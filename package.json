@@ -1,0 +1,10 @@
+{
+  "name": "arya-agent",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "start": "cd packages/arya && bun run src/index.ts",
+    "dev": "cd packages/arya && bun --watch run src/index.ts",
+    "init": "cd packages/arya && bun run init"
+  }
+}

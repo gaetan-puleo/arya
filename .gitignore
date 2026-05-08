@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment
+.env
+.env.local
+config.json
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Expo
+.expo/
+.expo-shared/
+
+# Android
+packages/arya-companion/android/app/build/
+packages/arya-companion/android/app/.cxx/
+packages/arya-companion/android/.gradle/
+packages/arya-companion/android/build/
+
+# iOS
+packages/arya-companion/ios/
+
+# Bun
+bun.lockb
+
+# TypeScript
+*.tsbuildinfo
+out/
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# EAS
+.eas/

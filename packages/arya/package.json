@@ -1,0 +1,26 @@
+{
+  "name": "arya",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Autonomous multi-agent runtime powered by mu",
+  "bin": {
+    "arya": "./bin/arya.js"
+  },
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "bun --watch run src/index.ts",
+    "init": "bun -e \"import { init } from './src/init.js'; init()\""
+  },
+  "dependencies": {
+    "croner": "^9.1.0",
+    "mu-agents": "0.15.0",
+    "mu-core": "0.15.0",
+    "mu-openai-provider": "0.15.0",
+    "ws": "^8.18.0",
+    "yaml": "^2.8.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13",
+    "@types/node": "^22.0.0"
+  }
+}

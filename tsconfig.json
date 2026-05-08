@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "declaration": true,
+    "outDir": "dist",
+    "baseUrl": ".",
+    "jsx": "react-jsx",
+    "paths": {
+      "mu-core": ["../mu/packages/mu-core/src"],
+      "mu-agents": ["../mu/packages/mu-agents/src"],
+      "mu-openai-provider": ["../mu/packages/mu-openai-provider/src"]
+    }
+  },
+  "include": ["packages/**/src/**/*.ts", "packages/**/src/**/*.tsx"],
+  "exclude": ["node_modules", "dist", "packages/arya-companion"]
+}
