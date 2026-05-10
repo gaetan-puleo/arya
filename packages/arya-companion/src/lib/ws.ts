@@ -86,14 +86,6 @@ export interface PendingApproval {
   createdAt: number;
 }
 
-function formatToolName(name: string): string {
-  const parts = name.split('.');
-  if (parts.length === 1) return name;
-  const tool = parts[parts.length - 1];
-  const prefix = parts.slice(0, -1).join('.');
-  return `${prefix}.${tool}`;
-}
-
 function formatToolArgs(args: unknown): string {
   if (!args || typeof args !== 'object') return '';
   const obj = args as Record<string, unknown>;
@@ -138,7 +130,6 @@ function getToolDescription(toolName: string): string {
 }
 
 export function formatApprovalMessage(request: ApprovalRequest): string {
-  const toolName = formatToolName(request.toolName);
   const description = getToolDescription(request.toolName);
   const args = formatToolArgs(request.toolArgs);
 

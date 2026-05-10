@@ -3,25 +3,12 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-	Button,
-	SizableText,
-	Text,
-	useTheme,
-	XStack,
-	YStack,
-} from "tamagui";
-import type { SubAgentEvent, SubAgentEventKind } from "@/src/lib/ws";
+import { useUnistyles } from "@/theme/ThemeContext";
+import type { SubAgentEvent, SubAgentEventKind } from "@/lib/ws";
 
 const WS_KEY = "arya-companion-ws";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const getThemeColor = (theme: any, key: string): string => {
-	const val = theme[key];
-	if (val && typeof val.get === "function") return val.get();
-	return typeof val === "string" ? val : "";
-};
 
 /** Timeline entry rendered in the FlatList */
 interface TimelineEntry {
@@ -52,19 +39,19 @@ export default function SubAgentDetailScreen() {
 	const { runId } = useLocalSearchParams<{ runId: string }>();
 	const insets = useSafeAreaInsets();
 	const router = useRouter();
-	const theme = useTheme();
+	const { theme } = useUnistyles();
 
-	const bg = getThemeColor(theme, "background");
-	const bgSecondary = getThemeColor(theme, "backgroundSecondary");
-	const bgTertiary = getThemeColor(theme, "backgroundTertiary");
-	const bgInput = getThemeColor(theme, "backgroundInput");
-	const textColor = getThemeColor(theme, "text");
-	const textSecondary = getThemeColor(theme, "textSecondary");
-	const borderColor = getThemeColor(theme, "border");
-	const successColor = getThemeColor(theme, "success");
-	const dangerColor = getThemeColor(theme, "danger");
-	const infoColor = getThemeColor(theme, "info");
-	const warningColor = getThemeColor(theme, "warning");
+	const bg = theme.colors.background;
+	const bgSecondary = theme.colors.backgroundSecondary;
+	const bgTertiary = theme.colors.backgroundTertiary;
+	const bgInput = theme.colors.backgroundInput;
+	const textColor = theme.colors.text;
+	const textSecondary = theme.colors.textSecondary;
+	const borderColor = theme.colors.border;
+	const successColor = theme.colors.success;
+	const dangerColor = theme.colors.danger;
+	const infoColor = theme.colors.info;
+	const warningColor = theme.colors.warning;
 
 	const [agentId, setAgentId] = useState<string>("");
 	const [status, setStatus] = useState<"running" | "success" | "error">(
@@ -85,7 +72,7 @@ export default function SubAgentDetailScreen() {
 				processEvent(evt);
 			}
 		}
-	}, [runId]);
+	}, [runId, processEvent]);
 
 	const processEvent = useCallback(
 		(evt: SubAgentEvent) => {
@@ -135,7 +122,7 @@ export default function SubAgentDetailScreen() {
 		return () => {
 			ws.current?.close();
 		};
-	}, []);
+	}, [connectWs]);
 
 	const connectWs = useCallback(
 		(url: string, token?: string) => {
@@ -191,7 +178,7 @@ export default function SubAgentDetailScreen() {
 				: "Error";
 
 	return (
-		<YStack flex={1} backgroundColor={bg}>
+		<View style={{ flex: 1, backgroundColor: bg }}>
 			<Stack.Screen
 				options={{
 					headerShown: true,
@@ -199,27 +186,34 @@ export default function SubAgentDetailScreen() {
 					headerTintColor: textColor,
 					headerStyle: { backgroundColor: bgSecondary },
 					headerLeft: () => (
-						<Button
+						<Pressable
 							onPress={() => router.back()}
-							width={32}
-							height={32}
-							borderRadius={16}
-							backgroundColor="transparent"
-							borderWidth={0}
-							padding={0}
-							justifyContent="center"
-							alignItems="center"
+							style={{
+								width: 32,
+								height: 32,
+								borderRadius: 16,
+								backgroundColor: "transparent",
+								justifyContent: "center",
+								alignItems: "center",
+							}}
 						>
 							<Ionicons name="arrow-back" size={22} color={textColor} />
-						</Button>
+						</Pressable>
 					),
 					headerRight: () => (
-						<XStack gap={4} alignItems="center" paddingRight={8}>
+						<View
+							style={{
+								flexDirection: "row",
+								gap: 4,
+								alignItems: "center",
+								paddingRight: 8,
+							}}
+						>
 							<Ionicons name={statusIcon} size={16} color={statusColor} />
-							<Text fontSize={13} fontWeight="600" color={statusColor}>
+							<Text style={{ fontSize: 13, fontWeight: "600", color: statusColor }}>
 								{statusLabel}
 							</Text>
-						</XStack>
+						</View>
 					),
 				}}
 			/>
@@ -256,7 +250,7 @@ export default function SubAgentDetailScreen() {
 					/>
 				)}
 			/>
-		</YStack>
+		</View>
 	);
 }
 
@@ -268,7 +262,7 @@ function TimelineItem({
 	textSecondary,
 	bgTertiary,
 	bgInput,
-	borderColor,
+	borderColor: _borderColor,
 	successColor,
 	dangerColor,
 	infoColor,
@@ -289,34 +283,47 @@ function TimelineItem({
 		case "invocation_start": {
 			const prompt = entry.data.prompt as string | undefined;
 			return (
-				<XStack gap={10} paddingHorizontal={16} paddingVertical={6} alignItems="flex-start">
-					<YStack width={20} alignItems="center" paddingTop={3}>
+				<View
+					style={{
+						flexDirection: "row",
+						gap: 10,
+						paddingHorizontal: 16,
+						paddingVertical: 6,
+						alignItems: "flex-start",
+					}}
+				>
+					<View style={{ width: 20, alignItems: "center", paddingTop: 3 }}>
 						<Ionicons name="play-circle" size={16} color={infoColor} />
-					</YStack>
-					<YStack flex={1} gap={2}>
-						<XStack justifyContent="space-between">
-							<Text fontSize={13} fontWeight="600" color={textColor}>
+					</View>
+					<View style={{ flex: 1, gap: 2 }}>
+						<View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+							<Text style={{ fontSize: 13, fontWeight: "600", color: textColor }}>
 								Invocation started
 							</Text>
-							<Text fontSize={10} color={textSecondary}>
+							<Text style={{ fontSize: 10, color: textSecondary }}>
 								{formatTime(entry.ts)}
 							</Text>
-						</XStack>
+						</View>
 						{prompt ? (
-							<YStack
-								backgroundColor={bgInput}
-								borderRadius={8}
-								paddingHorizontal={10}
-								paddingVertical={6}
-								marginTop={4}
+							<View
+								style={{
+									backgroundColor: bgInput,
+									borderRadius: 8,
+									paddingHorizontal: 10,
+									paddingVertical: 6,
+									marginTop: 4,
+								}}
 							>
-								<Text fontSize={12} color={textSecondary} numberOfLines={4}>
+								<Text
+									numberOfLines={4}
+									style={{ fontSize: 12, color: textSecondary }}
+								>
 									{prompt}
 								</Text>
-							</YStack>
+							</View>
 						) : null}
-					</YStack>
-				</XStack>
+					</View>
+				</View>
 			);
 		}
 
@@ -325,34 +332,47 @@ function TimelineItem({
 			const args = entry.data.args;
 			const argsStr = formatArgs(args);
 			return (
-				<XStack gap={10} paddingHorizontal={16} paddingVertical={6} alignItems="flex-start">
-					<YStack width={20} alignItems="center" paddingTop={3}>
+				<View
+					style={{
+						flexDirection: "row",
+						gap: 10,
+						paddingHorizontal: 16,
+						paddingVertical: 6,
+						alignItems: "flex-start",
+					}}
+				>
+					<View style={{ width: 20, alignItems: "center", paddingTop: 3 }}>
 						<Ionicons name="construct" size={14} color={warningColor} />
-					</YStack>
-					<YStack flex={1} gap={2}>
-						<XStack justifyContent="space-between">
-							<Text fontSize={13} fontWeight="600" color={textColor}>
+					</View>
+					<View style={{ flex: 1, gap: 2 }}>
+						<View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+							<Text style={{ fontSize: 13, fontWeight: "600", color: textColor }}>
 								{toolName}
 							</Text>
-							<Text fontSize={10} color={textSecondary}>
+							<Text style={{ fontSize: 10, color: textSecondary }}>
 								{formatTime(entry.ts)}
 							</Text>
-						</XStack>
+						</View>
 						{argsStr ? (
-							<YStack
-								backgroundColor={bgInput}
-								borderRadius={8}
-								paddingHorizontal={10}
-								paddingVertical={6}
-								marginTop={2}
+							<View
+								style={{
+									backgroundColor: bgInput,
+									borderRadius: 8,
+									paddingHorizontal: 10,
+									paddingVertical: 6,
+									marginTop: 2,
+								}}
 							>
-								<Text fontSize={11} color={textSecondary} fontFamily="$body" numberOfLines={6}>
+								<Text
+									numberOfLines={6}
+									style={{ fontSize: 11, color: textSecondary }}
+								>
 									{argsStr}
 								</Text>
-							</YStack>
+							</View>
 						) : null}
-					</YStack>
-				</XStack>
+					</View>
+				</View>
 			);
 		}
 
@@ -360,46 +380,56 @@ function TimelineItem({
 			const toolName = (entry.data.toolName as string) ?? "unknown";
 			const isError = entry.data.isError === true;
 			return (
-				<XStack gap={10} paddingHorizontal={16} paddingVertical={4} alignItems="center">
-					<YStack width={20} alignItems="center">
+				<View
+					style={{
+						flexDirection: "row",
+						gap: 10,
+						paddingHorizontal: 16,
+						paddingVertical: 4,
+						alignItems: "center",
+					}}
+				>
+					<View style={{ width: 20, alignItems: "center" }}>
 						<Ionicons
 							name={isError ? "close-circle" : "checkmark-circle"}
 							size={13}
 							color={isError ? dangerColor : successColor}
 						/>
-					</YStack>
-					<Text fontSize={12} color={isError ? dangerColor : textSecondary}>
+					</View>
+					<Text style={{ fontSize: 12, color: isError ? dangerColor : textSecondary }}>
 						{toolName} — {isError ? "failed" : "done"}
 					</Text>
-					<XStack flex={1} justifyContent="flex-end">
-						<Text fontSize={10} color={textSecondary}>
+					<View style={{ flex: 1, flexDirection: "row", justifyContent: "flex-end" }}>
+						<Text style={{ fontSize: 10, color: textSecondary }}>
 							{formatTime(entry.ts)}
 						</Text>
-					</XStack>
-				</XStack>
+					</View>
+				</View>
 			);
 		}
 
 		case "message_end": {
 			const text = (entry.data.text as string) ?? "";
 			return (
-				<YStack paddingHorizontal={16} paddingVertical={6}>
-					<YStack
-						backgroundColor={bgTertiary}
-						borderRadius={14}
-						paddingHorizontal={14}
-						paddingVertical={10}
+				<View style={{ paddingHorizontal: 16, paddingVertical: 6 }}>
+					<View
+						style={{
+							backgroundColor: bgTertiary,
+							borderRadius: 14,
+							paddingHorizontal: 14,
+							paddingVertical: 10,
+						}}
 					>
-						<Text fontSize={14} color={textColor} lineHeight={20}>
+						<Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>
 							{text}
 						</Text>
-					</YStack>
-					<XStack justifyContent="flex-end" paddingTop={2}>
-						<Text fontSize={10} color={textSecondary}>
+					</View>
+					<View style={{ flexDirection: "row", justifyContent: "flex-end", paddingTop: 2 }}>
+						<Text style={{ fontSize: 10, color: textSecondary }}>
 							{formatTime(entry.ts)}
 						</Text>
-					</XStack>
-				</YStack>
+					</View>
+				</View>
 			);
 		}
 
@@ -408,34 +438,47 @@ function TimelineItem({
 			const isError = st === "error";
 			const errorMsg = entry.data.error as string | undefined;
 			return (
-				<XStack gap={10} paddingHorizontal={16} paddingVertical={6} alignItems="flex-start">
-					<YStack width={20} alignItems="center" paddingTop={3}>
+				<View
+					style={{
+						flexDirection: "row",
+						gap: 10,
+						paddingHorizontal: 16,
+						paddingVertical: 6,
+						alignItems: "flex-start",
+					}}
+				>
+					<View style={{ width: 20, alignItems: "center", paddingTop: 3 }}>
 						<Ionicons
 							name={isError ? "close-circle" : "checkmark-circle"}
 							size={16}
 							color={isError ? dangerColor : successColor}
 						/>
-					</YStack>
-					<YStack flex={1} gap={2}>
-						<XStack justifyContent="space-between">
+					</View>
+					<View style={{ flex: 1, gap: 2 }}>
+						<View style={{ flexDirection: "row", justifyContent: "space-between" }}>
 							<Text
-								fontSize={13}
-								fontWeight="600"
-								color={isError ? dangerColor : successColor}
+								style={{
+									fontSize: 13,
+									fontWeight: "600",
+									color: isError ? dangerColor : successColor,
+								}}
 							>
 								{isError ? "Failed" : "Completed"}
 							</Text>
-							<Text fontSize={10} color={textSecondary}>
+							<Text style={{ fontSize: 10, color: textSecondary }}>
 								{formatTime(entry.ts)}
 							</Text>
-						</XStack>
+						</View>
 						{isError && errorMsg ? (
-							<Text fontSize={12} color={dangerColor} numberOfLines={3}>
+							<Text
+								numberOfLines={3}
+								style={{ fontSize: 12, color: dangerColor }}
+							>
 								{errorMsg}
 							</Text>
 						) : null}
-					</YStack>
-				</XStack>
+					</View>
+				</View>
 			);
 		}
 
@@ -458,24 +501,31 @@ function StreamingTextBubble({
 	textSecondary: string;
 }) {
 	return (
-		<YStack paddingHorizontal={16} paddingVertical={6}>
-			<XStack gap={4} alignItems="center" paddingBottom={4}>
-				<Ionicons name="chatbubble-ellipses-outline" size={12} color={textSecondary} />
-				<Text fontSize={11} color={textSecondary}>
-					Thinking…
-				</Text>
-			</XStack>
-			<YStack
-				backgroundColor={bgTertiary}
-				borderRadius={14}
-				paddingHorizontal={14}
-				paddingVertical={10}
+		<View style={{ paddingHorizontal: 16, paddingVertical: 6 }}>
+			<View
+				style={{
+					flexDirection: "row",
+					gap: 4,
+					alignItems: "center",
+					paddingBottom: 4,
+				}}
 			>
-				<Text fontSize={14} color={textColor} lineHeight={20}>
+				<Ionicons name="chatbubble-ellipses-outline" size={12} color={textSecondary} />
+				<Text style={{ fontSize: 11, color: textSecondary }}>Thinking…</Text>
+			</View>
+			<View
+				style={{
+					backgroundColor: bgTertiary,
+					borderRadius: 14,
+					paddingHorizontal: 14,
+					paddingVertical: 10,
+				}}
+			>
+				<Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>
 					{text}
 				</Text>
-			</YStack>
-		</YStack>
+			</View>
+		</View>
 	);
 }
 

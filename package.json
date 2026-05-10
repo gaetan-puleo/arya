@@ -3,8 +3,13 @@
   "private": true,
   "workspaces": ["packages/*"],
   "scripts": {
-    "start": "cd packages/arya && bun run src/index.ts",
-    "dev": "cd packages/arya && bun --watch run src/index.ts",
+    "start": "cd packages/arya && bun run start",
+    "dev:server": "cd packages/arya && bun run dev",
+    "dev:companion": "cd packages/arya-companion && bun run dev",
+    "dev": "concurrently -n server,companion -c blue,magenta \"cd packages/arya && bun run dev\" \"cd packages/arya-companion && bun run dev\"",
     "init": "cd packages/arya && bun run init"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }

@@ -1,8 +1,8 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
-import { Pressable } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import Animated, { FadeInLeft } from "react-native-reanimated";
-import { SizableText, Text, useTheme, XStack, YStack } from "tamagui";
+import { useUnistyles } from "@/theme/ThemeContext";
 
 export type SubAgentStatus = "running" | "success" | "error";
 
@@ -15,13 +15,6 @@ export interface SubAgentRunInfo {
 	endTs?: number;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const getThemeColor = (theme: any, key: string): string => {
-	const val = theme[key];
-	if (val && typeof val.get === "function") return val.get();
-	return typeof val === "string" ? val : "";
-};
-
 function formatDuration(startTs: number, endTs?: number): string {
 	const ms = (endTs ?? Date.now()) - startTs;
 	if (ms < 1000) return `${ms}ms`;
@@ -30,16 +23,16 @@ function formatDuration(startTs: number, endTs?: number): string {
 }
 
 export default function SubAgentCard({ run }: { run: SubAgentRunInfo }) {
-	const theme = useTheme();
+	const { theme } = useUnistyles();
 	const router = useRouter();
 
-	const textColor = getThemeColor(theme, "text");
-	const textSecondary = getThemeColor(theme, "textSecondary");
-	const bgTertiary = getThemeColor(theme, "backgroundTertiary");
-	const borderColor = getThemeColor(theme, "border");
-	const successColor = getThemeColor(theme, "success");
-	const dangerColor = getThemeColor(theme, "danger");
-	const infoColor = getThemeColor(theme, "info");
+	const textColor = theme.colors.text;
+	const textSecondary = theme.colors.textSecondary;
+	const bgTertiary = theme.colors.backgroundTertiary;
+	const borderColor = theme.colors.border;
+	const successColor = theme.colors.success;
+	const dangerColor = theme.colors.danger;
+	const infoColor = theme.colors.info;
 
 	const statusIcon: keyof typeof Ionicons.glyphMap =
 		run.status === "running"
@@ -57,27 +50,38 @@ export default function SubAgentCard({ run }: { run: SubAgentRunInfo }) {
 
 	return (
 		<Animated.View entering={FadeInLeft.duration(250).springify()}>
-			<YStack
-				alignItems="flex-start"
-				paddingHorizontal={16}
-				paddingVertical={4}
+			<View
+				style={{
+					alignItems: "flex-start",
+					paddingHorizontal: 16,
+					paddingVertical: 4,
+				}}
 			>
-				<XStack gap={8} alignItems="flex-end" maxWidth="85%">
+				<View
+					style={{
+						flexDirection: "row",
+						gap: 8,
+						alignItems: "flex-end",
+						maxWidth: "85%",
+					}}
+				>
 					{/* Avatar */}
-					<YStack
-						width={24}
-						height={24}
-						borderRadius={12}
-						backgroundColor="#FFFFFF"
-						justifyContent="center"
-						alignItems="center"
-						flexShrink={0}
-						marginBottom={2}
+					<View
+						style={{
+							width: 24,
+							height: 24,
+							borderRadius: 12,
+							backgroundColor: "#FFFFFF",
+							justifyContent: "center",
+							alignItems: "center",
+							flexShrink: 0,
+							marginBottom: 2,
+						}}
 					>
-						<SizableText fontSize={13} fontWeight="700" color="#1A1A1A">
+						<Text style={{ fontSize: 13, fontWeight: "700", color: "#1A1A1A" }}>
 							A
-						</SizableText>
-					</YStack>
+						</Text>
+					</View>
 
 					{/* Card */}
 					<Pressable
@@ -89,60 +93,64 @@ export default function SubAgentCard({ run }: { run: SubAgentRunInfo }) {
 						}
 						style={{ flex: 1 }}
 					>
-						<YStack
-							backgroundColor={bgTertiary}
-							borderRadius={16}
-							borderBottomLeftRadius={6}
-							borderWidth={1}
-							borderColor={borderColor}
-							paddingHorizontal={12}
-							paddingVertical={10}
-							gap={6}
+						<View
+							style={{
+								backgroundColor: bgTertiary,
+								borderRadius: 16,
+								borderBottomLeftRadius: 6,
+								borderWidth: 1,
+								borderColor,
+								paddingHorizontal: 12,
+								paddingVertical: 10,
+								gap: 6,
+							}}
 						>
 							{/* Header row */}
-							<XStack gap={6} alignItems="center">
+							<View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
 								<Ionicons name="git-branch-outline" size={13} color={textSecondary} />
 								<Text
-									fontSize={13}
-									fontWeight="600"
-									color={textColor}
-									flex={1}
 									numberOfLines={1}
+									style={{
+										fontSize: 13,
+										fontWeight: "600",
+										color: textColor,
+										flex: 1,
+									}}
 								>
 									@{run.agentId}
 								</Text>
 								<Ionicons name={statusIcon} size={14} color={statusColor} />
-							</XStack>
+							</View>
 
 							{/* Meta row */}
-							<XStack gap={10} alignItems="center">
+							<View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
 								{run.toolCount > 0 && (
-									<XStack gap={3} alignItems="center">
+									<View style={{ flexDirection: "row", gap: 3, alignItems: "center" }}>
 										<Ionicons name="construct-outline" size={11} color={textSecondary} />
-										<Text fontSize={11} color={textSecondary}>
+										<Text style={{ fontSize: 11, color: textSecondary }}>
 											{run.toolCount} tool{run.toolCount > 1 ? "s" : ""}
 										</Text>
-									</XStack>
+									</View>
 								)}
-								<XStack gap={3} alignItems="center">
+								<View style={{ flexDirection: "row", gap: 3, alignItems: "center" }}>
 									<Ionicons name="time-outline" size={11} color={textSecondary} />
-									<Text fontSize={11} color={textSecondary}>
+									<Text style={{ fontSize: 11, color: textSecondary }}>
 										{formatDuration(run.startTs, run.endTs)}
 									</Text>
-								</XStack>
-								<XStack flex={1} justifyContent="flex-end">
-									<XStack gap={2} alignItems="center">
-										<Text fontSize={11} color={infoColor}>
-											Details
-										</Text>
+								</View>
+								<View
+									style={{ flex: 1, flexDirection: "row", justifyContent: "flex-end" }}
+								>
+									<View style={{ flexDirection: "row", gap: 2, alignItems: "center" }}>
+										<Text style={{ fontSize: 11, color: infoColor }}>Details</Text>
 										<Ionicons name="chevron-forward" size={11} color={infoColor} />
-									</XStack>
-								</XStack>
-							</XStack>
-						</YStack>
+									</View>
+								</View>
+							</View>
+						</View>
 					</Pressable>
-				</XStack>
-			</YStack>
+				</View>
+			</View>
 		</Animated.View>
 	);
 }

@@ -3,28 +3,22 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useRouter } from "expo-router";
 import { useRef, useState } from "react";
-import { Alert, StyleSheet, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Button, SizableText, useTheme, YStack } from "tamagui";
+import { useUnistyles } from "@/theme/ThemeContext";
 
 const WS_STORAGE_KEY = "arya-companion-ws";
-
-const getThemeColor = (theme: any, key: string): string => {
-	const val = theme[key];
-	if (val && typeof val.get === "function") return val.get();
-	return typeof val === "string" ? val : "";
-};
 
 export default function ScanScreen() {
 	const insets = useSafeAreaInsets();
 	const router = useRouter();
-	const theme = useTheme();
+	const { theme } = useUnistyles();
 	const [permission, requestPermission] = useCameraPermissions();
 	const [scanned, setScanned] = useState(false);
 	const hasProcessed = useRef(false);
 
-	const textColor = getThemeColor(theme, "text");
-	const bg = getThemeColor(theme, "background");
+	const textColor = theme.colors.text;
+	const bg = theme.colors.background;
 
 	const handleBarCodeScanned = async ({ data }: { data: string }) => {
 		if (hasProcessed.current) return;
@@ -68,46 +62,53 @@ export default function ScanScreen() {
 
 	if (!permission.granted) {
 		return (
-			<YStack
-				flex={1}
-				backgroundColor={bg}
-				alignItems="center"
-				justifyContent="center"
-				paddingHorizontal={40}
-				gap={16}
+			<View
+				style={{
+					flex: 1,
+					backgroundColor: bg,
+					alignItems: "center",
+					justifyContent: "center",
+					paddingHorizontal: 40,
+					gap: 16,
+				}}
 			>
 				<Ionicons name="camera-outline" size={48} color={textColor} />
-				<SizableText
-					fontSize={16}
-					color={textColor}
-					textAlign="center"
-					lineHeight={24}
+				<Text
+					style={{
+						fontSize: 16,
+						color: textColor,
+						textAlign: "center",
+						lineHeight: 24,
+					}}
 				>
 					{"L'accès à la caméra est nécessaire pour scanner le QR code."}
-				</SizableText>
-				<Button
+				</Text>
+				<Pressable
 					onPress={requestPermission}
-					backgroundColor="#10A37F"
-					borderRadius={12}
-					paddingHorizontal={24}
-					paddingVertical={12}
-					pressStyle={{ opacity: 0.8 }}
+					style={({ pressed }) => ({
+						backgroundColor: "#10A37F",
+						borderRadius: 12,
+						paddingHorizontal: 24,
+						paddingVertical: 12,
+						opacity: pressed ? 0.8 : 1,
+					})}
 				>
-					<SizableText fontSize={15} fontWeight="600" color="#FFFFFF">
+					<Text style={{ fontSize: 15, fontWeight: "600", color: "#FFFFFF" }}>
 						Autoriser la caméra
-					</SizableText>
-				</Button>
-				<Button
+					</Text>
+				</Pressable>
+				<Pressable
 					onPress={() => router.back()}
-					backgroundColor="transparent"
-					borderWidth={0}
-					pressStyle={{ opacity: 0.6 }}
+					style={({ pressed }) => ({
+						backgroundColor: "transparent",
+						paddingHorizontal: 16,
+						paddingVertical: 8,
+						opacity: pressed ? 0.6 : 1,
+					})}
 				>
-					<SizableText fontSize={14} color={textColor}>
-						Retour
-					</SizableText>
-				</Button>
-			</YStack>
+					<Text style={{ fontSize: 14, color: textColor }}>Retour</Text>
+				</Pressable>
+			</View>
 		);
 	}
 
@@ -126,19 +127,20 @@ export default function ScanScreen() {
 			<View style={styles.overlay}>
 				{/* Top bar */}
 				<View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
-					<Button
+					<Pressable
 						onPress={() => router.back()}
-						width={36}
-						height={36}
-						borderRadius={18}
-						backgroundColor="rgba(0,0,0,0.5)"
-						justifyContent="center"
-						alignItems="center"
-						padding={0}
-						borderWidth={0}
+						style={({ pressed }) => ({
+							width: 36,
+							height: 36,
+							borderRadius: 18,
+							backgroundColor: "rgba(0,0,0,0.5)",
+							justifyContent: "center",
+							alignItems: "center",
+							opacity: pressed ? 0.8 : 1,
+						})}
 					>
 						<Ionicons name="close" size={22} color="#FFFFFF" />
-					</Button>
+					</Pressable>
 				</View>
 
 				{/* Center guide */}
@@ -148,14 +150,16 @@ export default function ScanScreen() {
 
 				{/* Bottom hint */}
 				<View style={[styles.bottomBar, { paddingBottom: insets.bottom + 24 }]}>
-					<SizableText
-						fontSize={15}
-						color="#FFFFFF"
-						textAlign="center"
-						lineHeight={22}
+					<Text
+						style={{
+							fontSize: 15,
+							color: "#FFFFFF",
+							textAlign: "center",
+							lineHeight: 22,
+						}}
 					>
 						Scannez le QR code affiché par Arya
-					</SizableText>
+					</Text>
 				</View>
 			</View>
 		</View>
