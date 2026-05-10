@@ -157,8 +157,6 @@ export function useChat() {
 	const [commands, setCommands] = useState<CommandInfo[]>([]);
 	const [agents, setAgents] = useState<AgentInfo[]>([]);
 	const [showScrollFab, setShowScrollFab] = useState(false);
-	const [inputExpanded, setInputExpanded] = useState(false);
-	const [textHeight, setTextHeight] = useState(0);
 
 	// ── Message handlers ──
 
@@ -380,10 +378,6 @@ export function useChat() {
 		agents,
 		showScrollFab,
 		setShowScrollFab,
-		inputExpanded,
-		setInputExpanded,
-		textHeight,
-		setTextHeight,
 		keyboardOpen,
 		keyboardHeight,
 		// Actions

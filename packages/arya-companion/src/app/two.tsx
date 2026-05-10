@@ -119,29 +119,6 @@ export default function ConfigScreen() {
 						Configuration
 					</Text>
 
-					{/* QR Code Scan */}
-					<Pressable
-						onPress={() => router.navigate("/scan")}
-						style={({ pressed }) => ({
-							backgroundColor: bgSecondary,
-							borderRadius: 14,
-							height: 50,
-							alignItems: "center",
-							justifyContent: "center",
-							marginBottom: 16,
-							borderWidth: 1,
-							borderColor,
-							flexDirection: "row",
-							gap: 10,
-							opacity: pressed ? 0.7 : 1,
-						})}
-					>
-						<IconButton name="qr-code-outline" size={20} />
-						<Text style={{ fontSize: 15, fontWeight: "600", color: textColor }}>
-							Scanner un QR code
-						</Text>
-					</Pressable>
-
 					{/* URL Section */}
 					<SectionLabel>URL WebSocket</SectionLabel>
 					<InputField

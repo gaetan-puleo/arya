@@ -3,26 +3,17 @@ import * as Haptics from "expo-haptics";
 import { useCallback, useState } from "react";
 import {
 	KeyboardAvoidingView,
-	LayoutAnimation,
 	Platform,
 	Pressable,
 	ScrollView,
 	Text,
 	TextInput,
-	UIManager,
 	View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useUnistyles } from "@/theme/ThemeContext";
 
 import type { CommandInfo, AgentInfo } from "@/lib/ws";
-
-if (
-	Platform.OS === "android" &&
-	UIManager.setLayoutAnimationEnabledExperimental
-) {
-	UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 interface ChatInputBarProps {
 	input: string;
@@ -75,15 +66,11 @@ export default function ChatInputBar({
 
 	const handleContentSizeChange = useCallback(
 		(e: { nativeEvent: { contentSize: { height: number } } }) => {
-			const next = Math.ceil(e.nativeEvent.contentSize.height);
-			setTextHeight((prev) => {
-				if (prev === next) return prev;
-				LayoutAnimation.configureNext({
-					duration: 120,
-					update: { type: LayoutAnimation.Types.easeInEaseOut },
-				});
-				return next;
-			});
+			const next = Math.min(
+				Math.max(Math.ceil(e.nativeEvent.contentSize.height), MIN_INPUT_HEIGHT),
+				COLLAPSED_MAX_HEIGHT,
+			);
+			setTextHeight((prev) => (prev === next ? prev : next));
 		},
 		[],
 	);
@@ -184,13 +171,20 @@ export default function ChatInputBar({
 							borderColor,
 							minHeight: 44,
 							paddingHorizontal: 6,
-							paddingVertical: 4,
+							paddingVertical: 6,
 							justifyContent: "center",
 							position: "relative",
 						}}
 					>
 					{/* ── TextInput + expand button ── */}
-					<View style={{ position: "relative" }}>
+					<View
+						style={{
+							position: "relative",
+							overflow: "hidden",
+							justifyContent: "center",
+							height: textHeight,
+						}}
+					>
 						<TextInput
 							style={{
 								paddingLeft: 12,
@@ -200,7 +194,7 @@ export default function ChatInputBar({
 								lineHeight: 20,
 								color: textColor,
 								minHeight: MIN_INPUT_HEIGHT,
-								height: Math.min(textHeight, COLLAPSED_MAX_HEIGHT),
+								maxHeight: COLLAPSED_MAX_HEIGHT,
 							}}
 							value={input}
 							onChangeText={onInputChange}
@@ -211,7 +205,7 @@ export default function ChatInputBar({
 							onSubmitEditing={send}
 							returnKeyType="send"
 							blurOnSubmit={false}
-							textAlignVertical="top"
+							textAlignVertical="center"
 							scrollEnabled={scrollEnabled}
 						/>
 						{showExpandButton && (
@@ -418,11 +412,11 @@ function SendButton({
 				position: "absolute",
 				bottom: 4,
 				right: 4,
-				width: 32,
-				height: 32,
+				width: 34,
+				height: 34,
 				justifyContent: "center",
 				alignItems: "center",
-				borderRadius: 16,
+				borderRadius: 17,
 				backgroundColor: hasText ? "#ECECEC" : "#4A4A4A",
 				opacity: !hasText || loading ? 0.4 : 1,
 				...(fullScreen

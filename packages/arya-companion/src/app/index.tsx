@@ -32,12 +32,8 @@ export default function ChatScreen() {
 				filteredCommands={chat.filteredCommands}
 				showAgentMenu={chat.showAgentMenu}
 				filteredAgents={chat.filteredAgents}
-				inputExpanded={chat.inputExpanded}
-				onExpandChange={chat.setInputExpanded}
-				textHeight={chat.textHeight}
 				keyboardOpen={chat.keyboardOpen}
 				keyboardHeight={chat.keyboardHeight}
-				setTextHeight={chat.setTextHeight}
 			/>
 		</View>
 	);

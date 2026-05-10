@@ -1,27 +1,27 @@
 import { useColorScheme } from 'react-native';
 import { createContext, useContext, useMemo } from 'react';
-import type { AppThemeName, Theme } from './themes';
-import { appThemes } from './themes';
+import type { Theme } from './themes';
+import { darkTheme, lightTheme } from './themes';
 
 interface ThemeContextValue {
   theme: Theme;
   colorScheme: 'light' | 'dark';
-  themeName: AppThemeName;
+  themeName: 'light' | 'dark';
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  theme: appThemes.dark,
+  theme: darkTheme,
   colorScheme: 'dark',
   themeName: 'dark',
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const colorScheme = useColorScheme() as 'light' | 'dark';
-  const themeName = useMemo<AppThemeName>(() => colorScheme ?? 'dark', [colorScheme]);
+  const themeName = useMemo<'light' | 'dark'>(() => colorScheme ?? 'dark', [colorScheme]);
 
   const value = useMemo<ThemeContextValue>(
     () => ({
-      theme: appThemes[themeName],
+      theme: themeName === 'light' ? lightTheme : darkTheme,
       colorScheme,
       themeName,
     }),

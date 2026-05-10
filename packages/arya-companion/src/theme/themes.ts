@@ -70,15 +70,24 @@ export const sharedFontWeights = {
   black: '900',
 } as const;
 
+const shared = {
+  spacing: sharedSpacing,
+  radius: sharedRadius,
+  fontSizes: sharedFontSizes,
+  fontWeights: sharedFontWeights,
+} as const;
+
+const black = '#000000';
+
 const darkColors = {
-  background: '#212121',
-  backgroundHover: '#2A2A2A',
-  backgroundFocus: '#303030',
-  backgroundAccent: '#303030',
+  background: black,
+  backgroundHover: black,
+  backgroundFocus: black,
+  backgroundAccent: black,
   backgroundOverlay: 'rgba(0,0,0,0.6)',
-  backgroundSecondary: '#171717',
-  backgroundTertiary: '#2F2F2F',
-  backgroundInput: '#303030',
+  backgroundSecondary: black,
+  backgroundTertiary: black,
+  backgroundInput: black,
   text: '#ECECEC',
   textSecondary: '#B4B4B4',
   textTertiary: '#8E8E8E',
@@ -132,36 +141,8 @@ const lightColors = {
   divider: '#E5E5E5',
 } as const;
 
-export type ThemeColors = {
-  [K in keyof typeof darkColors]: string;
-};
-export type Theme = {
-  colors: ThemeColors;
-  spacing: typeof sharedSpacing;
-  radius: typeof sharedRadius;
-  fontSizes: typeof sharedFontSizes;
-  fontWeights: typeof sharedFontWeights;
-};
+export type ThemeColors = typeof darkColors;
+export type Theme = { colors: ThemeColors } & typeof shared;
 
-export const darkTheme: Theme = {
-  colors: darkColors,
-  spacing: sharedSpacing,
-  radius: sharedRadius,
-  fontSizes: sharedFontSizes,
-  fontWeights: sharedFontWeights,
-};
-
-export const lightTheme: Theme = {
-  colors: lightColors,
-  spacing: sharedSpacing,
-  radius: sharedRadius,
-  fontSizes: sharedFontSizes,
-  fontWeights: sharedFontWeights,
-};
-
-export const appThemes = {
-  dark: darkTheme,
-  light: lightTheme,
-} as const;
-
-export type AppThemeName = keyof typeof appThemes;
+export const darkTheme: Theme = { colors: darkColors, ...shared };
+export const lightTheme: Theme = { colors: lightColors, ...shared };

@@ -53,7 +53,6 @@ function RootLayoutNav() {
           <Stack.Screen name="index" />
           <Stack.Screen name="two" />
           <Stack.Screen name="sub-agent/[runId]" />
-          <Stack.Screen name="scan" options={{ presentation: 'fullScreenModal' }} />
         </Stack>
       </ThemeProvider>
     </ThemeProviderUI>

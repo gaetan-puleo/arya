@@ -18,7 +18,7 @@ interface AryaAvatarProps {
 
 export function AryaAvatar({ size = 24, style }: AryaAvatarProps) {
 	const { theme } = useUnistyles();
-	const textColor = theme.colors.text;
+	const textColor = '#000000';
 
 	return (
 		<View
