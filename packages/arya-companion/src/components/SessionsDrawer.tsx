@@ -1,5 +1,6 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
+import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -73,6 +74,7 @@ export default function SessionsDrawer({
 	onModalOpenChange,
 }: SessionsDrawerProps) {
 	const { theme, rt } = useUnistyles();
+	const router = useRouter();
 	// Lighter-than-panel gray for the selected row — picked locally
 	// (rather than extending the theme palette) so the highlight is
 	// guaranteed to read against SessionsLayout's panel tint, which is
@@ -196,12 +198,70 @@ export default function SessionsDrawer({
 				paddingBottom: insets.bottom,
 			}}
 		>
-			{/* Header — title + bulk-delete affordance. Close is via
-			    swipe-left on the panel or the FAB-adjacent gestures
-			    owned by SessionsLayout, so no close button here.
-			    The trash icon is gated behind a confirmation modal
-			    and only rendered when there's actually something to
-			    delete; otherwise it'd be a confusing no-op. */}
+			{/* Top action row — settings pill, sitting above the
+			    "Sessions" title. Kept on its own row so the title and
+			    list group together visually below it. Right-aligned
+			    so it reads as a utility shortcut rather than a primary
+			    action competing with the FAB at the bottom. */}
+			<View
+				style={{
+					flexDirection: "row",
+					alignItems: "center",
+					justifyContent: "flex-end",
+					paddingHorizontal: 16,
+					paddingTop: 4,
+					paddingBottom: 8,
+				}}
+			>
+				<Pressable
+					onPress={() => {
+						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+						// Intentionally don't close the drawer here — the
+						// chat screen stays mounted under /two, so the
+						// drawer's open state is preserved. When the user
+						// taps "back" on the settings screen, they return
+						// to the still-open sessions sidebar.
+						router.push("/two");
+					}}
+					hitSlop={6}
+					accessibilityLabel="Settings"
+					accessibilityRole="button"
+					style={({ pressed }) => ({
+						flexDirection: "row",
+						alignItems: "center",
+						gap: 8,
+						height: 44,
+						paddingHorizontal: 12,
+						borderRadius: 24,
+						borderWidth: 1,
+						borderColor: theme.colors.border,
+						backgroundColor: pressed
+							? theme.colors.backgroundHover
+							: theme.colors.backgroundTranslucent,
+					})}
+				>
+					<Ionicons
+						name="settings-outline"
+						size={18}
+						color={theme.colors.text}
+					/>
+					<Text
+						style={{
+							fontSize: 14,
+							fontWeight: "600",
+							color: theme.colors.text,
+							includeFontPadding: false,
+						}}
+					>
+						Settings
+					</Text>
+				</Pressable>
+			</View>
+
+			{/* Title row — "Sessions" label + bulk-delete affordance.
+			    The trash icon is gated behind a confirmation modal and
+			    only rendered when there's actually something to
+			    delete, otherwise it'd be a confusing no-op. */}
 			<View
 				style={{
 					flexDirection: "row",
@@ -209,6 +269,7 @@ export default function SessionsDrawer({
 					paddingHorizontal: 16,
 					paddingTop: 4,
 					paddingBottom: 8,
+					gap: 8,
 				}}
 			>
 				<Text
