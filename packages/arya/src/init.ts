@@ -12,7 +12,7 @@ function xdgConfig(): string {
  *
  * Creates:
  *   ~/.config/arya/config.json          — LLM + WebSocket config
- *   ~/.config/arya/agents/assistant.md   — Default agent definition
+ *   ~/.config/arya/agents/arya.md        — Default agent definition
  *   ~/.config/arya/tasks/default.yaml    — Default scheduled tasks
  *   ~/.config/arya/plugins/              — Plugin config directory (empty)
  *
@@ -54,16 +54,16 @@ export function init(): void {
   }
 
   // Create agent template (only if it doesn't exist)
-  const agentPath = join(configDir, 'agents', 'assistant.md');
+  const agentPath = join(configDir, 'agents', 'arya.md');
   if (!existsSync(agentPath)) {
     writeFileSync(
       agentPath,
       `---
-id: assistant
-description: Assistant général pour arya-agent
+id: arya
+description: Default Arya primary agent
 type: primary
 enabled: true
-model: qwen2.5-coder:7b
+color: '#3B82F6'
 tools:
   fs.read_file: allow
   fs.write_file: ask
@@ -72,7 +72,7 @@ tools:
   http.fetch: allow
   subagent: ask
 ---
-You are a helpful assistant powered by arya-agent. You can use tools to interact with the filesystem, execute shell commands, and make HTTP requests. For sensitive operations, you will need approval from the user.
+You are Arya, an autonomous assistant powered by arya-agent. You can use tools to interact with the filesystem, execute shell commands, and make HTTP requests. For sensitive operations, you will need approval from the user.
 
 You may delegate work to subagents when appropriate. Use the \`subagent\` tool with a clear task description.`,
     );
@@ -84,13 +84,13 @@ You may delegate work to subagents when appropriate. Use the \`subagent\` tool w
     writeFileSync(
       tasksPath,
       `- id: hello-task
-  agent: assistant
+  agent: arya
   cron: "0 9 * * *"
   channel: companion
   prompt: Say hello and introduce yourself.
 
 - id: daily-summary
-  agent: assistant
+  agent: arya
   cron: "0 20 * * *"
   channel: companion
   prompt: Summarize the day's activities and any pending tasks.`,

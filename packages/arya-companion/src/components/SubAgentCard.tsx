@@ -55,7 +55,6 @@ export default function SubAgentCard({ run }: { run: SubAgentRunInfo }) {
 				style={{
 					alignItems: "flex-start",
 					paddingHorizontal: 16,
-					paddingVertical: 4,
 				}}
 			>
 				<View
@@ -85,7 +84,7 @@ export default function SubAgentCard({ run }: { run: SubAgentRunInfo }) {
 								borderWidth: 1,
 								borderColor,
 								paddingHorizontal: 12,
-								paddingVertical: 10,
+								paddingVertical: 12,
 								gap: 6,
 							}}
 						>
@@ -95,7 +94,7 @@ export default function SubAgentCard({ run }: { run: SubAgentRunInfo }) {
 								<Text
 									numberOfLines={1}
 									style={{
-										fontSize: 13,
+										fontSize: 14,
 										fontWeight: "600",
 										color: textColor,
 										flex: 1,
@@ -107,24 +106,24 @@ export default function SubAgentCard({ run }: { run: SubAgentRunInfo }) {
 							</View>
 
 							{/* Meta row */}
-							<View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
+							<View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
 								{run.toolCount > 0 && (
-									<View style={{ flexDirection: "row", gap: 3, alignItems: "center" }}>
+									<View style={{ flexDirection: "row", gap: 4, alignItems: "center" }}>
 										<Ionicons name="construct-outline" size={11} color={textSecondary} />
-										<Text style={{ fontSize: 11, color: textSecondary }}>
+										<Text style={{ fontSize: 12, color: textSecondary }}>
 											{run.toolCount} tool{run.toolCount > 1 ? "s" : ""}
 										</Text>
 									</View>
 								)}
-								<View style={{ flexDirection: "row", gap: 3, alignItems: "center" }}>
+								<View style={{ flexDirection: "row", gap: 4, alignItems: "center" }}>
 									<Ionicons name="time-outline" size={11} color={textSecondary} />
-									<Text style={{ fontSize: 11, color: textSecondary }}>
+									<Text style={{ fontSize: 12, color: textSecondary }}>
 										{formatDuration(run.startTs, run.endTs)}
 									</Text>
 								</View>
 								<View style={{ flex: 1, flexDirection: "row", justifyContent: "flex-end" }}>
 									<View style={{ flexDirection: "row", gap: 2, alignItems: "center" }}>
-										<Text style={{ fontSize: 11, color: infoColor }}>Details</Text>
+										<Text style={{ fontSize: 12, color: infoColor }}>Details</Text>
 										<Ionicons name="chevron-forward" size={11} color={infoColor} />
 									</View>
 								</View>

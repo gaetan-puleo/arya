@@ -40,7 +40,7 @@ function Dot({ color, delay }: { color: string; delay: number }) {
         {
           width: 6,
           height: 6,
-          borderRadius: 3,
+          borderRadius: 4,
           backgroundColor: color,
         },
         style,
@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
     paddingTop: 2,
   },
 });

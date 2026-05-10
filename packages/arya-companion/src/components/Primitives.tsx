@@ -11,14 +11,49 @@ import { useUnistyles } from "@/theme/ThemeContext";
 
 // ── AryaAvatar ──────────────────────────────────────────────────────────
 
+interface AgentHint {
+	id: string;
+	color?: string;
+}
+
 interface AryaAvatarProps {
 	size?: number;
 	style?: ViewStyle;
+	/**
+	 * Optional agent hint. When provided, the avatar uses the agent's first
+	 * letter and color (with luminance-based text contrast). When omitted,
+	 * falls back to the default "A" on white background.
+	 */
+	agent?: AgentHint | null;
 }
 
-export function AryaAvatar({ size = 24, style }: AryaAvatarProps) {
-	const { theme } = useUnistyles();
-	const textColor = '#000000';
+/** Pick a readable text color (black or white) for a given hex background. */
+function readableTextOn(bgHex: string | undefined): string {
+	if (!bgHex || !/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(bgHex)) return "#000000";
+	let hex = bgHex.slice(1);
+	if (hex.length === 3) {
+		hex = hex
+			.split("")
+			.map((c) => c + c)
+			.join("");
+	}
+	const r = parseInt(hex.slice(0, 2), 16) / 255;
+	const g = parseInt(hex.slice(2, 4), 16) / 255;
+	const b = parseInt(hex.slice(4, 6), 16) / 255;
+	// Relative luminance (sRGB)
+	const lin = (c: number) =>
+		c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+	const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+	return L > 0.5 ? "#000000" : "#FFFFFF";
+}
+
+export function AryaAvatar({ size = 24, style, agent }: AryaAvatarProps) {
+	const useAgentHint = !!agent && !!agent.id;
+	const bgColor = useAgentHint ? agent!.color ?? "#FFFFFF" : "#FFFFFF";
+	const textColor = useAgentHint ? readableTextOn(bgColor) : "#000000";
+	const letter = useAgentHint
+		? agent!.id.charAt(0).toUpperCase()
+		: "A";
 
 	return (
 		<View
@@ -27,7 +62,7 @@ export function AryaAvatar({ size = 24, style }: AryaAvatarProps) {
 					width: size,
 					height: size,
 					borderRadius: size / 2,
-					backgroundColor: "#FFFFFF",
+					backgroundColor: bgColor,
 					justifyContent: "center",
 					alignItems: "center",
 					flexShrink: 0,
@@ -37,7 +72,7 @@ export function AryaAvatar({ size = 24, style }: AryaAvatarProps) {
 			]}
 		>
 			<Text style={{ fontSize: size * 0.54, fontWeight: "700", color: textColor }}>
-				A
+				{letter}
 			</Text>
 		</View>
 	);
@@ -62,7 +97,7 @@ export function IconButton({ name, size = 20, onPress, style }: IconButtonProps)
 			style={({ pressed }) => ({
 				width: 34,
 				height: 34,
-				borderRadius: 17,
+				borderRadius: 16,
 				backgroundColor: "transparent",
 				justifyContent: "center",
 				alignItems: "center",
@@ -92,7 +127,7 @@ export function Card({ children, style, onPress }: CardProps) {
 		<View
 			style={{
 				backgroundColor: bgSecondary,
-				borderRadius: 14,
+				borderRadius: 16,
 				padding: 16,
 				borderWidth: 1,
 				borderColor,
@@ -120,7 +155,7 @@ export function SectionLabel({ children, style }: SectionLabelProps) {
 	return (
 		<Text
 			style={{
-				fontSize: 13,
+				fontSize: 14,
 				fontWeight: "600",
 				color: textSecondary,
 				marginBottom: 8,
@@ -149,10 +184,10 @@ export function HelpSection({ title, children }: HelpSectionProps) {
 		<Card style={{ marginTop: 24 }}>
 			<Text
 				style={{
-					fontSize: 17,
+					fontSize: 18,
 					fontWeight: "700",
 					color: textColor,
-					marginBottom: 14,
+					marginBottom: 16,
 				}}
 			>
 				{title}
@@ -190,10 +225,10 @@ export function InputField({
 			<Pressable
 				style={({ pressed }) => ({
 					backgroundColor: bgInput,
-					borderRadius: 10,
-					paddingHorizontal: 14,
+					borderRadius: 12,
+					paddingHorizontal: 16,
 					paddingVertical: 12,
-					fontSize: 15,
+					fontSize: 16,
 					color: textColor,
 					borderWidth: 1,
 					borderColor,
@@ -207,7 +242,7 @@ export function InputField({
 					placeholderTextColor={textPlaceholder}
 					secureTextEntry={secureTextEntry}
 					style={{
-						fontSize: 15,
+						fontSize: 16,
 						color: textColor,
 					}}
 				/>
@@ -239,7 +274,7 @@ export function SaveButton({ label, loading, onPress }: SaveButtonProps) {
 			disabled={loading}
 			style={({ pressed }) => ({
 				backgroundColor: loading ? bgTertiary : "#10A37F",
-				borderRadius: 14,
+				borderRadius: 16,
 				height: 50,
 				alignItems: "center",
 				justifyContent: "center",
@@ -277,7 +312,7 @@ export function ResetButton({ label = "Réinitialiser", onPress }: ResetButtonPr
 				opacity: pressed ? 0.6 : 1,
 			})}
 		>
-			<Text style={{ fontSize: 15, fontWeight: "600", color: dangerColor }}>
+			<Text style={{ fontSize: 16, fontWeight: "600", color: dangerColor }}>
 				{label}
 			</Text>
 		</Pressable>

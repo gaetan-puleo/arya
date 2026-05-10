@@ -160,7 +160,7 @@ export default function SubAgentDetailScreen() {
 							}}
 						>
 							<Ionicons name={statusIcon} size={16} color={statusColor} />
-							<Text style={{ fontSize: 13, fontWeight: "600", color: statusColor }}>
+							<Text style={{ fontSize: 14, fontWeight: "600", color: statusColor }}>
 								{statusLabel}
 							</Text>
 						</View>
@@ -236,7 +236,7 @@ function TimelineItem({
 				<Row gap={10} paddingH={16} paddingV={6} iconColor={infoColor} icon="play-circle" iconSize={16}>
 					<View style={{ flex: 1, gap: 2 }}>
 						<RowInner justifyBetween>
-							<Text style={{ fontSize: 13, fontWeight: "600", color: textColor }}>
+							<Text style={{ fontSize: 14, fontWeight: "600", color: textColor }}>
 								Invocation started
 							</Text>
 							<Text style={{ fontSize: 10, color: textSecondary }}>
@@ -259,7 +259,7 @@ function TimelineItem({
 				<Row gap={10} paddingH={16} paddingV={6} iconColor={warningColor} icon="construct" iconSize={14}>
 					<View style={{ flex: 1, gap: 2 }}>
 						<RowInner justifyBetween>
-							<Text style={{ fontSize: 13, fontWeight: "600", color: textColor }}>
+							<Text style={{ fontSize: 14, fontWeight: "600", color: textColor }}>
 								{toolName}
 							</Text>
 							<Text style={{ fontSize: 10, color: textSecondary }}>
@@ -315,7 +315,7 @@ function TimelineItem({
 						<RowInner justifyBetween>
 							<Text
 								style={{
-									fontSize: 13,
+									fontSize: 14,
 									fontWeight: "600",
 									color: isError ? dangerColor : successColor,
 								}}
@@ -358,7 +358,7 @@ function StreamingTextBubble({
 		<View style={{ paddingHorizontal: 16, paddingVertical: 6 }}>
 			<Row gap={4} alignBottom paddingV={4}>
 				<Ionicons name="chatbubble-ellipses-outline" size={12} color={textSecondary} />
-				<Text style={{ fontSize: 11, color: textSecondary }}>Thinking…</Text>
+				<Text style={{ fontSize: 12, color: textSecondary }}>Thinking…</Text>
 			</Row>
 			<Bubble bg={bgTertiary}>
 				<Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>
@@ -421,7 +421,7 @@ function CodeBox({ children }: { children: React.ReactNode }) {
 			style={{
 				backgroundColor: "rgba(255,255,255,0.06)",
 				borderRadius: 8,
-				paddingHorizontal: 10,
+				paddingHorizontal: 12,
 				paddingVertical: 6,
 				marginTop: 4,
 			}}
@@ -444,9 +444,9 @@ function Bubble({
 		<View
 			style={{
 				backgroundColor: bg,
-				borderRadius: 14,
-				paddingHorizontal: 14,
-				paddingVertical: 10,
+				borderRadius: 16,
+				paddingHorizontal: 16,
+				paddingVertical: 12,
 			}}
 		>
 			{children}

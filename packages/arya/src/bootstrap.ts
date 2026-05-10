@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { startMu } from 'mu-core';
 import { createAgentsPlugin } from 'mu-agents';
@@ -7,6 +8,46 @@ import type { AgentDefinition } from 'mu-agents';
 import { createWebSocketChannel } from './ws-channel.js';
 import { createScheduler } from './scheduler.js';
 import { createAryaToolsPlugin } from './plugins/tools/index.js';
+import { createAryaAgentSourcesPlugin } from './plugins/agent-sources.js';
+import { createSessionStore } from './session-store.js';
+
+/** Resolve the XDG config home directory for arya. */
+function xdgAryaAgentsDir(): string {
+  const base = process.env.XDG_CONFIG_HOME ?? join(homedir(), '.config');
+  return join(base, 'arya', 'agents');
+}
+
+/**
+ * Built-in agent names shipped by mu-agents that we suppress so Arya
+ * exposes only user-defined agents from `agentsDir`.
+ *
+ * If mu-agents adds new defaults in a future version, extend these sets.
+ */
+const SUPPRESSED_PRIMARY = new Set(['build', 'plan']);
+const SUPPRESSED_SUB = new Set(['review']);
+
+interface FilterableManager {
+  getPrimary(): AgentDefinition[];
+  getSubagents(): AgentDefinition[];
+  getActive(): AgentDefinition | undefined;
+  setAgents(primary: AgentDefinition[], subagent: AgentDefinition[]): void;
+  onChange(listener: (a: AgentDefinition | undefined) => void): () => void;
+}
+
+function filterBuiltinAgents(manager: FilterableManager): void {
+  const primary = manager.getPrimary();
+  const subagent = manager.getSubagents();
+  const cleanedPrimary = primary.filter((a) => !SUPPRESSED_PRIMARY.has(a.name));
+  const cleanedSub = subagent.filter((a) => !SUPPRESSED_SUB.has(a.name));
+  // Skip the call when nothing changed — prevents an infinite ping-pong
+  // with our own onChange listener (setAgents notifies listeners).
+  if (
+    cleanedPrimary.length !== primary.length ||
+    cleanedSub.length !== subagent.length
+  ) {
+    manager.setAgents(cleanedPrimary, cleanedSub);
+  }
+}
 
 export interface BootstrapConfig {
   baseUrl?: string;
@@ -36,10 +77,17 @@ export async function bootstrap(
   // Load config
   const config = loadConfig(cwd, configPath);
   const agentsDir = config.agentsDir ?? join(cwd, 'definitions', 'agents');
+  const xdgAgentsDir = xdgAryaAgentsDir();
+  // Extra source dirs to merge with the primary agentsDir. Filter to dirs
+  // distinct from the primary so we don't double-register.
+  const extraAgentDirs = [xdgAgentsDir].filter((d) => d !== agentsDir);
 
   console.log(`[arya] Bootstrap — cwd: ${cwd}`);
   console.log(`[arya] Config — baseUrl: ${config.baseUrl}, model: ${config.model}`);
   console.log(`[arya] Agents dir: ${agentsDir}`);
+  if (extraAgentDirs.length > 0) {
+    console.log(`[arya] Extra agents dirs: ${extraAgentDirs.join(', ')}`);
+  }
 
   // Start mu
   const handle = await startMu({
@@ -66,21 +114,45 @@ export async function bootstrap(
         },
         approvalChannelId: 'websocket',
       }),
+      // Merge additional agent source dirs (e.g. ~/.config/arya/agents).
+      // Must come AFTER createAgentsPlugin so ctx.agents is published.
+      createAryaAgentSourcesPlugin({ extraDirs: extraAgentDirs }),
       // Filesystem, shell, HTTP tools
       createAryaToolsPlugin({ cwd }),
     ],
   });
 
-  // Log loaded agents from the mu-agents manager
-  const muAgentsPlugin = handle.registry.getPlugin('mu-agents') as { manager: { getPrimary: () => AgentDefinition[]; getSubagents: () => AgentDefinition[] } } | undefined;
+  // Filter mu-agents built-ins (build/plan/review) so only user-defined
+  // agents from `agentsDir` are exposed. Re-applied on hot-reload via
+  // manager.onChange so chokidar reloads can't reintroduce them.
+  const muAgentsPlugin = handle.registry.getPlugin('mu-agents') as
+    | { manager: FilterableManager }
+    | undefined;
+
   if (muAgentsPlugin?.manager) {
+    filterBuiltinAgents(muAgentsPlugin.manager);
+    muAgentsPlugin.manager.onChange(() => {
+      filterBuiltinAgents(muAgentsPlugin.manager);
+    });
+
     const primary = muAgentsPlugin.manager.getPrimary();
     const subagents = muAgentsPlugin.manager.getSubagents();
-    console.log(`[arya] Loaded ${primary.length} primary agent(s): ${primary.map((a) => a.name).join(', ') || 'none'}`);
-    if (subagents.length > 0) {
-      console.log(`[arya] Loaded ${subagents.length} subagent(s): ${subagents.map((a) => a.name).join(', ') || 'none'}`);
-    }
+    console.log(
+      `[arya] Loaded ${primary.length} primary agent(s): ${
+        primary.map((a) => a.name).join(', ') || 'none'
+      }`,
+    );
+    console.log(
+      `[arya] Loaded ${subagents.length} subagent(s)${
+        subagents.length > 0 ? `: ${subagents.map((a) => a.name).join(', ')}` : ''
+      }`,
+    );
   }
+
+  // Persistent session store (titles, history, list/CRUD). Lives under
+  // $XDG_DATA_HOME/arya/sessions (defaults to ~/.local/share/arya/sessions).
+  const sessionStore = createSessionStore();
+  console.log('[arya] Session store ready');
 
   // Register WebSocket channel for companion
   const wsChannel = createWebSocketChannel(
@@ -90,6 +162,7 @@ export async function bootstrap(
     {
       port: config.wsPort ?? 3001,
       authToken: config.authToken,
+      store: sessionStore,
     },
   );
   handle.channels.register(wsChannel);

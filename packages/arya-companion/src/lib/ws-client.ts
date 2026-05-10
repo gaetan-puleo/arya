@@ -14,9 +14,12 @@ export function createReconnectingSocket(
 	url: string,
 	token: string | undefined,
 	onMessage: (data: unknown) => void,
+	onSocket?: (socket: WebSocket) => void,
 ): WebSocket {
 	const wsUrl = buildWsUrl(url, token);
 	const socket = new WebSocket(wsUrl);
+
+	onSocket?.(socket);
 
 	socket.onmessage = (e) => {
 		try {
@@ -30,7 +33,7 @@ export function createReconnectingSocket(
 	socket.onclose = () => {
 		setTimeout(() => {
 			if (socket.readyState !== WebSocket.OPEN) {
-				createReconnectingSocket(url, token, onMessage);
+				createReconnectingSocket(url, token, onMessage, onSocket);
 			}
 		}, 3000);
 	};

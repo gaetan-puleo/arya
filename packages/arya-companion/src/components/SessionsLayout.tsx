@@ -26,6 +26,7 @@ interface SessionsLayoutProps {
 	onSelect: (sessionId: string) => void;
 	onCreate: () => void;
 	onDelete: (sessionId: string) => void;
+	onDeleteAll: () => void;
 	onRename: (sessionId: string, title: string) => void;
 	children: React.ReactNode;
 }
@@ -72,6 +73,7 @@ export default function SessionsLayout({
 	onSelect,
 	onCreate,
 	onDelete,
+	onDeleteAll,
 	onRename,
 	children,
 }: SessionsLayoutProps) {
@@ -261,6 +263,7 @@ export default function SessionsLayout({
 					onSelect={onSelect}
 					onCreate={onCreate}
 					onDelete={onDelete}
+					onDeleteAll={onDeleteAll}
 					onRename={onRename}
 					onClose={() => onOpenChange(false)}
 					onModalOpenChange={handleModalOpenChange}

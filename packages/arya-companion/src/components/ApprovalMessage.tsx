@@ -1,22 +1,45 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { useUnistyles } from "@/theme/ThemeContext";
-import { AryaAvatar } from "@/components/Primitives";
 import type { ApprovalData } from "@/types/approval";
 
-const ARGS_MAX_LENGTH = 300;
+const ARGS_MAX_LENGTH = 600;
 
-function summarizeArgs(args: string | undefined): string | undefined {
+function prettyArgs(args: string | undefined): string | undefined {
 	if (!args) return undefined;
-	return args.length > ARGS_MAX_LENGTH
-		? `${args.slice(0, ARGS_MAX_LENGTH)}…`
-		: args;
+	let out = args;
+	try {
+		out = JSON.stringify(JSON.parse(args), null, 2);
+	} catch {
+		// keep raw
+	}
+	return out.length > ARGS_MAX_LENGTH ? `${out.slice(0, ARGS_MAX_LENGTH)}…` : out;
+}
+
+function Widget({ children }: { children: React.ReactNode }) {
+	const { theme } = useUnistyles();
+	return (
+		<View
+			style={{
+				borderRadius: 12,
+				borderWidth: 1,
+				borderColor: theme.colors.border,
+				backgroundColor: theme.colors.backgroundSecondary,
+				paddingHorizontal: 12,
+				paddingVertical: 12,
+				gap: 8,
+			}}
+		>
+			{children}
+		</View>
+	);
 }
 
 export default function ApprovalMessage({
 	toolName,
 	toolArgs: args,
+	toolResult,
 	status,
 	onApprove,
 	onDeny,
@@ -24,7 +47,11 @@ export default function ApprovalMessage({
 	onApprove: () => void;
 	onDeny: () => void;
 }) {
-	const [expanded, setExpanded] = useState(true);
+	const summary = prettyArgs(args);
+	const result = prettyArgs(toolResult);
+	const [expanded, setExpanded] = useState(
+		status === "pending" && (summary?.length ?? 0) <= 120,
+	);
 	const { theme } = useUnistyles();
 
 	const textColor = theme.colors.text;
@@ -34,160 +61,199 @@ export default function ApprovalMessage({
 	const dangerColor = theme.colors.danger;
 	const borderColor = theme.colors.border;
 
-	const summary = summarizeArgs(args);
+	const monoFamily = Platform.OS === "ios" ? "Menlo-Regular" : "monospace";
 
 	return (
-		<View style={{ alignItems: "flex-start", paddingHorizontal: 16, paddingVertical: 2 }}>
-			<View
-				style={{
-					flexDirection: "row",
-					gap: 8,
-					alignItems: "flex-end",
-					maxWidth: "85%",
-				}}
-			>
-				<AryaAvatar size={24} />
-				<View
-					style={{
-						backgroundColor: bgTertiary,
-						borderRadius: 16,
-						borderBottomLeftRadius: 6,
-						paddingHorizontal: 10,
-						paddingVertical: 8,
-						flex: 1,
-						gap: 6,
-					}}
-				>
-					{/* Header: shield + tool name + expand toggle */}
-					<Pressable
-						onPress={summary ? () => setExpanded((v) => !v) : undefined}
-						style={({ pressed }) => ({
-							flexDirection: "row",
-							gap: 6,
-							alignItems: "center",
-							paddingVertical: 4,
-							opacity: summary && pressed ? 0.6 : 1,
-						})}
-					>
-						<Ionicons name="shield-outline" size={12} color={textSecondary} />
-						<Text
-							numberOfLines={1}
-							style={{
-								fontSize: 12,
-								fontWeight: "500",
-								color: textColor,
-								flex: 1,
-							}}
+		<View
+			style={{
+				paddingHorizontal: 16,
+			}}
+		>
+			<Widget>
+				{/* Header */}
+				{(() => {
+					const canExpand = !!summary || !!result;
+					const statusColor =
+						status === "approved"
+							? successColor
+							: status === "denied"
+								? dangerColor
+								: null;
+					return (
+						<Pressable
+							onPress={canExpand ? () => setExpanded((v) => !v) : undefined}
+							style={({ pressed }) => ({
+								flexDirection: "row",
+								gap: 6,
+								alignItems: "center",
+								opacity: canExpand && pressed ? 0.6 : 1,
+							})}
 						>
-							{toolName}
-						</Text>
-						{summary ? (
-							<View style={{ flexDirection: "row", gap: 2, alignItems: "center" }}>
-								<Text style={{ fontSize: 11, color: textSecondary }}>
-									{expanded ? "hide" : "show more…"}
-								</Text>
+							<Ionicons name="shield-outline" size={12} color={textSecondary} />
+							<Text
+								numberOfLines={1}
+								style={{
+									fontSize: 12,
+									fontWeight: "500",
+									color: textColor,
+									flex: 1,
+								}}
+							>
+								{toolName}
+							</Text>
+							{statusColor ? (
+								<View
+									style={{
+										flexDirection: "row",
+										gap: 4,
+										alignItems: "center",
+									}}
+								>
+									<Ionicons
+										name={
+											status === "approved"
+												? "checkmark-circle"
+												: "close-circle"
+										}
+										size={13}
+										color={statusColor}
+									/>
+									<Text
+										style={{
+											fontSize: 12,
+											fontWeight: "600",
+											color: statusColor,
+										}}
+									>
+										{status === "approved" ? "Approved" : "Denied"}
+									</Text>
+								</View>
+							) : null}
+							{canExpand ? (
 								<Ionicons
 									name={expanded ? "chevron-up" : "chevron-down"}
 									size={12}
 									color={textSecondary}
 								/>
-							</View>
-						) : null}
-					</Pressable>
+							) : null}
+						</Pressable>
+					);
+				})()}
 
-					{/* Collapsible args */}
-					{expanded && summary ? (
-						<View
+				{/* Args preview */}
+				{expanded && summary ? (
+					<ScrollView
+						horizontal
+						showsHorizontalScrollIndicator={false}
+						style={{
+							alignSelf: "stretch",
+							backgroundColor: bgTertiary,
+							borderRadius: 8,
+						}}
+						contentContainerStyle={{
+							paddingHorizontal: 12,
+							paddingVertical: 8,
+						}}
+					>
+						<Text
 							style={{
-								backgroundColor: "rgba(255,255,255,0.06)",
-								borderRadius: 6,
-								paddingHorizontal: 8,
-								paddingVertical: 6,
+								fontFamily: monoFamily,
+								fontSize: 12,
+								lineHeight: 16,
+								color: textColor,
 							}}
 						>
-							<Text style={{ fontSize: 11, color: textSecondary }}>{summary}</Text>
-						</View>
-					) : null}
+							{summary}
+						</Text>
+					</ScrollView>
+				) : null}
 
-					{/* Buttons / Status */}
-					{status === "pending" ? (
-						<View
+				{/* Result preview (resolved only) */}
+				{status !== "pending" && expanded && result ? (
+					<ScrollView
+						horizontal
+						showsHorizontalScrollIndicator={false}
+						style={{
+							alignSelf: "stretch",
+							backgroundColor: bgTertiary,
+							borderRadius: 8,
+						}}
+						contentContainerStyle={{
+							paddingHorizontal: 12,
+							paddingVertical: 8,
+						}}
+					>
+						<Text
 							style={{
-								flexDirection: "row",
-								gap: 6,
-								justifyContent: "flex-end",
+								fontFamily: monoFamily,
+								fontSize: 12,
+								lineHeight: 16,
+								color: textColor,
 							}}
 						>
-							<Pressable
-								onPress={onDeny}
-								style={({ pressed }) => ({
-									height: 28,
-									paddingHorizontal: 12,
-									borderRadius: 14,
-									backgroundColor: "transparent",
-									borderWidth: 1,
-									borderColor,
-									flexDirection: "row",
-									gap: 3,
-									alignItems: "center",
-									justifyContent: "center",
-									opacity: pressed ? 0.7 : 1,
-									transform: [{ scale: pressed ? 0.97 : 1 }],
-								})}
-							>
-								<Ionicons name="close" size={13} color={dangerColor} />
-								<Text style={{ fontSize: 12, fontWeight: "600", color: dangerColor }}>
-									Deny
-								</Text>
-							</Pressable>
-							<Pressable
-								onPress={onApprove}
-								style={({ pressed }) => ({
-									height: 28,
-									paddingHorizontal: 12,
-									borderRadius: 14,
-									backgroundColor: successColor,
-									flexDirection: "row",
-									gap: 3,
-									alignItems: "center",
-									justifyContent: "center",
-									opacity: pressed ? 0.7 : 1,
-									transform: [{ scale: pressed ? 0.97 : 1 }],
-								})}
-							>
-								<Ionicons name="checkmark" size={13} color="#FFFFFF" />
-								<Text style={{ fontSize: 12, fontWeight: "600", color: "#FFFFFF" }}>
-									Allow
-								</Text>
-							</Pressable>
-						</View>
-					) : (
-						<View
-							style={{
+							{result}
+						</Text>
+					</ScrollView>
+				) : null}
+
+				{/* Controls (pending only) */}
+				{status === "pending" ? (
+					<View
+						style={{
+							flexDirection: "row",
+							gap: 6,
+							justifyContent: "flex-end",
+						}}
+					>
+						<Pressable
+							onPress={onDeny}
+							style={({ pressed }) => ({
+								height: 28,
+								paddingHorizontal: 12,
+								borderRadius: 16,
+								backgroundColor: "transparent",
+								borderWidth: 1,
+								borderColor,
 								flexDirection: "row",
 								gap: 4,
 								alignItems: "center",
-								justifyContent: "flex-end",
-							}}
+								justifyContent: "center",
+								opacity: pressed ? 0.7 : 1,
+								transform: [{ scale: pressed ? 0.97 : 1 }],
+							})}
 						>
-							<Ionicons
-								name={status === "approved" ? "checkmark-circle" : "close-circle"}
-								size={14}
-								color={status === "approved" ? successColor : dangerColor}
-							/>
+							<Ionicons name="close" size={13} color={dangerColor} />
 							<Text
-								style={{
-									fontSize: 12,
-									fontWeight: "600",
-									color: status === "approved" ? successColor : dangerColor,
-								}}
+								style={{ fontSize: 12, fontWeight: "600", color: dangerColor }}
 							>
-								{status === "approved" ? "Approved" : "Denied"}
+								Deny
 							</Text>
-						</View>
-					)}
-				</View>
-			</View>
+						</Pressable>
+						<Pressable
+							onPress={onApprove}
+							style={({ pressed }) => ({
+								height: 28,
+								paddingHorizontal: 12,
+								borderRadius: 16,
+								backgroundColor: successColor,
+								flexDirection: "row",
+								gap: 4,
+								alignItems: "center",
+								justifyContent: "center",
+								opacity: pressed ? 0.7 : 1,
+								transform: [{ scale: pressed ? 0.97 : 1 }],
+							})}
+						>
+							<Ionicons name="checkmark" size={13} color="#FFFFFF" />
+							<Text
+								style={{ fontSize: 12, fontWeight: "600", color: "#FFFFFF" }}
+							>
+								Allow
+							</Text>
+						</Pressable>
+					</View>
+				) : null}
+			</Widget>
 		</View>
 	);
 }

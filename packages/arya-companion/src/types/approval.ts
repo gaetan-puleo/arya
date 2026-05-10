@@ -7,4 +7,6 @@ export interface ApprovalData {
 	toolName: string;
 	toolArgs: string | undefined;
 	status: ApprovalStatus;
+	/** Tool execution result (only for replayed/historic entries). */
+	toolResult?: string;
 }

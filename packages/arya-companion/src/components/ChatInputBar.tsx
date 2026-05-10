@@ -3,9 +3,11 @@ import * as Haptics from "expo-haptics";
 import { useCallback, useState } from "react";
 import {
 	KeyboardAvoidingView,
+	Modal,
 	Platform,
 	Pressable,
 	ScrollView,
+	StatusBar,
 	Text,
 	TextInput,
 	View,
@@ -47,9 +49,10 @@ export default function ChatInputBar({
 	const [inputExpanded, setInputExpanded] = useState(false);
 	const [textHeight, setTextHeight] = useState(MIN_INPUT_HEIGHT);
 	const insets = useSafeAreaInsets();
-	const { theme } = useUnistyles();
+	const { theme, rt } = useUnistyles();
 
 	const bg = theme.colors.background;
+	const bgTranslucent = theme.colors.backgroundTranslucent;
 	const bgSecondary = theme.colors.backgroundSecondary;
 	const bgTertiary = theme.colors.backgroundTertiary;
 	const bgInput = theme.colors.backgroundInput;
@@ -82,6 +85,7 @@ export default function ChatInputBar({
 	}, [hasText, loading, onSend]);
 
 	return (
+		<>
 		<KeyboardAvoidingView
 			behavior={Platform.OS === "ios" ? "padding" : undefined}
 			keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 48 : 0}
@@ -140,19 +144,23 @@ export default function ChatInputBar({
 					paddingHorizontal: 12,
 					paddingTop: 4,
 					paddingBottom: keyboardOpen ? 16 : insets.bottom + 8,
-					backgroundColor: bg,
+					backgroundColor: bgTranslucent,
 				}}
 			>
 				<View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
-					{/* ── More button ── */}
+					{/* ── More button ──
+					    Hidden for now (no attachment/extras action wired yet).
+					    Kept in source so it can be re-enabled by removing the
+					    `display: "none"` once a handler exists. */}
 					<Pressable
 						onPress={() => {}}
 						style={{
+							display: "none",
 							width: 44,
 							height: 44,
 							justifyContent: "center",
 							alignItems: "center",
-							borderRadius: 22,
+							borderRadius: 24,
 							borderWidth: 1,
 							borderColor,
 							backgroundColor: bgInput,
@@ -166,7 +174,7 @@ export default function ChatInputBar({
 						style={{
 							flex: 1,
 							backgroundColor: bgInput,
-							borderRadius: 22,
+							borderRadius: 24,
 							borderWidth: 1,
 							borderColor,
 							minHeight: 44,
@@ -219,7 +227,7 @@ export default function ChatInputBar({
 									height: 28,
 									justifyContent: "center",
 									alignItems: "center",
-									borderRadius: 14,
+									borderRadius: 16,
 								}}
 							>
 								<Ionicons name="expand" size={18} color={textSecondary} />
@@ -237,67 +245,81 @@ export default function ChatInputBar({
 			</View>
 				</View>
 
-			{/* ── Full-screen expanded input overlay ── */}
-			{inputExpanded && (
-				<View
-					style={{
-						position: "absolute",
-						top: 0,
-						left: 0,
-						right: 0,
-						bottom: 0,
-						backgroundColor: bg,
-						zIndex: 100,
-					}}
-				>
-					<TextInput
-						style={{
-							flex: 1,
-							paddingTop: insets.top + 20,
-							paddingHorizontal: 20,
-							paddingBottom: keyboardOpen ? 80 : insets.bottom + 80,
-							fontSize: 18,
-							color: textColor,
-							textAlignVertical: "top",
-							lineHeight: 26,
-						}}
-						value={input}
-						onChangeText={onInputChange}
-						placeholder="Message…"
-						placeholderTextColor={textPlaceholder}
-						multiline
-						autoFocus
-						returnKeyType="send"
-						blurOnSubmit={false}
-						onSubmitEditing={send}
-					/>
-
-					<Pressable
-						onPress={() => setInputExpanded(false)}
-						style={{
-							position: "absolute",
-							top: insets.top + 8,
-							right: 8,
-							width: 44,
-							height: 44,
-							justifyContent: "center",
-							alignItems: "center",
-						}}
-					>
-						<Ionicons name="close" size={28} color={textColor} />
-					</Pressable>
-
-					<SendButton
-						hasText={hasText}
-						loading={loading}
-						onSend={send}
-						fullScreen
-						keyboardOpen={keyboardOpen}
-						insets={insets}
-					/>
-				</View>
-			)}
 		</KeyboardAvoidingView>
+
+			{/* ── Full-screen expanded input overlay ──
+			 * Rendered via React Native Modal so it draws into its own native
+			 * window — sits on top of everything (chat list, mode chip, FAB,
+			 * keyboard avoiding view) and extends over the on-screen keyboard.
+			 */}
+			<Modal
+				visible={inputExpanded}
+				animationType="fade"
+				transparent={false}
+				statusBarTranslucent
+				onRequestClose={() => setInputExpanded(false)}
+				presentationStyle="overFullScreen"
+			>
+				<StatusBar
+					barStyle={rt.themeName === "dark" ? "light-content" : "dark-content"}
+				/>
+				<KeyboardAvoidingView
+					behavior={Platform.OS === "ios" ? "padding" : undefined}
+					style={{ flex: 1, backgroundColor: bg }}
+				>
+					<View style={{ flex: 1, backgroundColor: bg }}>
+						<TextInput
+							style={{
+								flex: 1,
+								width: "100%",
+								paddingTop: insets.top + 56,
+								paddingHorizontal: 20,
+								paddingBottom: 80,
+								fontSize: 18,
+								color: textColor,
+								textAlignVertical: "top",
+								lineHeight: 26,
+							}}
+							value={input}
+							onChangeText={onInputChange}
+							placeholder="Message…"
+							placeholderTextColor={textPlaceholder}
+							multiline
+							autoFocus
+							returnKeyType="send"
+							blurOnSubmit={false}
+							onSubmitEditing={send}
+						/>
+
+						<Pressable
+							onPress={() => setInputExpanded(false)}
+							hitSlop={8}
+							style={{
+								position: "absolute",
+								top: insets.top + 8,
+								right: 8,
+								width: 44,
+								height: 44,
+								justifyContent: "center",
+								alignItems: "center",
+								zIndex: 10,
+							}}
+						>
+							<Ionicons name="close" size={28} color={textColor} />
+						</Pressable>
+
+						<SendButton
+							hasText={hasText}
+							loading={loading}
+							onSend={send}
+							fullScreen
+							keyboardOpen={keyboardOpen}
+							insets={insets}
+						/>
+					</View>
+				</KeyboardAvoidingView>
+			</Modal>
+		</>
 	);
 }
 
@@ -351,7 +373,7 @@ function InlineMenu<T extends { description: string }>({
 						onPress={() => onSelect(item)}
 						style={({ pressed }) => ({
 							flexDirection: "row",
-							gap: 10,
+							gap: 8,
 							alignItems: "center",
 							paddingHorizontal: 16,
 							paddingVertical: 12,
@@ -372,7 +394,7 @@ function InlineMenu<T extends { description: string }>({
 						</Text>
 						<Text
 							style={{
-								fontSize: 13,
+								fontSize: 14,
 								color: textSecondary,
 								flex: 1,
 							}}
@@ -416,7 +438,7 @@ function SendButton({
 				height: 34,
 				justifyContent: "center",
 				alignItems: "center",
-				borderRadius: 17,
+				borderRadius: 16,
 				backgroundColor: hasText ? "#ECECEC" : "#4A4A4A",
 				opacity: !hasText || loading ? 0.4 : 1,
 				...(fullScreen

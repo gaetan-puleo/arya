@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useUnistyles } from "@/theme/ThemeContext";
 import type { SessionSummary } from "@/lib/ws";
 import SessionActionsModal, {
+	SessionDeleteAllModal,
 	SessionDeleteModal,
 	SessionRenameModal,
 } from "@/components/SessionActionsModal";
@@ -30,6 +31,12 @@ interface SessionsDrawerProps {
 	onSelect: (sessionId: string) => void;
 	onCreate: () => void;
 	onDelete: (sessionId: string) => void;
+	/**
+	 * Wipe every session in one shot. Surfaced as a small icon
+	 * button next to the "Sessions" header title; gated behind a
+	 * confirmation modal because the action is irreversible.
+	 */
+	onDeleteAll: () => void;
 	onRename: (sessionId: string, title: string) => void;
 	/** Called when the user taps the panel's X button. */
 	onClose: () => void;
@@ -60,6 +67,7 @@ export default function SessionsDrawer({
 	onSelect,
 	onCreate,
 	onDelete,
+	onDeleteAll,
 	onRename,
 	onClose,
 	onModalOpenChange,
@@ -85,6 +93,10 @@ export default function SessionsDrawer({
 	const [deleteTarget, setDeleteTarget] = useState<SessionSummary | null>(
 		null,
 	);
+	// Whether the bulk "delete all sessions" confirmation is open.
+	// Independent of the per-session deleteTarget — they're surfaced
+	// from different entry points (header icon vs. row long-press).
+	const [deleteAllOpen, setDeleteAllOpen] = useState(false);
 	// Screen-space rect of the long-pressed row, captured the moment
 	// the action modal opens. The modal uses this to anchor itself to
 	// the row's location instead of centering on screen.
@@ -98,15 +110,22 @@ export default function SessionsDrawer({
 	const lastTouchRef = useRef({ x: 0, y: 0 });
 
 	// Bubble modal-open state up so SessionsLayout can suppress its
-	// pan gestures while a row-action modal is on screen. The three
-	// slots are mutually exclusive but we OR them to be safe.
+	// pan gestures while a row-action modal is on screen. The slots
+	// are mutually exclusive in normal use but we OR them to be safe.
 	useEffect(() => {
 		onModalOpenChange?.(
 			actionTarget !== null ||
 				renameTarget !== null ||
-				deleteTarget !== null,
+				deleteTarget !== null ||
+				deleteAllOpen,
 		);
-	}, [actionTarget, renameTarget, deleteTarget, onModalOpenChange]);
+	}, [
+		actionTarget,
+		renameTarget,
+		deleteTarget,
+		deleteAllOpen,
+		onModalOpenChange,
+	]);
 
 	const openActions = useCallback((session: SessionSummary) => {
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -137,6 +156,11 @@ export default function SessionsDrawer({
 		onDelete(deleteTarget.id);
 		setDeleteTarget(null);
 	}, [deleteTarget, onDelete]);
+
+	const handleDeleteAllConfirm = useCallback(() => {
+		onDeleteAll();
+		setDeleteAllOpen(false);
+	}, [onDeleteAll]);
 
 	const handleRenameSubmit = useCallback(
 		(title: string) => {
@@ -172,10 +196,16 @@ export default function SessionsDrawer({
 				paddingBottom: insets.bottom,
 			}}
 		>
-			{/* Header — just the title. Close is via swipe-left on the
-			    panel or the FAB-adjacent gestures owned by SessionsLayout. */}
+			{/* Header — title + bulk-delete affordance. Close is via
+			    swipe-left on the panel or the FAB-adjacent gestures
+			    owned by SessionsLayout, so no close button here.
+			    The trash icon is gated behind a confirmation modal
+			    and only rendered when there's actually something to
+			    delete; otherwise it'd be a confusing no-op. */}
 			<View
 				style={{
+					flexDirection: "row",
+					alignItems: "center",
 					paddingHorizontal: 16,
 					paddingTop: 4,
 					paddingBottom: 8,
@@ -183,6 +213,7 @@ export default function SessionsDrawer({
 			>
 				<Text
 					style={{
+						flex: 1,
 						fontSize: 18,
 						fontWeight: "700",
 						color: theme.colors.text,
@@ -190,6 +221,36 @@ export default function SessionsDrawer({
 				>
 					Sessions
 				</Text>
+				{sessions.length > 0 ? (
+					<Pressable
+						onPress={() => {
+							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+							setDeleteAllOpen(true);
+						}}
+						hitSlop={8}
+						accessibilityLabel="Delete all sessions"
+						accessibilityRole="button"
+						style={({ pressed }) => ({
+							width: 32,
+							height: 32,
+							alignItems: "center",
+							justifyContent: "center",
+							borderRadius: 16,
+							backgroundColor: pressed
+								? theme.colors.backgroundHover
+								: "transparent",
+						})}
+					>
+						<Ionicons
+							name="trash-outline"
+							size={18}
+							// Subtle by default — the destructive color
+							// only kicks in inside the confirmation
+							// modal, so the header glyph stays calm.
+							color={theme.colors.textSecondary}
+						/>
+					</Pressable>
+				) : null}
 			</View>
 
 			{/* List */}
@@ -240,7 +301,7 @@ export default function SessionsDrawer({
 									paddingHorizontal: 16,
 									paddingTop: 12,
 									paddingBottom: 4,
-									fontSize: 11,
+									fontSize: 12,
 									fontWeight: "700",
 									letterSpacing: 0.6,
 									textTransform: "uppercase",
@@ -268,10 +329,10 @@ export default function SessionsDrawer({
 										delayLongPress={350}
 										style={({ pressed }) => ({
 											paddingHorizontal: 12,
-											paddingVertical: 10,
+											paddingVertical: 12,
 											marginHorizontal: 8,
 											marginVertical: 2,
-											borderRadius: 10,
+											borderRadius: 12,
 											backgroundColor: isActive
 												? selectedRowBg
 												: pressed
@@ -292,7 +353,7 @@ export default function SessionsDrawer({
 										<Text
 											style={{
 												marginTop: 2,
-												fontSize: 11,
+												fontSize: 12,
 												color: theme.colors.textTertiary,
 											}}
 										>
@@ -332,8 +393,8 @@ export default function SessionsDrawer({
 					flexDirection: "row",
 					alignItems: "center",
 					gap: 8,
-					paddingLeft: 18,
-					paddingRight: 22,
+					paddingLeft: 20,
+					paddingRight: 24,
 					height: 56,
 					borderRadius: 9999,
 					backgroundColor: "#FFFFFF",
@@ -373,7 +434,7 @@ export default function SessionsDrawer({
 				>
 					<Text
 						style={{
-							fontSize: 15,
+							fontSize: 16,
 							fontWeight: "700",
 							color: "#000000",
 							// Android-only quirks: includeFontPadding adds
@@ -412,6 +473,12 @@ export default function SessionsDrawer({
 			session={deleteTarget}
 			onClose={() => setDeleteTarget(null)}
 			onConfirm={handleDeleteConfirm}
+		/>
+		<SessionDeleteAllModal
+			open={deleteAllOpen}
+			sessionCount={sessions.length}
+			onClose={() => setDeleteAllOpen(false)}
+			onConfirm={handleDeleteAllConfirm}
 		/>
 		</>
 	);

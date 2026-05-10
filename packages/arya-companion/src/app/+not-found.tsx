@@ -28,7 +28,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   link: {
-    marginTop: 15,
+    marginTop: 16,
     paddingVertical: 15,
   },
   linkText: {

@@ -110,7 +110,7 @@ export default function ConfigScreen() {
 				<View style={{ padding: 20 }}>
 					<Text
 						style={{
-							fontSize: 28,
+							fontSize: 30,
 							fontWeight: "700",
 							color: textColor,
 							marginBottom: 24,
@@ -208,12 +208,12 @@ export default function ConfigScreen() {
 						<View
 							style={{
 								backgroundColor: theme.colors.backgroundInput,
-								borderRadius: 10,
+								borderRadius: 12,
 								padding: 12,
 								marginBottom: 12,
 							}}
 						>
-							<Text style={{ fontSize: 13, color: textColor, lineHeight: 22 }}>
+							<Text style={{ fontSize: 14, color: textColor, lineHeight: 22 }}>
 								COMPANION_PORT=3001 \{'\n'}COMPANION_TOKEN=monsecret
 							</Text>
 						</View>

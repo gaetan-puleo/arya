@@ -245,7 +245,7 @@ export default function SessionActionsModal({
 							width: cardPosition ? CARD_WIDTH : "100%",
 							maxWidth: CARD_WIDTH,
 							backgroundColor: theme.colors.backgroundTertiary,
-							borderRadius: 14,
+							borderRadius: 16,
 							borderWidth: 1,
 							borderColor: theme.colors.border,
 							overflow: "hidden",
@@ -298,9 +298,9 @@ function ActionRow({
 			style={({ pressed }) => ({
 				flexDirection: "row",
 				alignItems: "center",
-				gap: 10,
-				paddingHorizontal: 14,
-				paddingVertical: 14,
+				gap: 8,
+				paddingHorizontal: 16,
+				paddingVertical: 16,
 				backgroundColor: pressed
 					? theme.colors.backgroundHover
 					: "transparent",
@@ -309,7 +309,7 @@ function ActionRow({
 			<Ionicons name={icon} size={18} color={color} />
 			<Text
 				style={{
-					fontSize: 15,
+					fontSize: 16,
 					fontWeight: "500",
 					color,
 				}}
@@ -385,17 +385,19 @@ export function SessionRenameModal({
 					style={{
 						width: "100%",
 						maxWidth: 340,
-						backgroundColor: theme.colors.background,
-						borderRadius: 14,
-						borderWidth: 1,
-						borderColor: theme.colors.border,
+						// Same gray as the action and delete modals so
+						// the in-app modal stack stays visually
+						// consistent. No border — the overlay backdrop
+						// already gives the card enough contrast.
+						backgroundColor: theme.colors.backgroundTertiary,
+						borderRadius: 16,
 						padding: 16,
 						gap: 12,
 					}}
 				>
 					<Text
 						style={{
-							fontSize: 15,
+							fontSize: 16,
 							fontWeight: "700",
 							color: theme.colors.text,
 						}}
@@ -418,7 +420,7 @@ export function SessionRenameModal({
 							borderWidth: 1,
 							borderColor: theme.colors.border,
 							borderRadius: 8,
-							paddingHorizontal: 10,
+							paddingHorizontal: 12,
 							paddingVertical: 8,
 							backgroundColor: theme.colors.backgroundInput,
 						}}
@@ -434,7 +436,7 @@ export function SessionRenameModal({
 						<Pressable
 							onPress={onClose}
 							style={({ pressed }) => ({
-								paddingHorizontal: 14,
+								paddingHorizontal: 16,
 								paddingVertical: 8,
 								borderRadius: 9999,
 								backgroundColor: pressed
@@ -444,7 +446,7 @@ export function SessionRenameModal({
 						>
 							<Text
 								style={{
-									fontSize: 13,
+									fontSize: 14,
 									fontWeight: "600",
 									color: theme.colors.textSecondary,
 								}}
@@ -455,7 +457,7 @@ export function SessionRenameModal({
 						<Pressable
 							onPress={submit}
 							style={({ pressed }) => ({
-								paddingHorizontal: 14,
+								paddingHorizontal: 16,
 								paddingVertical: 8,
 								borderRadius: 9999,
 								borderWidth: 1,
@@ -467,7 +469,7 @@ export function SessionRenameModal({
 						>
 							<Text
 								style={{
-									fontSize: 13,
+									fontSize: 14,
 									fontWeight: "700",
 									color: theme.colors.text,
 								}}
@@ -482,33 +484,35 @@ export function SessionRenameModal({
 	);
 }
 
-// ── SessionDeleteModal ───────────────────────────────────────────────────
+// ── ConfirmDeleteModal (shared) ─────────────────────────────────────────
 
-interface SessionDeleteModalProps {
-	/** Session to delete. `null` keeps the modal closed. */
-	session: SessionSummary | null;
+interface ConfirmDeleteModalProps {
+	open: boolean;
+	title: string;
+	body: string;
+	confirmLabel?: string;
 	onClose: () => void;
 	onConfirm: () => void;
 }
 
 /**
- * Custom centered confirmation modal for destructive session deletion.
- * Replaces the platform `Alert.alert` so the visual style matches the
- * other in-app modals (rounded card, themed colors, danger button).
+ * Generic destructive-confirmation modal: centered card with a title,
+ * a short body and Cancel + (danger-styled) confirm buttons.
  *
- * Layout mirrors {@link SessionRenameModal}: title at the top, a short
- * explanatory body, and Cancel + Delete buttons in a right-aligned
- * footer. The Delete button uses the danger color and `notification`
- * haptics to reinforce that the action is destructive.
+ * Used by both the single-session delete prompt and the "delete all
+ * sessions" bulk prompt — extracting the visual shell here keeps the
+ * two callsites in lockstep (any future styling tweak applies to
+ * both at once) without growing the SessionDeleteModal API.
  */
-export function SessionDeleteModal({
-	session,
+function ConfirmDeleteModal({
+	open,
+	title,
+	body,
+	confirmLabel = "Delete",
 	onClose,
 	onConfirm,
-}: SessionDeleteModalProps) {
+}: ConfirmDeleteModalProps) {
 	const { theme } = useUnistyles();
-	const open = session !== null;
-
 	return (
 		<Modal
 			visible={open}
@@ -531,36 +535,34 @@ export function SessionDeleteModal({
 					style={{
 						width: "100%",
 						maxWidth: 340,
-						// Same gray as the action modal card so the two
-						// confirmation surfaces share a visual identity.
+						// Same gray as the other in-app modals so the
+						// confirmation surface stays visually consistent.
 						// No border — the overlay backdrop already gives
 						// the card enough contrast against the panel.
 						backgroundColor: theme.colors.backgroundTertiary,
-						borderRadius: 14,
+						borderRadius: 16,
 						padding: 16,
 						gap: 12,
 					}}
 				>
 					<Text
 						style={{
-							fontSize: 15,
+							fontSize: 16,
 							fontWeight: "700",
 							color: theme.colors.text,
 						}}
 					>
-						Delete session?
+						{title}
 					</Text>
 
 					<Text
 						style={{
-							fontSize: 13,
+							fontSize: 14,
 							lineHeight: 18,
 							color: theme.colors.textSecondary,
 						}}
 					>
-						{session
-							? `"${session.title}" and its history will be permanently removed.`
-							: ""}
+						{body}
 					</Text>
 
 					<View
@@ -573,7 +575,7 @@ export function SessionDeleteModal({
 						<Pressable
 							onPress={onClose}
 							style={({ pressed }) => ({
-								paddingHorizontal: 14,
+								paddingHorizontal: 16,
 								paddingVertical: 8,
 								borderRadius: 9999,
 								backgroundColor: pressed
@@ -583,7 +585,7 @@ export function SessionDeleteModal({
 						>
 							<Text
 								style={{
-									fontSize: 13,
+									fontSize: 14,
 									fontWeight: "600",
 									color: theme.colors.textSecondary,
 								}}
@@ -599,7 +601,7 @@ export function SessionDeleteModal({
 								onConfirm();
 							}}
 							style={({ pressed }) => ({
-								paddingHorizontal: 14,
+								paddingHorizontal: 16,
 								paddingVertical: 8,
 								borderRadius: 9999,
 								backgroundColor: pressed
@@ -609,7 +611,7 @@ export function SessionDeleteModal({
 						>
 							<Text
 								style={{
-									fontSize: 13,
+									fontSize: 14,
 									fontWeight: "700",
 									// White on the danger background reads
 									// reliably across both themes; using
@@ -618,12 +620,81 @@ export function SessionDeleteModal({
 									color: "#FFFFFF",
 								}}
 							>
-								Delete
+								{confirmLabel}
 							</Text>
 						</Pressable>
 					</View>
 				</Pressable>
 			</Pressable>
 		</Modal>
+	);
+}
+
+// ── SessionDeleteModal ───────────────────────────────────────────────────
+
+interface SessionDeleteModalProps {
+	/** Session to delete. `null` keeps the modal closed. */
+	session: SessionSummary | null;
+	onClose: () => void;
+	onConfirm: () => void;
+}
+
+/**
+ * Single-session delete confirmation. Thin wrapper around
+ * {@link ConfirmDeleteModal} that fills in the "Delete session?"
+ * title and the per-session body copy.
+ */
+export function SessionDeleteModal({
+	session,
+	onClose,
+	onConfirm,
+}: SessionDeleteModalProps) {
+	return (
+		<ConfirmDeleteModal
+			open={session !== null}
+			title="Delete session?"
+			body={
+				session
+					? `"${session.title}" and its history will be permanently removed.`
+					: ""
+			}
+			onClose={onClose}
+			onConfirm={onConfirm}
+		/>
+	);
+}
+
+// ── SessionDeleteAllModal ────────────────────────────────────────────────
+
+interface SessionDeleteAllModalProps {
+	/** Whether the bulk-delete confirmation is visible. */
+	open: boolean;
+	/** Number of sessions that would be removed — surfaced in the body. */
+	sessionCount: number;
+	onClose: () => void;
+	onConfirm: () => void;
+}
+
+/**
+ * Bulk "delete every session" confirmation modal. Same visual shell
+ * as {@link SessionDeleteModal}; the body explicitly mentions the
+ * count so users have a sanity check before committing.
+ */
+export function SessionDeleteAllModal({
+	open,
+	sessionCount,
+	onClose,
+	onConfirm,
+}: SessionDeleteAllModalProps) {
+	const plural = sessionCount === 1 ? "session" : "sessions";
+	return (
+		<ConfirmDeleteModal
+			open={open}
+			title="Delete all sessions?"
+			body={`All ${sessionCount} ${plural} and their history will be permanently removed. This cannot be undone.`}
+			confirmLabel="Delete all"
+			onClose={onClose}
+			onConfirm={onConfirm}
+		/>
 	);
 }
