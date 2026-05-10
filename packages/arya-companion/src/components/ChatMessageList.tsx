@@ -4,24 +4,13 @@ import { useEffect, useRef } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { useUnistyles } from "@/theme/ThemeContext";
-
-import ApprovalMessage, {
-  type ApprovalStatus,
-} from "@/components/ApprovalMessage";
+import ApprovalMessage from "@/components/ApprovalMessage";
 import ChatMessage from "@/components/ChatMessage";
-import SubAgentCard, {
-  type SubAgentRunInfo,
-} from "@/components/SubAgentCard";
+import SubAgentCard from "@/components/SubAgentCard";
 import TypingDots from "@/components/TypingDots";
-
-export interface ApprovalData {
-	msgId: string;
-	requestId: string;
-	token: string;
-	toolName: string;
-	toolArgs: string | undefined;
-	status: ApprovalStatus;
-}
+import { AryaAvatar } from "@/components/Primitives";
+import type { ApprovalData } from "@/types/approval";
+import type { SubAgentRunInfo } from "@/components/SubAgentCard";
 
 interface ChatMessageListProps {
 	messages: { id: string; role: "user" | "assistant"; text: string }[];
@@ -95,21 +84,7 @@ export default function ChatMessageList({
 							gap: 12,
 						}}
 					>
-						<View
-							style={{
-								width: 52,
-								height: 52,
-								borderRadius: 26,
-								backgroundColor: "#FFFFFF",
-								justifyContent: "center",
-								alignItems: "center",
-								marginBottom: 4,
-							}}
-						>
-							<Text style={{ fontSize: 28, fontWeight: "700", color: "#1A1A1A" }}>
-								A
-							</Text>
-						</View>
+						<AryaAvatar size={52} />
 						<Text
 							style={{
 								fontSize: 20,
@@ -138,7 +113,7 @@ export default function ChatMessageList({
 						return (
 							<ApprovalMessage
 								toolName={approval.toolName}
-								args={approval.toolArgs}
+								toolArgs={approval.toolArgs}
 								status={approval.status}
 								onApprove={() => onRespondApproval(msg.id, "approve")}
 								onDeny={() => onRespondApproval(msg.id, "deny")}
@@ -165,24 +140,7 @@ export default function ChatMessageList({
 										alignItems: "flex-end",
 									}}
 								>
-									<View
-										style={{
-											width: 24,
-											height: 24,
-											borderRadius: 12,
-											backgroundColor: "#FFFFFF",
-											justifyContent: "center",
-											alignItems: "center",
-											flexShrink: 0,
-											marginBottom: 2,
-										}}
-									>
-										<Text
-											style={{ fontSize: 13, fontWeight: "700", color: "#1A1A1A" }}
-										>
-											A
-										</Text>
-									</View>
+									<AryaAvatar size={24} />
 									<View
 										style={{
 											backgroundColor: bgTertiary,

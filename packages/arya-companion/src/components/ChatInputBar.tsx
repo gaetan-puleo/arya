@@ -79,126 +79,42 @@ export default function ChatInputBar({
 		>
 			{/* ── Inline command menu ── */}
 			{showCommandMenu && filteredCommands.length > 0 && (
-				<View
-					style={{
-						backgroundColor: bgSecondary,
-						borderTopLeftRadius: 16,
-						borderTopRightRadius: 16,
-						borderWidth: 1,
-						borderBottomWidth: 0,
-						borderColor,
-						maxHeight: 220,
-						marginHorizontal: 12,
+				<InlineMenu
+					items={filteredCommands}
+					prefix="/"
+					onSelect={(cmd) => {
+						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+						onInputChange(`/${cmd.command} `);
 					}}
-				>
-					<ScrollView
-						showsVerticalScrollIndicator={false}
-						keyboardShouldPersistTaps="always"
-					>
-						{filteredCommands.map((cmd, i) => (
-							<Pressable
-								key={cmd.command}
-								onPress={() => {
-									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-									onInputChange(`/${cmd.command} `);
-								}}
-								style={({ pressed }) => ({
-									flexDirection: "row",
-									gap: 10,
-									alignItems: "center",
-									paddingHorizontal: 16,
-									paddingVertical: 12,
-									borderBottomWidth: i < filteredCommands.length - 1 ? 1 : 0,
-									borderBottomColor: borderColor,
-									backgroundColor: pressed ? bgTertiary : "transparent",
-								})}
-							>
-								<Text
-									style={{
-										fontSize: 14,
-										fontWeight: "700",
-										color: textColor,
-										flexShrink: 0,
-									}}
-								>
-									/{cmd.command}
-								</Text>
-								<Text
-									style={{
-										fontSize: 13,
-										color: textSecondary,
-										flex: 1,
-									}}
-									numberOfLines={1}
-								>
-									{cmd.description}
-								</Text>
-							</Pressable>
-						))}
-					</ScrollView>
-				</View>
+					label={(item) => `/${item.command}`}
+					description={(item) => item.description}
+					keyExtractor={(item) => item.command}
+					bgSecondary={bgSecondary}
+					bgTertiary={bgTertiary}
+					borderColor={borderColor}
+					textColor={textColor}
+					textSecondary={textSecondary}
+				/>
 			)}
 
 			{/* ── Inline agent menu ── */}
 			{showAgentMenu && filteredAgents.length > 0 && (
-				<View
-					style={{
-						backgroundColor: bgSecondary,
-						borderTopLeftRadius: 16,
-						borderTopRightRadius: 16,
-						borderWidth: 1,
-						borderBottomWidth: 0,
-						borderColor,
-						maxHeight: 220,
-						marginHorizontal: 12,
+				<InlineMenu
+					items={filteredAgents}
+					prefix="@"
+					onSelect={(agent) => {
+						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+						onInputChange(`@${agent.id} `);
 					}}
-				>
-					<ScrollView
-						showsVerticalScrollIndicator={false}
-						keyboardShouldPersistTaps="always"
-					>
-						{filteredAgents.map((agent, i) => (
-							<Pressable
-								key={agent.id}
-								onPress={() => {
-									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-									onInputChange(`@${agent.id} `);
-								}}
-								style={({ pressed }) => ({
-									flexDirection: "row",
-									gap: 10,
-									alignItems: "center",
-									paddingHorizontal: 16,
-									paddingVertical: 12,
-									borderBottomWidth: i < filteredAgents.length - 1 ? 1 : 0,
-									borderBottomColor: borderColor,
-									backgroundColor: pressed ? bgTertiary : "transparent",
-								})}
-							>
-								<Text
-									style={{
-										fontSize: 14,
-										fontWeight: "700",
-										color: textColor,
-										flexShrink: 0,
-									}}
-								>
-									@{agent.id}
-								</Text>
-								<Text
-									style={{
-										fontSize: 13,
-										color: textSecondary,
-										flex: 1,
-									}}
-									numberOfLines={1}
-								>
-									{agent.description}
-								</Text>
-							</Pressable>
-						))}
-					</ScrollView>
-				</View>
+					label={(item) => `@${item.id}`}
+					description={(item) => item.description}
+					keyExtractor={(item) => item.id}
+					bgSecondary={bgSecondary}
+					bgTertiary={bgTertiary}
+					borderColor={borderColor}
+					textColor={textColor}
+					textSecondary={textSecondary}
+				/>
 			)}
 
 			<View
@@ -265,28 +181,11 @@ export default function ChatInputBar({
 					</View>
 
 					{/* ── Send button — absolute bottom-right ── */}
-					<Pressable
-						onPress={send}
-						disabled={!hasText || loading}
-						style={{
-							position: "absolute",
-							bottom: 4,
-							right: 4,
-							width: 32,
-							height: 32,
-							justifyContent: "center",
-							alignItems: "center",
-							borderRadius: 16,
-							backgroundColor: hasText ? "#ECECEC" : "#4A4A4A",
-							opacity: !hasText || loading ? 0.4 : 1,
-						}}
-					>
-						<Ionicons
-							name="arrow-up"
-							size={18}
-							color={hasText ? "#1A1A1A" : "#8E8E8E"}
-						/>
-					</Pressable>
+					<SendButton
+						hasText={hasText}
+						loading={loading}
+						onSend={send}
+					/>
 				</View>
 			</View>
 
@@ -303,7 +202,6 @@ export default function ChatInputBar({
 						zIndex: 100,
 					}}
 				>
-					{/* Full-screen TextInput */}
 					<TextInput
 						style={{
 							flex: 1,
@@ -326,7 +224,6 @@ export default function ChatInputBar({
 						onSubmitEditing={send}
 					/>
 
-					{/* Close button — top-right corner */}
 					<Pressable
 						onPress={() => onExpandChange(false)}
 						style={{
@@ -342,31 +239,154 @@ export default function ChatInputBar({
 						<Ionicons name="close" size={28} color={textColor} />
 					</Pressable>
 
-					{/* Send button — bottom-right corner */}
-					<Pressable
-						onPress={send}
-						disabled={!hasText || loading}
-						style={{
-							position: "absolute",
-							bottom: keyboardOpen ? 16 : insets.bottom + 16,
-							right: 16,
-							width: 40,
-							height: 40,
-							borderRadius: 20,
-							justifyContent: "center",
-							alignItems: "center",
-							backgroundColor: hasText ? "#ECECEC" : "#4A4A4A",
-							opacity: !hasText || loading ? 0.4 : 1,
-						}}
-					>
-						<Ionicons
-							name="arrow-up"
-							size={22}
-							color={hasText ? "#1A1A1A" : "#8E8E8E"}
-						/>
-					</Pressable>
+					<SendButton
+						hasText={hasText}
+						loading={loading}
+						onSend={send}
+						fullScreen
+						keyboardOpen={keyboardOpen}
+						insets={insets}
+					/>
 				</View>
 			)}
 		</KeyboardAvoidingView>
+	);
+}
+
+// ── Shared inline menu ─────────────────────────────────────────────────
+
+function InlineMenu<T extends { description: string }>({
+	items,
+	prefix,
+	onSelect,
+	label,
+	description,
+	keyExtractor,
+	bgSecondary,
+	bgTertiary,
+	borderColor,
+	textColor,
+	textSecondary,
+}: {
+	items: T[];
+	prefix: string;
+	onSelect: (item: T) => void;
+	label: (item: T) => string;
+	description: (item: T) => string;
+	keyExtractor: (item: T) => string;
+	bgSecondary: string;
+	bgTertiary: string;
+	borderColor: string;
+	textColor: string;
+	textSecondary: string;
+}) {
+	return (
+		<View
+			style={{
+				backgroundColor: bgSecondary,
+				borderTopLeftRadius: 16,
+				borderTopRightRadius: 16,
+				borderWidth: 1,
+				borderBottomWidth: 0,
+				borderColor,
+				maxHeight: 220,
+				marginHorizontal: 12,
+			}}
+		>
+			<ScrollView
+				showsVerticalScrollIndicator={false}
+				keyboardShouldPersistTaps="always"
+			>
+				{items.map((item, i) => (
+					<Pressable
+						key={keyExtractor(item)}
+						onPress={() => onSelect(item)}
+						style={({ pressed }) => ({
+							flexDirection: "row",
+							gap: 10,
+							alignItems: "center",
+							paddingHorizontal: 16,
+							paddingVertical: 12,
+							borderBottomWidth: i < items.length - 1 ? 1 : 0,
+							borderBottomColor: borderColor,
+							backgroundColor: pressed ? bgTertiary : "transparent",
+						})}
+					>
+						<Text
+							style={{
+								fontSize: 14,
+								fontWeight: "700",
+								color: textColor,
+								flexShrink: 0,
+							}}
+						>
+							{label(item)}
+						</Text>
+						<Text
+							style={{
+								fontSize: 13,
+								color: textSecondary,
+								flex: 1,
+							}}
+							numberOfLines={1}
+						>
+							{description(item)}
+						</Text>
+					</Pressable>
+				))}
+			</ScrollView>
+		</View>
+	);
+}
+
+// ── Send button ────────────────────────────────────────────────────────
+
+function SendButton({
+	hasText,
+	loading,
+	onSend,
+	fullScreen = false,
+	keyboardOpen,
+	insets,
+}: {
+	hasText: boolean;
+	loading: boolean;
+	onSend: () => void;
+	fullScreen?: boolean;
+	keyboardOpen?: boolean;
+	insets?: ReturnType<typeof useSafeAreaInsets>;
+}) {
+	return (
+		<Pressable
+			onPress={onSend}
+			disabled={!hasText || loading}
+			style={{
+				position: "absolute",
+				bottom: 4,
+				right: 4,
+				width: 32,
+				height: 32,
+				justifyContent: "center",
+				alignItems: "center",
+				borderRadius: 16,
+				backgroundColor: hasText ? "#ECECEC" : "#4A4A4A",
+				opacity: !hasText || loading ? 0.4 : 1,
+				...(fullScreen
+					? {
+							bottom: keyboardOpen ? 16 : (insets?.bottom ?? 0) + 16,
+							width: 40,
+							height: 40,
+							borderRadius: 20,
+							right: 16,
+						}
+					: {}),
+			}}
+		>
+			<Ionicons
+				name="arrow-up"
+				size={fullScreen ? 22 : 18}
+				color={hasText ? "#1A1A1A" : "#8E8E8E"}
+			/>
+		</Pressable>
 	);
 }

@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 import Animated, { FadeInLeft } from "react-native-reanimated";
 import { useUnistyles } from "@/theme/ThemeContext";
+import { AryaAvatar } from "@/components/Primitives";
 
 export type SubAgentStatus = "running" | "success" | "error";
 
@@ -65,25 +66,8 @@ export default function SubAgentCard({ run }: { run: SubAgentRunInfo }) {
 						maxWidth: "85%",
 					}}
 				>
-					{/* Avatar */}
-					<View
-						style={{
-							width: 24,
-							height: 24,
-							borderRadius: 12,
-							backgroundColor: "#FFFFFF",
-							justifyContent: "center",
-							alignItems: "center",
-							flexShrink: 0,
-							marginBottom: 2,
-						}}
-					>
-						<Text style={{ fontSize: 13, fontWeight: "700", color: "#1A1A1A" }}>
-							A
-						</Text>
-					</View>
+					<AryaAvatar size={24} />
 
-					{/* Card */}
 					<Pressable
 						onPress={() =>
 							router.push({
@@ -138,9 +122,7 @@ export default function SubAgentCard({ run }: { run: SubAgentRunInfo }) {
 										{formatDuration(run.startTs, run.endTs)}
 									</Text>
 								</View>
-								<View
-									style={{ flex: 1, flexDirection: "row", justifyContent: "flex-end" }}
-								>
+								<View style={{ flex: 1, flexDirection: "row", justifyContent: "flex-end" }}>
 									<View style={{ flexDirection: "row", gap: 2, alignItems: "center" }}>
 										<Text style={{ fontSize: 11, color: infoColor }}>Details</Text>
 										<Ionicons name="chevron-forward" size={11} color={infoColor} />

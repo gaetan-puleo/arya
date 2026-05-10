@@ -3,10 +3,14 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useUnistyles } from "@/theme/ThemeContext";
 import type { SubAgentEvent, SubAgentEventKind } from "@/lib/ws";
+import { globalSubAgentEvents } from "@/lib/subAgentStore";
+import { createReconnectingSocket } from "@/lib/ws-client";
+import { formatArgs, formatTime } from "@/utils/format";
+import { IconButton } from "@/components/Primitives";
 
 const WS_KEY = "arya-companion-ws";
 
@@ -18,23 +22,6 @@ interface TimelineEntry {
 	data: Record<string, unknown>;
 }
 
-function formatTime(ts: number): string {
-	const d = new Date(ts);
-	return d.toLocaleTimeString([], {
-		hour: "2-digit",
-		minute: "2-digit",
-		second: "2-digit",
-	});
-}
-
-function formatArgs(args: unknown): string {
-	if (!args || typeof args !== "object") return "";
-	const entries = Object.entries(args as Record<string, unknown>).slice(0, 5);
-	return entries
-		.map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`)
-		.join("\n");
-}
-
 export default function SubAgentDetailScreen() {
 	const { runId } = useLocalSearchParams<{ runId: string }>();
 	const insets = useSafeAreaInsets();
@@ -42,7 +29,6 @@ export default function SubAgentDetailScreen() {
 	const { theme } = useUnistyles();
 
 	const bg = theme.colors.background;
-	const bgSecondary = theme.colors.backgroundSecondary;
 	const bgTertiary = theme.colors.backgroundTertiary;
 	const bgInput = theme.colors.backgroundInput;
 	const textColor = theme.colors.text;
@@ -54,25 +40,12 @@ export default function SubAgentDetailScreen() {
 	const warningColor = theme.colors.warning;
 
 	const [agentId, setAgentId] = useState<string>("");
-	const [status, setStatus] = useState<"running" | "success" | "error">(
-		"running",
-	);
+	const [status, setStatus] = useState<"running" | "success" | "error">("running");
 	const [entries, setEntries] = useState<TimelineEntry[]>([]);
 	const [streamedText, setStreamedText] = useState("");
 	const streamedRef = useRef("");
 	const ws = useRef<WebSocket | null>(null);
 	const seenIds = useRef(new Set<string>());
-
-	// Load events that were already collected before navigating here
-	// They're stored on a global (set by index.tsx)
-	useEffect(() => {
-		const stored = globalSubAgentEvents.get(runId ?? "");
-		if (stored) {
-			for (const evt of stored) {
-				processEvent(evt);
-			}
-		}
-	}, [runId, processEvent]);
 
 	const processEvent = useCallback(
 		(evt: SubAgentEvent) => {
@@ -87,13 +60,11 @@ export default function SubAgentDetailScreen() {
 				const delta = (evt.data.delta as string) ?? "";
 				streamedRef.current += delta;
 				setStreamedText(streamedRef.current);
-				return; // Don't add to timeline — streamed text is shown separately
+				return;
 			} else if (evt.kind === "message_end") {
-				// Replace streamed text with final message
 				const text = (evt.data.text as string) ?? "";
 				streamedRef.current = "";
 				setStreamedText("");
-				// Add as timeline entry
 				setEntries((prev) => [
 					...prev,
 					{ id: evtId, kind: evt.kind, ts: evt.ts, data: { text } },
@@ -112,49 +83,40 @@ export default function SubAgentDetailScreen() {
 		[],
 	);
 
+	// Load events that were already collected before navigating here
+	useEffect(() => {
+		const stored = globalSubAgentEvents.get(runId ?? "");
+		if (stored) {
+			for (const evt of stored) {
+				processEvent(evt);
+			}
+		}
+	}, [runId, processEvent]);
+
 	// Connect WebSocket to listen for new events in real-time
 	useEffect(() => {
 		AsyncStorage.getItem(WS_KEY).then((raw) => {
 			if (!raw) return;
 			const cfg = JSON.parse(raw);
-			connectWs(cfg.url, cfg.token);
+			const socket = createReconnectingSocket(
+				cfg.url,
+				cfg.token,
+				(msg) => {
+					const m = msg as Record<string, unknown>;
+					if (
+						m.type === "sub_agent_event" &&
+						(m.event as Record<string, unknown>)?.runId === runId
+					) {
+						processEvent(m.event as SubAgentEvent);
+					}
+				},
+			);
+			ws.current = socket;
 		});
 		return () => {
 			ws.current?.close();
 		};
-	}, [connectWs]);
-
-	const connectWs = useCallback(
-		(url: string, token?: string) => {
-			const wsUrl = url.replace(/^https:/, "wss:").replace(/^http:/, "ws:");
-			const params = token
-				? `${wsUrl.includes("?") ? "&" : "?"}token=${token}`
-				: "";
-			const socket = new WebSocket(`${wsUrl}${params}`);
-			ws.current = socket;
-
-			socket.onclose = () => {
-				setTimeout(() => {
-					if (ws.current === socket) connectWs(wsUrl, token);
-				}, 3000);
-			};
-
-			socket.onmessage = (e) => {
-				try {
-					const msg = JSON.parse(e.data);
-					if (
-						msg.type === "sub_agent_event" &&
-						msg.event?.runId === runId
-					) {
-						processEvent(msg.event as SubAgentEvent);
-					}
-				} catch {
-					// ignore
-				}
-			};
-		},
-		[runId, processEvent],
-	);
+	}, [runId, processEvent]);
 
 	const statusIcon: keyof typeof Ionicons.glyphMap =
 		status === "running"
@@ -184,21 +146,9 @@ export default function SubAgentDetailScreen() {
 					headerShown: true,
 					headerTitle: agentId ? `@${agentId}` : "Sub-Agent",
 					headerTintColor: textColor,
-					headerStyle: { backgroundColor: bgSecondary },
+					headerStyle: { backgroundColor: theme.colors.backgroundSecondary },
 					headerLeft: () => (
-						<Pressable
-							onPress={() => router.back()}
-							style={{
-								width: 32,
-								height: 32,
-								borderRadius: 16,
-								backgroundColor: "transparent",
-								justifyContent: "center",
-								alignItems: "center",
-							}}
-						>
-							<Ionicons name="arrow-back" size={22} color={textColor} />
-						</Pressable>
+						<IconButton name="arrow-back" onPress={() => router.back()} />
 					),
 					headerRight: () => (
 						<View
@@ -283,47 +233,21 @@ function TimelineItem({
 		case "invocation_start": {
 			const prompt = entry.data.prompt as string | undefined;
 			return (
-				<View
-					style={{
-						flexDirection: "row",
-						gap: 10,
-						paddingHorizontal: 16,
-						paddingVertical: 6,
-						alignItems: "flex-start",
-					}}
-				>
-					<View style={{ width: 20, alignItems: "center", paddingTop: 3 }}>
-						<Ionicons name="play-circle" size={16} color={infoColor} />
-					</View>
+				<Row gap={10} paddingH={16} paddingV={6} iconColor={infoColor} icon="play-circle" iconSize={16}>
 					<View style={{ flex: 1, gap: 2 }}>
-						<View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+						<RowInner justifyBetween>
 							<Text style={{ fontSize: 13, fontWeight: "600", color: textColor }}>
 								Invocation started
 							</Text>
 							<Text style={{ fontSize: 10, color: textSecondary }}>
 								{formatTime(entry.ts)}
 							</Text>
-						</View>
+						</RowInner>
 						{prompt ? (
-							<View
-								style={{
-									backgroundColor: bgInput,
-									borderRadius: 8,
-									paddingHorizontal: 10,
-									paddingVertical: 6,
-									marginTop: 4,
-								}}
-							>
-								<Text
-									numberOfLines={4}
-									style={{ fontSize: 12, color: textSecondary }}
-								>
-									{prompt}
-								</Text>
-							</View>
+							<CodeBox>{prompt}</CodeBox>
 						) : null}
 					</View>
-				</View>
+				</Row>
 			);
 		}
 
@@ -332,47 +256,21 @@ function TimelineItem({
 			const args = entry.data.args;
 			const argsStr = formatArgs(args);
 			return (
-				<View
-					style={{
-						flexDirection: "row",
-						gap: 10,
-						paddingHorizontal: 16,
-						paddingVertical: 6,
-						alignItems: "flex-start",
-					}}
-				>
-					<View style={{ width: 20, alignItems: "center", paddingTop: 3 }}>
-						<Ionicons name="construct" size={14} color={warningColor} />
-					</View>
+				<Row gap={10} paddingH={16} paddingV={6} iconColor={warningColor} icon="construct" iconSize={14}>
 					<View style={{ flex: 1, gap: 2 }}>
-						<View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+						<RowInner justifyBetween>
 							<Text style={{ fontSize: 13, fontWeight: "600", color: textColor }}>
 								{toolName}
 							</Text>
 							<Text style={{ fontSize: 10, color: textSecondary }}>
 								{formatTime(entry.ts)}
 							</Text>
-						</View>
+						</RowInner>
 						{argsStr ? (
-							<View
-								style={{
-									backgroundColor: bgInput,
-									borderRadius: 8,
-									paddingHorizontal: 10,
-									paddingVertical: 6,
-									marginTop: 2,
-								}}
-							>
-								<Text
-									numberOfLines={6}
-									style={{ fontSize: 11, color: textSecondary }}
-								>
-									{argsStr}
-								</Text>
-							</View>
+							<CodeBox>{argsStr}</CodeBox>
 						) : null}
 					</View>
-				</View>
+				</Row>
 			);
 		}
 
@@ -380,22 +278,14 @@ function TimelineItem({
 			const toolName = (entry.data.toolName as string) ?? "unknown";
 			const isError = entry.data.isError === true;
 			return (
-				<View
-					style={{
-						flexDirection: "row",
-						gap: 10,
-						paddingHorizontal: 16,
-						paddingVertical: 4,
-						alignItems: "center",
-					}}
+				<Row
+					paddingH={16}
+					paddingV={4}
+					alignCenter
+					iconColor={isError ? dangerColor : successColor}
+					icon={isError ? "close-circle" : "checkmark-circle"}
+					iconSize={13}
 				>
-					<View style={{ width: 20, alignItems: "center" }}>
-						<Ionicons
-							name={isError ? "close-circle" : "checkmark-circle"}
-							size={13}
-							color={isError ? dangerColor : successColor}
-						/>
-					</View>
 					<Text style={{ fontSize: 12, color: isError ? dangerColor : textSecondary }}>
 						{toolName} — {isError ? "failed" : "done"}
 					</Text>
@@ -404,32 +294,14 @@ function TimelineItem({
 							{formatTime(entry.ts)}
 						</Text>
 					</View>
-				</View>
+				</Row>
 			);
 		}
 
 		case "message_end": {
 			const text = (entry.data.text as string) ?? "";
 			return (
-				<View style={{ paddingHorizontal: 16, paddingVertical: 6 }}>
-					<View
-						style={{
-							backgroundColor: bgTertiary,
-							borderRadius: 14,
-							paddingHorizontal: 14,
-							paddingVertical: 10,
-						}}
-					>
-						<Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>
-							{text}
-						</Text>
-					</View>
-					<View style={{ flexDirection: "row", justifyContent: "flex-end", paddingTop: 2 }}>
-						<Text style={{ fontSize: 10, color: textSecondary }}>
-							{formatTime(entry.ts)}
-						</Text>
-					</View>
-				</View>
+				<MessageBubble text={text} textColor={textColor} time={formatTime(entry.ts)} />
 			);
 		}
 
@@ -438,24 +310,9 @@ function TimelineItem({
 			const isError = st === "error";
 			const errorMsg = entry.data.error as string | undefined;
 			return (
-				<View
-					style={{
-						flexDirection: "row",
-						gap: 10,
-						paddingHorizontal: 16,
-						paddingVertical: 6,
-						alignItems: "flex-start",
-					}}
-				>
-					<View style={{ width: 20, alignItems: "center", paddingTop: 3 }}>
-						<Ionicons
-							name={isError ? "close-circle" : "checkmark-circle"}
-							size={16}
-							color={isError ? dangerColor : successColor}
-						/>
-					</View>
+				<Row gap={10} paddingH={16} paddingV={6} iconColor={isError ? dangerColor : successColor} icon={isError ? "close-circle" : "checkmark-circle"} iconSize={16}>
 					<View style={{ flex: 1, gap: 2 }}>
-						<View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+						<RowInner justifyBetween>
 							<Text
 								style={{
 									fontSize: 13,
@@ -468,17 +325,14 @@ function TimelineItem({
 							<Text style={{ fontSize: 10, color: textSecondary }}>
 								{formatTime(entry.ts)}
 							</Text>
-						</View>
+						</RowInner>
 						{isError && errorMsg ? (
-							<Text
-								numberOfLines={3}
-								style={{ fontSize: 12, color: dangerColor }}
-							>
+							<Text numberOfLines={3} style={{ fontSize: 12, color: dangerColor }}>
 								{errorMsg}
 							</Text>
 						) : null}
 					</View>
-				</View>
+				</Row>
 			);
 		}
 
@@ -487,7 +341,7 @@ function TimelineItem({
 	}
 }
 
-// ── Streaming text bubble (shown at top while text is streaming) ────
+// ── Streaming text bubble ──────────────────────────────────────────────
 
 function StreamingTextBubble({
 	text,
@@ -502,33 +356,143 @@ function StreamingTextBubble({
 }) {
 	return (
 		<View style={{ paddingHorizontal: 16, paddingVertical: 6 }}>
-			<View
-				style={{
-					flexDirection: "row",
-					gap: 4,
-					alignItems: "center",
-					paddingBottom: 4,
-				}}
-			>
+			<Row gap={4} alignBottom paddingV={4}>
 				<Ionicons name="chatbubble-ellipses-outline" size={12} color={textSecondary} />
 				<Text style={{ fontSize: 11, color: textSecondary }}>Thinking…</Text>
-			</View>
-			<View
-				style={{
-					backgroundColor: bgTertiary,
-					borderRadius: 14,
-					paddingHorizontal: 14,
-					paddingVertical: 10,
-				}}
-			>
+			</Row>
+			<Bubble bg={bgTertiary}>
 				<Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>
 					{text}
 				</Text>
-			</View>
+			</Bubble>
 		</View>
 	);
 }
 
-// ── Global store for sub-agent events (populated by index.tsx) ──────
+// ── Shared layout helpers ──────────────────────────────────────────────
 
-export const globalSubAgentEvents = new Map<string, SubAgentEvent[]>();
+function Row({
+	children,
+	gap = 0,
+	paddingH,
+	paddingV,
+	alignCenter,
+	alignBottom,
+	justifyBetween,
+	iconColor,
+	icon,
+	iconSize = 14,
+}: {
+	children: React.ReactNode;
+	gap?: number;
+	paddingH?: number;
+	paddingV?: number;
+	alignCenter?: boolean;
+	alignBottom?: boolean;
+	justifyBetween?: boolean;
+	iconColor?: string;
+	icon?: keyof typeof Ionicons.glyphMap;
+	iconSize?: number;
+}) {
+	return (
+		<View
+			style={{
+				flexDirection: "row",
+				gap,
+				paddingHorizontal: paddingH,
+				paddingVertical: paddingV,
+				alignItems: alignCenter ? "center" : alignBottom ? "flex-end" : "flex-start",
+				justifyContent: justifyBetween ? "space-between" : undefined,
+			}}
+		>
+			{icon && (
+				<View style={{ width: 20, alignItems: "center", paddingTop: alignCenter ? undefined : 3 }}>
+					<Ionicons name={icon} size={iconSize} color={iconColor!} />
+				</View>
+			)}
+			{children}
+		</View>
+	);
+}
+
+function CodeBox({ children }: { children: React.ReactNode }) {
+	return (
+		<View
+			style={{
+				backgroundColor: "rgba(255,255,255,0.06)",
+				borderRadius: 8,
+				paddingHorizontal: 10,
+				paddingVertical: 6,
+				marginTop: 4,
+			}}
+		>
+			<Text numberOfLines={6} style={{ fontSize: 12, color: "#B4B4B4" }}>
+				{children}
+			</Text>
+		</View>
+	);
+}
+
+function Bubble({
+	children,
+	bg,
+}: {
+	children: React.ReactNode;
+	bg: string;
+}) {
+	return (
+		<View
+			style={{
+				backgroundColor: bg,
+				borderRadius: 14,
+				paddingHorizontal: 14,
+				paddingVertical: 10,
+			}}
+		>
+			{children}
+		</View>
+	);
+}
+
+function MessageBubble({
+	text,
+	textColor,
+	time,
+}: {
+	text: string;
+	textColor: string;
+	time: string;
+}) {
+	return (
+		<View style={{ paddingHorizontal: 16, paddingVertical: 6 }}>
+			<Bubble bg="#2F2F2F">
+				<Text style={{ fontSize: 14, color: textColor, lineHeight: 20 }}>
+					{text}
+				</Text>
+			</Bubble>
+			<RowInner justifyBetween>
+				<View />
+				<Text style={{ fontSize: 10, color: "#B4B4B4" }}>{time}</Text>
+			</RowInner>
+		</View>
+	);
+}
+
+function RowInner({
+	children,
+	justifyBetween,
+}: {
+	children: React.ReactNode;
+	justifyBetween?: boolean;
+}) {
+	return (
+		<View
+			style={{
+				flexDirection: "row",
+				justifyContent: justifyBetween ? "space-between" : undefined,
+			}}
+		>
+			{children}
+		</View>
+	);
+}

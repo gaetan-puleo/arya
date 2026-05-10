@@ -2,16 +2,8 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useUnistyles } from "@/theme/ThemeContext";
-
-export type ApprovalStatus = "pending" | "approved" | "denied";
-
-interface ApprovalMessageProps {
-	toolName: string;
-	args?: string;
-	status: ApprovalStatus;
-	onApprove: () => void;
-	onDeny: () => void;
-}
+import { AryaAvatar } from "@/components/Primitives";
+import type { ApprovalData } from "@/types/approval";
 
 const ARGS_MAX_LENGTH = 300;
 
@@ -24,13 +16,16 @@ function summarizeArgs(args: string | undefined): string | undefined {
 
 export default function ApprovalMessage({
 	toolName,
-	args,
+	toolArgs: args,
 	status,
 	onApprove,
 	onDeny,
-}: ApprovalMessageProps) {
-	const { theme } = useUnistyles();
+}: Omit<ApprovalData, "msgId" | "requestId" | "token"> & {
+	onApprove: () => void;
+	onDeny: () => void;
+}) {
 	const [expanded, setExpanded] = useState(true);
+	const { theme } = useUnistyles();
 
 	const textColor = theme.colors.text;
 	const textSecondary = theme.colors.textSecondary;
@@ -51,20 +46,7 @@ export default function ApprovalMessage({
 					maxWidth: "85%",
 				}}
 			>
-				<View
-					style={{
-						width: 24,
-						height: 24,
-						borderRadius: 12,
-						backgroundColor: "#FFFFFF",
-						justifyContent: "center",
-						alignItems: "center",
-						flexShrink: 0,
-						marginBottom: 2,
-					}}
-				>
-					<Text style={{ fontSize: 13, fontWeight: "700", color: "#1A1A1A" }}>A</Text>
-				</View>
+				<AryaAvatar size={24} />
 				<View
 					style={{
 						backgroundColor: bgTertiary,
