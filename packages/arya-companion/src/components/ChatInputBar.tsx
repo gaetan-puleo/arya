@@ -1,19 +1,28 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import {
 	KeyboardAvoidingView,
+	LayoutAnimation,
 	Platform,
 	Pressable,
 	ScrollView,
 	Text,
 	TextInput,
+	UIManager,
 	View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useUnistyles } from "@/theme/ThemeContext";
 
 import type { CommandInfo, AgentInfo } from "@/lib/ws";
+
+if (
+	Platform.OS === "android" &&
+	UIManager.setLayoutAnimationEnabledExperimental
+) {
+	UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 interface ChatInputBarProps {
 	input: string;
@@ -24,13 +33,13 @@ interface ChatInputBarProps {
 	filteredCommands: CommandInfo[];
 	showAgentMenu: boolean;
 	filteredAgents: AgentInfo[];
-	inputExpanded: boolean;
-	onExpandChange: (v: boolean) => void;
-	textHeight: number;
 	keyboardOpen: boolean;
 	keyboardHeight: number;
-	setTextHeight: (v: number) => void;
 }
+
+const MIN_INPUT_HEIGHT = 28;
+const COLLAPSED_MAX_HEIGHT = 120;
+const EXPAND_BUTTON_THRESHOLD = 100;
 
 export default function ChatInputBar({
 	input,
@@ -41,13 +50,11 @@ export default function ChatInputBar({
 	filteredCommands,
 	showAgentMenu,
 	filteredAgents,
-	inputExpanded,
-	onExpandChange,
-	textHeight,
 	keyboardOpen,
 	keyboardHeight,
-	setTextHeight,
 }: ChatInputBarProps) {
+	const [inputExpanded, setInputExpanded] = useState(false);
+	const [textHeight, setTextHeight] = useState(MIN_INPUT_HEIGHT);
 	const insets = useSafeAreaInsets();
 	const { theme } = useUnistyles();
 
@@ -62,6 +69,25 @@ export default function ChatInputBar({
 
 	const hasText = input.trim().length > 0;
 
+	const scrollEnabled = textHeight >= COLLAPSED_MAX_HEIGHT;
+	const showExpandButton =
+		textHeight >= EXPAND_BUTTON_THRESHOLD && !inputExpanded;
+
+	const handleContentSizeChange = useCallback(
+		(e: { nativeEvent: { contentSize: { height: number } } }) => {
+			const next = Math.ceil(e.nativeEvent.contentSize.height);
+			setTextHeight((prev) => {
+				if (prev === next) return prev;
+				LayoutAnimation.configureNext({
+					duration: 120,
+					update: { type: LayoutAnimation.Types.easeInEaseOut },
+				});
+				return next;
+			});
+		},
+		[],
+	);
+
 	const send = useCallback(() => {
 		if (!hasText || loading) return;
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -74,11 +100,16 @@ export default function ChatInputBar({
 			keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 48 : 0}
 			style={{
 				flex: 0,
-				paddingBottom: Platform.OS === "android" ? keyboardHeight : 0,
+				paddingBottom:
+					Platform.OS === "android"
+						? keyboardOpen
+							? keyboardHeight + insets.bottom
+							: 0
+						: 0,
 			}}
 		>
 			{/* ── Inline command menu ── */}
-			{showCommandMenu && filteredCommands.length > 0 && (
+			{/* {showCommandMenu && filteredCommands.length > 0 && (
 				<InlineMenu
 					items={filteredCommands}
 					prefix="/"
@@ -95,10 +126,10 @@ export default function ChatInputBar({
 					textColor={textColor}
 					textSecondary={textSecondary}
 				/>
-			)}
+			)} */}
 
 			{/* ── Inline agent menu ── */}
-			{showAgentMenu && filteredAgents.length > 0 && (
+			{/* {showAgentMenu && filteredAgents.length > 0 && (
 				<InlineMenu
 					items={filteredAgents}
 					prefix="@"
@@ -115,7 +146,7 @@ export default function ChatInputBar({
 					textColor={textColor}
 					textSecondary={textSecondary}
 				/>
-			)}
+			)} */}
 
 			<View
 				style={{
@@ -125,45 +156,67 @@ export default function ChatInputBar({
 					backgroundColor: bg,
 				}}
 			>
-				<View
-					style={{
-						backgroundColor: bgInput,
-						borderRadius: 22,
-						borderWidth: 1,
-						borderColor,
-						paddingHorizontal: 6,
-						paddingVertical: 4,
-						flexDirection: "row",
-						alignItems: "flex-start",
-						position: "relative",
-					}}
-				>
+				<View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
+					{/* ── More button ── */}
+					<Pressable
+						onPress={() => {}}
+						style={{
+							width: 44,
+							height: 44,
+							justifyContent: "center",
+							alignItems: "center",
+							borderRadius: 22,
+							borderWidth: 1,
+							borderColor,
+							backgroundColor: bgInput,
+						}}
+					>
+						<Ionicons name="add" size={26} color={textSecondary} />
+					</Pressable>
+
+					{/* ── Input container ── */}
+					<View
+						style={{
+							flex: 1,
+							backgroundColor: bgInput,
+							borderRadius: 22,
+							borderWidth: 1,
+							borderColor,
+							minHeight: 44,
+							paddingHorizontal: 6,
+							paddingVertical: 4,
+							justifyContent: "center",
+							position: "relative",
+						}}
+					>
 					{/* ── TextInput + expand button ── */}
-					<View style={{ flex: 1, position: "relative" }}>
+					<View style={{ position: "relative" }}>
 						<TextInput
 							style={{
-								paddingHorizontal: 12,
-								paddingVertical: 6,
+								paddingLeft: 12,
+								paddingRight: 40,
+								paddingVertical: 0,
 								fontSize: 16,
+								lineHeight: 20,
 								color: textColor,
-								maxHeight: inputExpanded ? 220 : 120,
-								minHeight: 32,
+								minHeight: MIN_INPUT_HEIGHT,
+								height: Math.min(textHeight, COLLAPSED_MAX_HEIGHT),
 							}}
 							value={input}
 							onChangeText={onInputChange}
 							placeholder="Message…"
 							placeholderTextColor={textPlaceholder}
 							multiline
-							onContentSizeChange={(e) => setTextHeight(e.nativeEvent.contentSize.height)}
+							onContentSizeChange={handleContentSizeChange}
 							onSubmitEditing={send}
 							returnKeyType="send"
 							blurOnSubmit={false}
-							textAlignVertical={inputExpanded ? "top" : "center"}
-							scrollEnabled
+							textAlignVertical="top"
+							scrollEnabled={scrollEnabled}
 						/>
-						{textHeight >= 100 && !inputExpanded && (
+						{showExpandButton && (
 							<Pressable
-								onPress={() => onExpandChange(true)}
+								onPress={() => setInputExpanded(true)}
 								style={{
 									position: "absolute",
 									top: 4,
@@ -188,6 +241,7 @@ export default function ChatInputBar({
 					/>
 				</View>
 			</View>
+				</View>
 
 			{/* ── Full-screen expanded input overlay ── */}
 			{inputExpanded && (
@@ -225,7 +279,7 @@ export default function ChatInputBar({
 					/>
 
 					<Pressable
-						onPress={() => onExpandChange(false)}
+						onPress={() => setInputExpanded(false)}
 						style={{
 							position: "absolute",
 							top: insets.top + 8,
