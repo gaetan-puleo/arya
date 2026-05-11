@@ -73,13 +73,13 @@ export default function SessionsDrawer({
 	onClose,
 	onModalOpenChange,
 }: SessionsDrawerProps) {
-	const { theme, rt } = useUnistyles();
+	const { theme } = useUnistyles();
 	const router = useRouter();
 	// Lighter-than-panel gray for the selected row — picked locally
 	// (rather than extending the theme palette) so the highlight is
 	// guaranteed to read against SessionsLayout's panel tint, which is
 	// also a hardcoded gray.
-	const selectedRowBg = rt.themeName === "dark" ? "#2A2A2A" : "#E4E4E4";
+	const selectedRowBg = "#2A2A2A";
 	const insets = useSafeAreaInsets();
 
 	// Two modal "targets" — non-null when the corresponding modal is

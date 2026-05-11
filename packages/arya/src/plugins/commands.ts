@@ -85,11 +85,6 @@ export function createAryaCommandsPlugin(): Plugin {
       const mu = ctx.getPlugin?.<MuAgentsHandle>('mu-agents');
       rebuild(mu);
       unsubscribe = mu?.manager?.onChange?.(() => rebuild(mu)) ?? null;
-      console.log(
-        `[arya-commands] Registered ${commands.length} slash command(s): ${commands
-          .map((c) => `/${c.name}`)
-          .join(', ')}`,
-      );
     },
     deactivate() {
       unsubscribe?.();
@@ -98,4 +93,4 @@ export function createAryaCommandsPlugin(): Plugin {
   };
 }
 
-export default createAryaCommandsPlugin;
+

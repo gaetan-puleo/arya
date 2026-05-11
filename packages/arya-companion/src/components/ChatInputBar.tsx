@@ -49,7 +49,7 @@ export default function ChatInputBar({
 	const [inputExpanded, setInputExpanded] = useState(false);
 	const [textHeight, setTextHeight] = useState(MIN_INPUT_HEIGHT);
 	const insets = useSafeAreaInsets();
-	const { theme, rt } = useUnistyles();
+	const { theme } = useUnistyles();
 
 	const bg = theme.colors.background;
 	const bgTranslucent = theme.colors.backgroundTranslucent;
@@ -260,9 +260,7 @@ export default function ChatInputBar({
 				onRequestClose={() => setInputExpanded(false)}
 				presentationStyle="overFullScreen"
 			>
-				<StatusBar
-					barStyle={rt.themeName === "dark" ? "light-content" : "dark-content"}
-				/>
+				<StatusBar barStyle="light-content" />
 				<KeyboardAvoidingView
 					behavior={Platform.OS === "ios" ? "padding" : undefined}
 					style={{ flex: 1, backgroundColor: bg }}

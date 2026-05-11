@@ -1,6 +1,6 @@
-import { ThemeProvider as ThemeProviderUI, useAppTheme } from '@/theme/ThemeContext';
+import { ThemeProvider as ThemeProviderUI } from '@/theme/ThemeContext';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import * as NavigationBar from 'expo-navigation-bar';
 import { Stack } from 'expo-router';
@@ -59,24 +59,22 @@ function RootLayoutNav() {
 // do NOT need this — the header already accounts for the status bar.
 function StackNavigator() {
   const insets = useSafeAreaInsets();
-  const { colorScheme } = useAppTheme();
-  const isDark = colorScheme === 'dark';
 
   // Android edge-to-edge enforces a transparent system navigation bar,
   // and the `expo-navigation-bar` plugin config (`enforceContrast:
   // false`) disables the default scrim. The app's own background then
   // shows through the nav bar area, making it visually match the
   // screen background automatically — no runtime color set needed.
-  // We only flip the button (icon) color to keep it readable against
-  // the current theme.
+  // We only set the button (icon) color to keep it readable against
+  // the dark theme.
   useEffect(() => {
     if (Platform.OS !== 'android') return;
-    NavigationBar.setStyle(isDark ? 'light' : 'dark');
-  }, [isDark]);
+    NavigationBar.setStyle('light');
+  }, []);
 
   return (
-    <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
+    <ThemeProvider value={DarkTheme}>
+      <StatusBar style="light" />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen
           name="index"

@@ -5,7 +5,7 @@ import Animated, { FadeInLeft } from "react-native-reanimated";
 import { useUnistyles } from "@/theme/ThemeContext";
 import { AryaAvatar } from "@/components/Primitives";
 
-export type SubAgentStatus = "running" | "success" | "error";
+type SubAgentStatus = "running" | "success" | "error";
 
 export interface SubAgentRunInfo {
 	runId: string;

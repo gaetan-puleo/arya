@@ -2,7 +2,7 @@
  * Shared WebSocket utilities: URL coercion, token params, reconnecting socket.
  */
 
-export function buildWsUrl(url: string, token?: string): string {
+function buildWsUrl(url: string, token?: string): string {
 	const wsUrl = url.replace(/^https:/, "wss:").replace(/^http:/, "ws:");
 	const params = token
 		? `${wsUrl.includes("?") ? "&" : "?"}token=${token}`

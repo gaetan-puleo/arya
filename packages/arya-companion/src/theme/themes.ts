@@ -1,4 +1,4 @@
-export const sharedSpacing = {
+const sharedSpacing = {
   0: 0,
   0.25: 1,
   0.5: 2,
@@ -34,7 +34,7 @@ export const sharedSpacing = {
   20: 80,
 } as const;
 
-export const sharedRadius = {
+const sharedRadius = {
   0: 0,
   1: 2,
   2: 4,
@@ -51,7 +51,7 @@ export const sharedRadius = {
   full: 9999,
 } as const;
 
-export const sharedFontSizes = {
+const sharedFontSizes = {
   xs: 12,
   sm: 14,
   md: 16,
@@ -61,7 +61,7 @@ export const sharedFontSizes = {
   xxxl: 30,
 } as const;
 
-export const sharedFontWeights = {
+const sharedFontWeights = {
   regular: '400',
   medium: '500',
   semibold: '600',
@@ -81,9 +81,10 @@ const black = '#000000';
 
 const darkColors = {
   background: black,
+  // Pressed-state surface — currently aliased to pure black so taps on
+  // top of the page background read as a faint tint via the underlying
+  // overlays. Kept distinct so future hover styling has a hook.
   backgroundHover: black,
-  backgroundFocus: black,
-  backgroundAccent: black,
   backgroundOverlay: 'rgba(0,0,0,0.6)',
   backgroundTranslucent: 'rgba(0,0,0,0.8)',
   backgroundSecondary: black,
@@ -96,55 +97,14 @@ const darkColors = {
   textInverse: '#171717',
   border: '#3E3E3E',
   borderFocus: '#ECECEC',
-  borderTransparent: 'transparent',
   primary: '#ECECEC',
-  primaryFocus: '#FFFFFF',
-  primaryHover: '#D1D1D1',
   success: '#10A37F',
   danger: '#EF4444',
   warning: '#F59E0B',
   info: '#60A5FA',
-  tint: '#ECECEC',
-  tabIconDefault: '#6E6E6E',
-  tabIconSelected: '#ECECEC',
-  shadow: 'rgba(0,0,0,0.4)',
-  divider: '#3E3E3E',
 } as const;
 
-const lightColors = {
-  background: '#FFFFFF',
-  backgroundHover: '#F7F7F8',
-  backgroundFocus: '#FFFFFF',
-  backgroundAccent: '#FFFFFF',
-  backgroundOverlay: 'rgba(0,0,0,0.1)',
-  backgroundTranslucent: 'rgba(255,255,255,0.8)',
-  backgroundSecondary: '#F7F7F8',
-  backgroundTertiary: '#ECECEC',
-  backgroundInput: '#F4F4F4',
-  text: '#1A1A1A',
-  textSecondary: '#6E6E6E',
-  textTertiary: '#8E8E8E',
-  textPlaceholder: '#B4B4B4',
-  textInverse: '#FFFFFF',
-  border: '#E5E5E5',
-  borderFocus: '#1A1A1A',
-  borderTransparent: 'transparent',
-  primary: '#1A1A1A',
-  primaryFocus: '#000000',
-  primaryHover: '#333333',
-  success: '#10A37F',
-  danger: '#EF4444',
-  warning: '#F59E0B',
-  info: '#60A5FA',
-  tint: '#1A1A1A',
-  tabIconDefault: '#B4B4B4',
-  tabIconSelected: '#1A1A1A',
-  shadow: 'rgba(0,0,0,0.06)',
-  divider: '#E5E5E5',
-} as const;
-
-export type ThemeColors = typeof darkColors;
+type ThemeColors = typeof darkColors;
 export type Theme = { colors: ThemeColors } & typeof shared;
 
 export const darkTheme: Theme = { colors: darkColors, ...shared };
-export const lightTheme: Theme = { colors: lightColors, ...shared };

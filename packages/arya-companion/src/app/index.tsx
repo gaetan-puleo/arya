@@ -61,7 +61,6 @@ export default function ChatScreen() {
 				onRespondApproval={chat.respondApproval}
 				subAgentRuns={chat.subAgentRuns}
 				showScrollFab={chat.showScrollFab}
-				onScrollToEnd={() => {}}
 				onShowScrollFabChange={chat.setShowScrollFab}
 				keyboardOpen={chat.keyboardOpen}
 				keyboardHeight={chat.keyboardHeight}

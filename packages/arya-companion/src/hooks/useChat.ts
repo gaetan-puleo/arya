@@ -6,10 +6,11 @@ import type {
 	AgentInfo,
 	ChatMessageItem,
 	CommandInfo,
-	PersistedSession,
+	PersistedSessionWire,
 	SessionSummary,
 	SubAgentEvent,
 } from "@/lib/ws";
+import { persistedSessionFromWire } from "@/lib/ws";
 import type { SubAgentRunInfo } from "@/components/SubAgentCard";
 import type { ApprovalData, ApprovalStatus } from "@/types/approval";
 import { globalSubAgentEvents } from "@/lib/subAgentStore";
@@ -26,28 +27,30 @@ let approvalSeq = 0;
 function useWebSocket() {
 	const ws = useRef<WebSocket | null>(null);
 	const [socket, setSocket] = useState<WebSocket | null>(null);
-	const [connected, setConnected] = useState(false);
 
 	const connect = useCallback((url: string, token?: string) => {
 		if (!url.trim()) return;
 
 		console.log(`[ws] connecting to ${url}${token ? " (with token)" : ""}`);
 
-		const newSocket = createReconnectingSocket(
+		// `onMessage` is a no-op here — the consumer attaches its own
+		// `message` listener on `socket` via `addEventListener`. We only
+		// need `onSocket` to publish the current socket and wire lifecycle
+		// logs for the reconnect loop.
+		return createReconnectingSocket(
 			url,
 			token,
-			(msg) => {
-				// Handled by callers via onMessage callbacks
-			},
+			() => {},
 			(s) => {
 				ws.current = s;
 				setSocket(s);
 
 				s.addEventListener("open", () => {
 					console.log(`[ws] connected to ${url}`);
+					s.send(JSON.stringify({ type: "commands" }));
+					s.send(JSON.stringify({ type: "agents" }));
 				});
 				s.addEventListener("close", (e: CloseEvent) => {
-					setConnected(false);
 					console.warn(
 						`[ws] closed (code=${e.code}, reason="${e.reason || ""}") — will retry in 3s`,
 					);
@@ -60,14 +63,6 @@ function useWebSocket() {
 				});
 			},
 		);
-
-		newSocket.onopen = () => {
-			setConnected(true);
-			newSocket.send(JSON.stringify({ type: "commands" }));
-			newSocket.send(JSON.stringify({ type: "agents" }));
-		};
-
-		return newSocket;
 	}, []);
 
 	useEffect(() => {
@@ -84,7 +79,7 @@ function useWebSocket() {
 		};
 	}, []);
 
-	return { ws, socket, connected };
+	return { ws, socket };
 }
 
 // ── useKeyboard ────────────────────────────────────────────────────────
@@ -165,7 +160,7 @@ function useSlashAndAt(
 // ── useChat (orchestrator) ─────────────────────────────────────────────
 
 export function useChat() {
-	const { ws, socket, connected } = useWebSocket();
+	const { ws, socket } = useWebSocket();
 	const { keyboardOpen, keyboardHeight } = useKeyboard();
 
 	const [messages, setMessages] = useState<ChatMessageItem[]>([]);
@@ -328,12 +323,15 @@ export function useChat() {
 			} else if (msg.type === "sessions:history") {
 				const sessId = String(msg.sessionId ?? "");
 				if (sessId !== currentSessionIdRef.current) return;
-				const session = msg.session as PersistedSession | null;
-				if (!session) {
+				const wire = msg.session as PersistedSessionWire | null;
+				if (!wire) {
 					// Server says this session id is unknown — start fresh.
 					setMessages([]);
 					return;
 				}
+				// Convert mu-core ChatMessage[] → flat PersistedMessage[]
+				// shape the chat UI expects.
+				const session = persistedSessionFromWire(wire);
 				// Replay the persisted transcript. We use stable ids from disk
 				// so React keys are consistent across reloads.
 				setMessages(
@@ -478,7 +476,7 @@ export function useChat() {
 		socket.send(
 			JSON.stringify({ type: "sessions:get", sessionId: currentSessionId }),
 		);
-	}, [socket, currentSessionId, connected]);
+	}, [socket, currentSessionId]);
 
 	// ── Derived ──
 
@@ -540,6 +538,10 @@ export function useChat() {
 			// consistent across the very first message of a brand-new app
 			// install. The server's appendMessage will auto-create the file.
 			sessId = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+			// Keep the ref in lockstep with the state setter — see the
+			// note in `createSession` for why we can't rely solely on
+			// the syncing useEffect here.
+			currentSessionIdRef.current = sessId;
 			setCurrentSessionId(sessId);
 		}
 
@@ -564,13 +566,6 @@ export function useChat() {
 			: { type: "chat", text: txt, sessionId: sessId };
 		ws.current.send(JSON.stringify(payload));
 	}, [input, loading, ws]);
-
-	const clearChat = useCallback(() => {
-		setMessages([]);
-		setApprovals(new Map());
-		setSubAgentRuns(new Map());
-		globalSubAgentEvents.clear();
-	}, []);
 
 	// Resolve the currently active primary agent from the list. Falls back
 	// to a synthesized AgentInfo when the id is known but the list hasn't
@@ -614,6 +609,9 @@ export function useChat() {
 			setApprovals(new Map());
 			setSubAgentRuns(new Map());
 			setLoading(false);
+			// Sync the ref synchronously so a same-tick `send` reads the
+			// just-selected id rather than the stale previous value.
+			currentSessionIdRef.current = sessionId;
 			setCurrentSessionId(sessionId);
 			// History request fires from the dependency-driven effect.
 		},
@@ -635,6 +633,13 @@ export function useChat() {
 		setApprovals(new Map());
 		setSubAgentRuns(new Map());
 		setLoading(false);
+		// Update the ref synchronously so a Send fired in the same tick
+		// (e.g. user taps the Chat FAB then immediately taps Send) sees
+		// the new id rather than the stale value. The state-syncing
+		// useEffect would otherwise only run after the next commit, and
+		// `send` reads from the ref — leading to a duplicate session
+		// being auto-created in `send`'s `if (!sessId)` branch.
+		currentSessionIdRef.current = id;
 		setCurrentSessionId(id);
 	}, [ws]);
 
@@ -650,6 +655,10 @@ export function useChat() {
 			// new active id (or leave us with none for the empty state).
 			if (sessionId === currentSessionIdRef.current) {
 				setMessages([]);
+				// Clear the ref in lockstep so a same-tick `send` won't
+				// reuse the now-deleted id and resurrect the session
+				// server-side via appendMessage's auto-create.
+				currentSessionIdRef.current = null;
 				setCurrentSessionId(null);
 				AsyncStorage.removeItem(SESSION_ID_KEY).catch(() => {});
 			}
@@ -679,6 +688,9 @@ export function useChat() {
 		setApprovals(new Map());
 		setSubAgentRuns(new Map());
 		setLoading(false);
+		// Sync the ref so any in-flight `send` from this tick can't
+		// resurrect one of the deleted sessions.
+		currentSessionIdRef.current = null;
 		setCurrentSessionId(null);
 		AsyncStorage.removeItem(SESSION_ID_KEY).catch(() => {});
 	}, [ws, sessions]);
@@ -707,7 +719,6 @@ export function useChat() {
 		input,
 		setInput,
 		loading,
-		connected,
 		commands,
 		agents,
 		activeAgent,
@@ -724,7 +735,6 @@ export function useChat() {
 		// Actions
 		respondApproval,
 		send,
-		clearChat,
 		setActiveAgent,
 		selectSession,
 		createSession,

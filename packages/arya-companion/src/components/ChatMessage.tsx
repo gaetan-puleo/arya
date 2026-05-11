@@ -48,7 +48,7 @@ export default function ChatMessage({
 	animate = true,
 	authorAgent,
 }: ChatMessageProps) {
-	const isUser = role === "assistant";
+	const isUser = role === "user";
 	const { theme } = useUnistyles();
 	const [copied, setCopied] = useState(false);
 
@@ -57,10 +57,12 @@ export default function ChatMessage({
 	const successColor = theme.colors.success;
 	const bgTertiary = theme.colors.backgroundTertiary;
 
+	// User bubbles slide in from the right; assistant bubbles from the
+	// left, mirroring their alignment.
 	const entering = animate
 		? isUser
-			? FadeInLeft.duration(300).springify()
-			: FadeInRight.duration(300).springify()
+			? FadeInRight.duration(300).springify()
+			: FadeInLeft.duration(300).springify()
 		: undefined;
 
 	const handleCopy = useCallback(() => {
@@ -81,8 +83,8 @@ export default function ChatMessage({
 
 	const handleLongPress = handleCopy;
 
-	if (!isUser) {
-		// User: right-aligned bubble
+	if (isUser) {
+		// User: right-aligned bubble.
 		return (
 			<Animated.View entering={entering}>
 				<View

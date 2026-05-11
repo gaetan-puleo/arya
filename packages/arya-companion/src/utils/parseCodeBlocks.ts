@@ -1,5 +1,5 @@
-export type TextSegment = { type: "text"; content: string };
-export type CodeSegment = {
+type TextSegment = { type: "text"; content: string };
+type CodeSegment = {
 	type: "code";
 	content: string;
 	language?: string;

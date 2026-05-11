@@ -15,6 +15,9 @@
 
 import { existsSync } from 'node:fs';
 import type { Plugin } from 'mu-core';
+import { createLogger } from '../lib/logger.js';
+
+const log = createLogger('arya-agent-sources');
 
 export interface AryaAgentSourcesConfig {
   /** Absolute paths of agent directories to merge in addition to the primary. */
@@ -32,21 +35,21 @@ export function createAryaAgentSourcesPlugin(
     activate(ctx) {
       const registry = ctx.agents;
       if (!registry) {
-        console.warn(
-          '[arya-agent-sources] ctx.agents is not available — is mu-agents registered before this plugin?',
+        log.warn(
+          'ctx.agents is not available — is mu-agents registered before this plugin?',
         );
         return;
       }
       for (const dir of dirs) {
         if (!existsSync(dir)) {
-          console.log(`[arya-agent-sources] Skipping missing dir: ${dir}`);
+          log.debug(`Skipping missing dir: ${dir}`);
           continue;
         }
         registry.registerSource(dir);
-        console.log(`[arya-agent-sources] Registered extra agents dir: ${dir}`);
+        log.info(`Registered extra agents dir: ${dir}`);
       }
     },
   };
 }
 
-export default createAryaAgentSourcesPlugin;
+

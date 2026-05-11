@@ -77,7 +77,7 @@ export default function SessionsLayout({
 	onRename,
 	children,
 }: SessionsLayoutProps) {
-	const { theme, rt } = useUnistyles();
+	const { theme } = useUnistyles();
 	const screenWidth = Dimensions.get("window").width;
 
 	// Single source of truth for the slide. 0 → closed (chat covers
@@ -134,9 +134,9 @@ export default function SessionsLayout({
 	// interpolateColor runs on the UI thread so the tint stays in
 	// lockstep with the slide regardless of drag speed.
 	const panelClosedTint = theme.colors.backgroundTertiary;
-	// Hardcoded mid-grays — picked once for each theme so we don't
-	// have to extend the theme palette just for this transition.
-	const panelOpenColor = rt.themeName === "dark" ? "#0E0E0E" : "#F4F4F4";
+	// Hardcoded mid-gray — picked once so we don't have to extend the
+	// theme palette just for this transition.
+	const panelOpenColor = "#0E0E0E";
 	const panelStyle = useAnimatedStyle(() => {
 		const progress = translateX.value / screenWidth;
 		const offset = -screenWidth * PANEL_PARALLAX_RATIO * (1 - progress);

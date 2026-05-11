@@ -12,6 +12,12 @@ import {
 	View,
 } from "react-native";
 import { initialWindowMetrics } from "react-native-safe-area-context";
+import { useUnistyles } from "@/theme/ThemeContext";
+import type { SessionSummary } from "@/lib/ws";
+// Type-only import to avoid pulling SessionsDrawer at runtime —
+// SessionsDrawer itself imports this file, and a value-level cycle
+// would leave one side undefined at module-eval time.
+import type { RowAnchor } from "@/components/SessionsDrawer";
 
 /**
  * Returns the bottom inset to subtract from the *app window* when
@@ -46,18 +52,65 @@ function getBottomInsetForClamp(): number {
 // confirmation modals so it reads as a contextual popover rather
 // than a full-width dialog — it pops near the pressed row.
 const CARD_WIDTH = 220;
+
+/**
+ * Centered modal shell shared by the rename + confirmation dialogs.
+ *
+ * Renders a faded backdrop (tap-to-dismiss) and a gray card with the
+ * uniform `backgroundTertiary` surface used across the in-app modal
+ * stack. Children are placed inside the card; the inner Pressable
+ * swallows touches so a tap on the card doesn't bubble up and close
+ * the modal.
+ */
+function CenteredModalCard({
+	open,
+	onClose,
+	children,
+}: {
+	open: boolean;
+	onClose: () => void;
+	children: React.ReactNode;
+}) {
+	const { theme } = useUnistyles();
+	return (
+		<Modal
+			visible={open}
+			transparent
+			animationType="fade"
+			onRequestClose={onClose}
+		>
+			<Pressable
+				onPress={onClose}
+				style={{
+					flex: 1,
+					backgroundColor: theme.colors.backgroundOverlay,
+					alignItems: "center",
+					justifyContent: "center",
+					padding: 24,
+				}}
+			>
+				<Pressable
+					onPress={() => {}}
+					style={{
+						width: "100%",
+						maxWidth: 340,
+						backgroundColor: theme.colors.backgroundTertiary,
+						borderRadius: 16,
+						padding: 16,
+						gap: 12,
+					}}
+				>
+					{children}
+				</Pressable>
+			</Pressable>
+		</Modal>
+	);
+}
 // Minimum gutter between the card and the device edges. Used when
 // clamping both the X and Y anchors so the card never bleeds past
 // any screen edge.
 const CARD_HORIZONTAL_PADDING = 16;
 const CARD_VERTICAL_PADDING = 16;
-
-import { useUnistyles } from "@/theme/ThemeContext";
-import type { SessionSummary } from "@/lib/ws";
-// Type-only import to avoid pulling SessionsDrawer at runtime —
-// SessionsDrawer itself imports this file, and a value-level cycle
-// would leave one side undefined at module-eval time.
-import type { RowAnchor } from "@/components/SessionsDrawer";
 
 // ── SessionActionsModal ──────────────────────────────────────────────────
 
@@ -364,123 +417,91 @@ export function SessionRenameModal({
 	};
 
 	return (
-		<Modal
-			visible={open}
-			transparent
-			animationType="fade"
-			onRequestClose={onClose}
-		>
-			<Pressable
-				onPress={onClose}
+		<CenteredModalCard open={open} onClose={onClose}>
+			<Text
 				style={{
-					flex: 1,
-					backgroundColor: theme.colors.backgroundOverlay,
-					alignItems: "center",
-					justifyContent: "center",
-					padding: 24,
+					fontSize: 16,
+					fontWeight: "700",
+					color: theme.colors.text,
+				}}
+			>
+				Rename session
+			</Text>
+
+			<TextInput
+				ref={inputRef}
+				value={draft}
+				onChangeText={setDraft}
+				onSubmitEditing={submit}
+				returnKeyType="done"
+				selectTextOnFocus
+				placeholder="Session title"
+				placeholderTextColor={theme.colors.textPlaceholder}
+				style={{
+					fontSize: 14,
+					color: theme.colors.text,
+					borderWidth: 1,
+					borderColor: theme.colors.border,
+					borderRadius: 8,
+					paddingHorizontal: 12,
+					paddingVertical: 8,
+					backgroundColor: theme.colors.backgroundInput,
+				}}
+			/>
+
+			<View
+				style={{
+					flexDirection: "row",
+					justifyContent: "flex-end",
+					gap: 8,
 				}}
 			>
 				<Pressable
-					onPress={() => {}}
-					style={{
-						width: "100%",
-						maxWidth: 340,
-						// Same gray as the action and delete modals so
-						// the in-app modal stack stays visually
-						// consistent. No border — the overlay backdrop
-						// already gives the card enough contrast.
-						backgroundColor: theme.colors.backgroundTertiary,
-						borderRadius: 16,
-						padding: 16,
-						gap: 12,
-					}}
+					onPress={onClose}
+					style={({ pressed }) => ({
+						paddingHorizontal: 16,
+						paddingVertical: 8,
+						borderRadius: 9999,
+						backgroundColor: pressed
+							? theme.colors.backgroundHover
+							: "transparent",
+					})}
 				>
 					<Text
 						style={{
-							fontSize: 16,
+							fontSize: 14,
+							fontWeight: "600",
+							color: theme.colors.textSecondary,
+						}}
+					>
+						Cancel
+					</Text>
+				</Pressable>
+				<Pressable
+					onPress={submit}
+					style={({ pressed }) => ({
+						paddingHorizontal: 16,
+						paddingVertical: 8,
+						borderRadius: 9999,
+						borderWidth: 1,
+						borderColor: theme.colors.border,
+						backgroundColor: pressed
+							? theme.colors.backgroundHover
+							: theme.colors.backgroundSecondary,
+					})}
+				>
+					<Text
+						style={{
+							fontSize: 14,
 							fontWeight: "700",
 							color: theme.colors.text,
 						}}
 					>
-						Rename session
+						Save
 					</Text>
-
-					<TextInput
-						ref={inputRef}
-						value={draft}
-						onChangeText={setDraft}
-						onSubmitEditing={submit}
-						returnKeyType="done"
-						selectTextOnFocus
-						placeholder="Session title"
-						placeholderTextColor={theme.colors.textPlaceholder}
-						style={{
-							fontSize: 14,
-							color: theme.colors.text,
-							borderWidth: 1,
-							borderColor: theme.colors.border,
-							borderRadius: 8,
-							paddingHorizontal: 12,
-							paddingVertical: 8,
-							backgroundColor: theme.colors.backgroundInput,
-						}}
-					/>
-
-					<View
-						style={{
-							flexDirection: "row",
-							justifyContent: "flex-end",
-							gap: 8,
-						}}
-					>
-						<Pressable
-							onPress={onClose}
-							style={({ pressed }) => ({
-								paddingHorizontal: 16,
-								paddingVertical: 8,
-								borderRadius: 9999,
-								backgroundColor: pressed
-									? theme.colors.backgroundHover
-									: "transparent",
-							})}
-						>
-							<Text
-								style={{
-									fontSize: 14,
-									fontWeight: "600",
-									color: theme.colors.textSecondary,
-								}}
-							>
-								Cancel
-							</Text>
-						</Pressable>
-						<Pressable
-							onPress={submit}
-							style={({ pressed }) => ({
-								paddingHorizontal: 16,
-								paddingVertical: 8,
-								borderRadius: 9999,
-								borderWidth: 1,
-								borderColor: theme.colors.border,
-								backgroundColor: pressed
-									? theme.colors.backgroundHover
-									: theme.colors.backgroundSecondary,
-							})}
-						>
-							<Text
-								style={{
-									fontSize: 14,
-									fontWeight: "700",
-									color: theme.colors.text,
-								}}
-							>
-								Save
-							</Text>
-						</Pressable>
-					</View>
 				</Pressable>
-			</Pressable>
-		</Modal>
+			</View>
+		</CenteredModalCard>
 	);
 }
 
@@ -514,119 +535,87 @@ function ConfirmDeleteModal({
 }: ConfirmDeleteModalProps) {
 	const { theme } = useUnistyles();
 	return (
-		<Modal
-			visible={open}
-			transparent
-			animationType="fade"
-			onRequestClose={onClose}
-		>
-			<Pressable
-				onPress={onClose}
+		<CenteredModalCard open={open} onClose={onClose}>
+			<Text
 				style={{
-					flex: 1,
-					backgroundColor: theme.colors.backgroundOverlay,
-					alignItems: "center",
-					justifyContent: "center",
-					padding: 24,
+					fontSize: 16,
+					fontWeight: "700",
+					color: theme.colors.text,
+				}}
+			>
+				{title}
+			</Text>
+
+			<Text
+				style={{
+					fontSize: 14,
+					lineHeight: 18,
+					color: theme.colors.textSecondary,
+				}}
+			>
+				{body}
+			</Text>
+
+			<View
+				style={{
+					flexDirection: "row",
+					justifyContent: "flex-end",
+					gap: 8,
 				}}
 			>
 				<Pressable
-					onPress={() => {}}
-					style={{
-						width: "100%",
-						maxWidth: 340,
-						// Same gray as the other in-app modals so the
-						// confirmation surface stays visually consistent.
-						// No border — the overlay backdrop already gives
-						// the card enough contrast against the panel.
-						backgroundColor: theme.colors.backgroundTertiary,
-						borderRadius: 16,
-						padding: 16,
-						gap: 12,
-					}}
+					onPress={onClose}
+					style={({ pressed }) => ({
+						paddingHorizontal: 16,
+						paddingVertical: 8,
+						borderRadius: 9999,
+						backgroundColor: pressed
+							? theme.colors.backgroundHover
+							: "transparent",
+					})}
 				>
 					<Text
 						style={{
-							fontSize: 16,
-							fontWeight: "700",
-							color: theme.colors.text,
-						}}
-					>
-						{title}
-					</Text>
-
-					<Text
-						style={{
 							fontSize: 14,
-							lineHeight: 18,
+							fontWeight: "600",
 							color: theme.colors.textSecondary,
 						}}
 					>
-						{body}
+						Cancel
 					</Text>
-
-					<View
+				</Pressable>
+				<Pressable
+					onPress={() => {
+						Haptics.notificationAsync(
+							Haptics.NotificationFeedbackType.Warning,
+						);
+						onConfirm();
+					}}
+					style={({ pressed }) => ({
+						paddingHorizontal: 16,
+						paddingVertical: 8,
+						borderRadius: 9999,
+						backgroundColor: pressed
+							? theme.colors.backgroundHover
+							: theme.colors.danger,
+					})}
+				>
+					<Text
 						style={{
-							flexDirection: "row",
-							justifyContent: "flex-end",
-							gap: 8,
+							fontSize: 14,
+							fontWeight: "700",
+							// White on the danger background reads
+							// reliably across both themes; using
+							// theme.colors.text would invert badly
+							// on a saturated red.
+							color: "#FFFFFF",
 						}}
 					>
-						<Pressable
-							onPress={onClose}
-							style={({ pressed }) => ({
-								paddingHorizontal: 16,
-								paddingVertical: 8,
-								borderRadius: 9999,
-								backgroundColor: pressed
-									? theme.colors.backgroundHover
-									: "transparent",
-							})}
-						>
-							<Text
-								style={{
-									fontSize: 14,
-									fontWeight: "600",
-									color: theme.colors.textSecondary,
-								}}
-							>
-								Cancel
-							</Text>
-						</Pressable>
-						<Pressable
-							onPress={() => {
-								Haptics.notificationAsync(
-									Haptics.NotificationFeedbackType.Warning,
-								);
-								onConfirm();
-							}}
-							style={({ pressed }) => ({
-								paddingHorizontal: 16,
-								paddingVertical: 8,
-								borderRadius: 9999,
-								backgroundColor: pressed
-									? theme.colors.backgroundHover
-									: theme.colors.danger,
-							})}
-						>
-							<Text
-								style={{
-									fontSize: 14,
-									fontWeight: "700",
-									// White on the danger background reads
-									// reliably across both themes; using
-									// theme.colors.text would invert badly
-									// on a saturated red.
-									color: "#FFFFFF",
-								}}
-							>
-								{confirmLabel}
-							</Text>
-						</Pressable>
-					</View>
+						{confirmLabel}
+					</Text>
 				</Pressable>
-			</Pressable>
-		</Modal>
+			</View>
+		</CenteredModalCard>
 	);
 }
 

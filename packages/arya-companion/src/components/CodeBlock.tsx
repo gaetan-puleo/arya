@@ -1,7 +1,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import {
 	Platform,
 	Pressable,
@@ -12,18 +12,13 @@ import {
 } from "react-native";
 import type { TextStyle } from "react-native";
 import SyntaxHighlighter from "react-syntax-highlighter/dist/esm/default-highlight";
-import {
-	atomOneDark,
-	atomOneLight,
-} from "react-syntax-highlighter/dist/esm/styles/hljs";
+import { atomOneDark } from "react-syntax-highlighter/dist/esm/styles/hljs";
 import { useUnistyles } from "@/theme/ThemeContext";
 
 interface CodeBlockProps {
 	code: string;
 	language?: string;
 }
-
-const COPY_RESET_MS = 1500;
 
 // ── Language alias map ────────────────────────────────────────────────
 //
@@ -115,10 +110,8 @@ function renderNode(
 }
 
 export default function CodeBlock({ code, language }: CodeBlockProps) {
-	const { theme, rt } = useUnistyles();
-	const [copied, setCopied] = useState(false);
+	const { theme } = useUnistyles();
 
-	const isDark = rt.themeName === "dark";
 	const rawLang = language?.trim() || "text";
 	const displayLang = rawLang.charAt(0).toUpperCase() + rawLang.slice(1);
 	const highlightLang = resolveLanguage(language);
@@ -127,26 +120,20 @@ export default function CodeBlock({ code, language }: CodeBlockProps) {
 		try {
 			await Clipboard.setStringAsync(code);
 			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-			setCopied(true);
-			setTimeout(() => setCopied(false), COPY_RESET_MS);
 		} catch {
 			// noop
 		}
 	}, [code]);
 
-	const grayBg = isDark ? "#2A2A2A" : "#E5E5E5";
+	const grayBg = "#2A2A2A";
 	const headerBg = grayBg;
 	const codeBg = grayBg;
-	const borderColor = theme.colors.border;
 	const textSecondary = theme.colors.textSecondary;
 	const textColor = theme.colors.text;
 
 	const monoFamily = Platform.OS === "ios" ? "Menlo-Regular" : "monospace";
 
-	const stylesheet = (isDark ? atomOneDark : atomOneLight) as Record<
-		string,
-		TextStyle
-	>;
+	const stylesheet = atomOneDark as Record<string, TextStyle>;
 
 	const baseTextStyle: TextStyle = {
 		color: textColor,

@@ -13,7 +13,7 @@ Autonomous multi-agent runtime powered by mu.
 
 1. **Server arya** : un serveur autonome qui fait tourner des agents mu avec un channel WebSocket pour communiquer avec le companion mobile
 2. **Companion mobile** : une app React Native/Expo pour chatter avec les agents, gérer les approbations d'outils, et suivre les sous-agents
-3. **Extensibilité** : système de plugins pour ajouter des outils (fs, shell, http, calendar, email, homeassistant, obsidian, qonto, etc.)
+3. **Extensibilité** : le cœur fournit les outils `fs`, `shell` et `http`. Des plugins additionnels peuvent être chargés dynamiquement au démarrage depuis `~/.config/arya/plugins/*.ts` (hors repo).
 4. **Autonomie** : scheduler cron/heartbeat pour exécuter des tâches automatiques
 
 ### Architecture Globale
@@ -817,4 +817,4 @@ You may delegate work to subagents when appropriate. Use the \`subagent\` tool w
 6. ✅ Implémenter les plugins outils (fs, shell, http) — noms alignés
 7. ✅ Variables d'environnement `ARYA_*` dans `bootstrap.ts`
 8. ⬜ Tests unitaires
-9. ⬜ Plugins additionnels (calendar, email, homeassistant, obsidian, qonto)
+9. ⬜ Documentation pour les plugins additionnels chargés depuis `~/.config/arya/plugins/`

@@ -19,6 +19,9 @@
  */
 
 import type { ChatMessage, MessageBus, Session } from 'mu-core';
+import { createLogger } from './lib/logger.js';
+
+const log = createLogger('arya-message-bus');
 
 /** Outbound transport — the WS channel passes its own `push` here. */
 type PushFn = (event: Record<string, unknown>) => void;
@@ -86,7 +89,7 @@ export function createAryaMessageBus(
         // No session in scope — degrade gracefully. mu-agents only calls
         // this from `transformUserInput`, which the host always wraps in
         // `setCurrentSession`, so hitting this branch indicates a bug.
-        console.warn('[arya-message-bus] append() called without current session');
+        log.warn('append() called without current session');
         return;
       }
       const entry = getOrInit(currentSessionId);
@@ -109,7 +112,7 @@ export function createAryaMessageBus(
 
     injectNext(message) {
       if (!currentSessionId) {
-        console.warn('[arya-message-bus] injectNext() called without current session');
+        log.warn('injectNext() called without current session');
         return;
       }
       getOrInit(currentSessionId).injected.push(message);

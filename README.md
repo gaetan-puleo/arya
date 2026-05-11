@@ -4,7 +4,7 @@ Autonomous multi-agent runtime powered by **mu**.
 
 ## Vision
 
-**arya-agent** = **mu comme moteur** + **Companion channel (WebSocket)** + **Scheduler autonome** + **Plugins métiers**
+**arya-agent** = **mu comme moteur** + **Companion channel (WebSocket)** + **Scheduler autonome** + **Système de plugins**
 
 - **arya** (server) : backend Node.js basé sur mu-core + mu-agents
 - **arya-companion** (mobile) : app Expo/React Native — chat client WebSocket
@@ -13,7 +13,7 @@ Autonomous multi-agent runtime powered by **mu**.
 
 1. **Server arya** : un serveur autonome qui fait tourner des agents mu avec un channel WebSocket pour communiquer avec le companion mobile
 2. **Companion mobile** : une app React Native/Expo pour chatter avec les agents, gérer les approbations d'outils, et suivre les sous-agents
-3. **Extensibilité** : système de plugins pour ajouter des outils (fs, shell, http, calendar, email, homeassistant, obsidian, qonto, etc.)
+3. **Extensibilité** : le cœur fournit les outils `fs`, `shell` et `http`. Des plugins additionnels peuvent être chargés dynamiquement au démarrage depuis `~/.config/arya/plugins/*.ts` (hors repo).
 4. **Autonomie** : scheduler cron/heartbeat pour exécuter des tâches automatiques
 
 ## Architecture
@@ -159,10 +159,11 @@ need approval from the user.
 **Outils disponibles :**
 | Outil | Description | matchKey |
 |-------|-------------|----------|
-| `fs.read_file` | Lire un fichier texte | `path` |
-| `fs.write_file` | Écrire un fichier | `path` |
-| `fs.list_dir` | Lister un répertoire | `path` |
-| `shell.execute` | Exécuter une commande bash | `cmd` |
+| `read` | Lire un fichier texte | `path` |
+| `write` | Écrire un fichier | `path` |
+| `edit` | Remplacer une portion exacte | `path` |
+| `list_dir` | Lister un répertoire | `path` |
+| `bash` | Exécuter une commande bash | `cmd` |
 | `http.fetch` | Requêtes HTTP | `url` |
 | `subagent` | Déclencher un sous-agent | aucun |
 
@@ -262,17 +263,28 @@ arya-consomme les packages mu suivants :
 
 | Package | Rôle |
 |---------|------|
-| `mu-core` | Agent loop orchestration, sessions, channels, plugins SDK |
+| `mu-core` | Agent loop orchestration, sessions, channels, plugins SDK, JSONL session store |
 | `mu-agents` | Agent switcher, sub-agents, permissions, approval gateway |
 | `mu-openai-provider` | Provider OpenAI-compatible (Ollama, vLLM, etc.) |
+| `mu-tools` | Outils partagés `read`, `write`, `edit`, `bash`, `list_dir` |
+| `mu-scheduler` | Runner cron pour tâches autonomes |
 
 ## 🔌 Ajouter des Outils
 
-Pour ajouter de nouveaux outils (calendar, email, homeassistant, etc.) :
+Le repo ne ship que `http.fetch` localement (`packages/arya/src/plugins/tools/`).
+Les outils filesystem + shell viennent de `mu-tools` (partagé avec
+mu-coding). Des plugins additionnels peuvent être chargés dynamiquement
+au démarrage depuis `~/.config/arya/plugins/*.ts` — ces plugins ne vivent
+pas dans ce repo.
 
-1. Créez un fichier dans `packages/arya/src/plugins/tools/`
-2. Exportez une fonction `createXxxTool(getCwd)` retournant un `PluginTool`
-3. Ajoutez-le dans `packages/arya/src/plugins/tools/index.ts`
+Pour ajouter un plugin :
+
+1. Créez `~/.config/arya/plugins/<nom>.ts`
+2. Exportez une factory (`createXxx`) retournant soit un `Plugin`
+   (`{ name, tools: [...] }`) soit un `PluginTool` unique
+   (`{ definition, permission, execute }`).
+3. Installez ses dépendances dans `$XDG_DATA_HOME/arya/plugins/node_modules`
+   (ou `~/.local/share/arya/plugins/node_modules`).
 
 Chaque outil doit déclarer :
 - `definition.function.name` — nom utilisé dans les permissions

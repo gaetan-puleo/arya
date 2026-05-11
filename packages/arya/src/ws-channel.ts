@@ -10,9 +10,33 @@ import {
   type SessionManager,
   type SlashCommand,
 } from 'mu-core';
-import type { AgentDefinition, ApprovalGateway, ApprovalRequest, ApprovalChannel } from 'mu-agents';
 import type { AryaMessageBusHandle } from './message-bus.js';
-import type { SessionStore } from './session-store.js';
+import type { SessionStore } from 'mu-core';
+import { createLogger } from './lib/logger.js';
+import {
+  makeAssistantMessage,
+  makeUserMessage,
+} from './lib/messages.js';
+import { enrichLLMError, errorMessage } from 'mu-core';
+import {
+  type AgentListItem,
+  getActiveAgentId,
+  getMuAgents,
+  listAgents,
+  subscribeActiveAgent,
+} from 'mu-agents';
+import { handleSessionsMessage } from './ws/sessions-handler.js';
+import {
+  createApprovalChannel,
+  handleApprovalResponse,
+} from './ws/approval.js';
+import {
+  createConnectionState,
+  tearDownConnectionState,
+} from './ws/connection-state.js';
+import { makeEnsureSubscribed } from './ws/stream-subscriber.js';
+
+const log = createLogger('ws');
 
 export interface WsChannelOptions {
   port: number;
@@ -38,32 +62,6 @@ interface ConnectedClient {
   sessionId: string;
 }
 
-/** Build the agents list sent to the companion on connect and on request. */
-function buildGetAgentsList(
-  registry: PluginRegistry,
-): () => Array<{ id: string; description: string; type: string; color?: string }> {
-  return () => {
-    // The agents are managed by the mu-agents plugin. We access them via
-    // the registry's getPlugin handle.
-    // Note: this is called inside the connection handler, so the plugin
-    // must already be registered (it is, since startMu registers all plugins
-    // before the channel starts).
-    const muAgentsPlugin = (registry as any).getPlugin('mu-agents');
-    if (!muAgentsPlugin?.manager) return [];
-
-    const primary = muAgentsPlugin.manager.getPrimary?.() ?? [];
-    const subagents = muAgentsPlugin.manager.getSubagents?.() ?? [];
-    const all: AgentDefinition[] = [...primary, ...subagents];
-
-    return all.map((a) => ({
-      id: a.name,
-      description: a.description ?? '',
-      type: a.type ?? 'primary',
-      color: a.color,
-    }));
-  };
-}
-
 /**
  * Map mu-core's `SlashCommand` shape (`{ name, description, execute }`)
  * to the wire shape the companion expects (`{ command, description }`).
@@ -84,29 +82,6 @@ function findCommand(registry: PluginRegistry, name: string): SlashCommand | und
   return (registry.getCommands() ?? []).find((c) => c.name === name);
 }
 
-/** Resolve the currently active primary agent's id, or null if none. */
-function getActiveAgentId(registry: PluginRegistry): string | null {
-  const muAgentsPlugin = (registry as any).getPlugin('mu-agents');
-  const active = muAgentsPlugin?.manager?.getActive?.() as AgentDefinition | undefined;
-  return active?.name ?? null;
-}
-
-/**
- * Subscribe to mu-agents' active-agent changes. The returned unsubscribe
- * is a no-op when the plugin or onChange isn't available.
- */
-function subscribeActiveAgent(
-  registry: PluginRegistry,
-  onChange: (agentId: string | null) => void,
-): () => void {
-  const muAgentsPlugin = (registry as any).getPlugin('mu-agents');
-  const subscribe = muAgentsPlugin?.manager?.onChange;
-  if (typeof subscribe !== 'function') return () => {};
-  return subscribe.call(muAgentsPlugin.manager, (active: AgentDefinition | undefined) => {
-    onChange(active?.name ?? null);
-  });
-}
-
 /**
  * WebSocket channel — implements the `Channel` interface from mu-core.
  *
@@ -116,7 +91,7 @@ function subscribeActiveAgent(
  *   { type: "approval_response", requestId: "...", token: "...", action: "approve"|"deny" }
  *   { type: "set_active_agent", agentId: "arya" }
  *   { type: "sessions:list" }
- *   { type: "sessions:create", title?: string }
+ *   { type: "sessions:create", sessionId?: string, title?: string }
  *   { type: "sessions:delete", sessionId: string }
  *   { type: "sessions:rename", sessionId: string, title: string }
  *   { type: "sessions:get", sessionId: string }
@@ -145,26 +120,11 @@ export function createWebSocketChannel(
   const store = options.store;
   const wss = new WebSocketServer({ port: options.port });
   const clients = new Map<WebSocket, ConnectedClient>();
-  const getAgents = buildGetAgentsList(registry);
+  const getAgents = (): AgentListItem[] => listAgents(registry);
   const getCommands = buildGetCommandsList(registry);
 
-  // Create an approval channel that pushes approval requests to connected clients
-  const approvalChannel: ApprovalChannel = {
-    sendApprovalRequest: async (req: ApprovalRequest) => {
-      // Push approval request to all connected clients
-      push({
-        type: 'approval_request',
-        requestId: req.id,
-        token: req.token,
-        toolName: req.toolName,
-        toolArgs: req.toolArgs,
-        agentId: req.agentId,
-        channelId: req.channelId,
-      });
-      // Return undefined to defer resolution to gateway.approve/deny calls
-      return undefined;
-    },
-  };
+  // Approval channel — pushes requests to every connected client.
+  const approvalChannel = createApprovalChannel((event) => push(event));
 
   wss.on('connection', (ws, req) => {
     // Auth check
@@ -179,7 +139,7 @@ export function createWebSocketChannel(
     clients.set(ws, { ws, sessionId });
 
     // Register approval channel with mu-agents plugin
-    const muAgentsPlugin = registry.getPlugin('mu-agents') as { approvalGateway: ApprovalGateway } | undefined;
+    const muAgentsPlugin = getMuAgents(registry);
     if (muAgentsPlugin?.approvalGateway) {
       muAgentsPlugin.approvalGateway.registerChannel('websocket', approvalChannel);
     }
@@ -192,101 +152,19 @@ export function createWebSocketChannel(
     ws.send(JSON.stringify({ type: 'agents', agents, activeAgentId }));
     ws.send(JSON.stringify({ type: 'sessions:listed', sessions: store.list() }));
 
-    // Track running turns per session to reject re-entrance gracefully and
-    // avoid the SDK's unhandled-rejection crash. Keyed by sessionId.
-    const runningSessions = new Set<string>();
+    // Per-connection bookkeeping (running turns, lazy subscriptions,
+    // stream-state caches). See `connection-state.ts` for field docs.
+    const connState = createConnectionState();
+    const { runningSessions } = connState;
 
-    // Subscribe once per WS connection per session id (lazy). Without this,
-    // re-subscribing on every chat message would leak listeners and replay
-    // each event N times after N messages.
-    const sessionSubs = new Map<string, () => void>();
-    // Track the latest streamed assistant text per session so we can
-    // persist it once the turn finishes. The mu-core stream emits
-    // *cumulative* text in `event.text`, so we just keep the last value.
-    const pendingAssistant = new Map<string, string>();
-    // Latest mu-core message graph snapshot per session. Used at
-    // stream_ended to extract any tool invocations that ran during the
-    // turn so we can persist them as visible chat history.
-    const latestMessages = new Map<string, ChatMessage[]>();
-    // High-water mark of how many messages we've already scanned for a
-    // session, so successive turns only persist newly-added tools.
-    const persistedMessageCount = new Map<string, number>();
-
-    function ensureSubscribed(targetSessionId: string) {
-      if (sessionSubs.has(targetSessionId)) return;
-      const session = sessions.getOrCreate(targetSessionId);
-      const off = session.subscribe((event) => {
-        if (event.type === 'stream_partial') {
-          pendingAssistant.set(targetSessionId, event.text);
-          push({ type: 'stream', text: event.text, sessionId: targetSessionId });
-        } else if (event.type === 'messages_changed') {
-          // Snapshot — we'll consume it at stream_ended to persist tool messages.
-          latestMessages.set(targetSessionId, event.messages);
-        } else if (event.type === 'stream_ended') {
-          // Persist any tool invocations that ran during this turn before
-          // the assistant text, so the on-disk transcript order matches
-          // what the user saw.
-          try {
-            const snapshot = latestMessages.get(targetSessionId) ?? [];
-            const cursor = persistedMessageCount.get(targetSessionId) ?? 0;
-            const tools = snapshot
-              .slice(cursor)
-              .filter((m) => m.role === 'tool' && m.toolResult);
-            for (const t of tools) {
-              const toolName = t.toolResult?.name ?? 'tool';
-              const argsObj = t.toolCallArgs;
-              const argsStr = argsObj
-                ? JSON.stringify(argsObj, null, 2)
-                : undefined;
-              store.appendMessage(targetSessionId, {
-                id: `${Date.now()}-t-${t.toolCallId ?? Math.random().toString(36).slice(2, 8)}`,
-                role: 'tool',
-                text: '',
-                ts: Date.now(),
-                toolName,
-                toolArgs: argsStr,
-                toolResult: t.toolResult?.content ?? t.content ?? '',
-                toolError: t.toolResult?.error === true,
-              });
-            }
-            persistedMessageCount.set(targetSessionId, snapshot.length);
-          } catch (err) {
-            console.error('[ws] failed to persist tool messages:', err);
-          }
-
-          // Persist the assistant turn now that the model finished.
-          const finalText = pendingAssistant.get(targetSessionId) ?? '';
-          pendingAssistant.delete(targetSessionId);
-          if (finalText.trim()) {
-            try {
-              store.appendMessage(targetSessionId, {
-                id: `${Date.now()}-a`,
-                role: 'assistant',
-                text: finalText,
-                ts: Date.now(),
-                agentId: getActiveAgentId(registry) ?? undefined,
-              });
-            } catch (err) {
-              console.error('[ws] failed to persist assistant message:', err);
-            }
-          }
-          push({ type: 'done', text: '', sessionId: targetSessionId });
-        } else if (event.type === 'error') {
-          pendingAssistant.delete(targetSessionId);
-          // The OpenAI SDK surfaces network failures as a bare
-          // "Connection error." — useless without context. Tack the
-          // configured baseUrl on so the user immediately sees which
-          // endpoint is unreachable.
-          const isBareConn = event.message === 'Connection error.';
-          const detailed = isBareConn
-            ? `Connection error: cannot reach the LLM endpoint at ${options.providerConfig.baseUrl}. Check that the server is running and the URL is reachable.`
-            : event.message;
-          console.error(`[ws] LLM error (${targetSessionId}): ${detailed}`);
-          push({ type: 'error', message: detailed, sessionId: targetSessionId });
-        }
-      });
-      sessionSubs.set(targetSessionId, off);
-    }
+    const ensureSubscribed = makeEnsureSubscribed({
+      sessions,
+      registry,
+      store,
+      state: connState,
+      push,
+      baseUrl: options.providerConfig.baseUrl,
+    });
 
     ws.on('message', (data) => {
       let msg: Record<string, unknown>;
@@ -310,62 +188,12 @@ export function createWebSocketChannel(
       }
 
       // ── Sessions management ────────────────────────────────────────
-      if (msg.type === 'sessions:list') {
-        ws.send(JSON.stringify({ type: 'sessions:listed', sessions: store.list() }));
-        return;
-      }
-      if (msg.type === 'sessions:create') {
-        const created = store.create({
-          title: typeof msg.title === 'string' ? msg.title : undefined,
-        });
-        // Push to all clients so other connected companions stay in sync.
-        push({ type: 'sessions:changed', sessionId: created.id, kind: 'created' });
-        push({ type: 'sessions:listed', sessions: store.list() });
-        return;
-      }
-      if (msg.type === 'sessions:delete') {
-        const id = String(msg.sessionId ?? '');
-        if (!id) {
-          pushError('sessions:delete missing sessionId');
-          return;
-        }
-        const ok = store.delete(id);
-        if (ok) {
-          push({ type: 'sessions:changed', sessionId: id, kind: 'deleted' });
-          push({ type: 'sessions:listed', sessions: store.list() });
-        }
-        return;
-      }
-      if (msg.type === 'sessions:rename') {
-        const id = String(msg.sessionId ?? '');
-        const title = String(msg.title ?? '');
-        if (!id) {
-          pushError('sessions:rename missing sessionId');
-          return;
-        }
-        const renamed = store.rename(id, title);
-        if (renamed) {
-          push({ type: 'sessions:changed', sessionId: id, kind: 'renamed' });
-          push({ type: 'sessions:listed', sessions: store.list() });
-        }
-        return;
-      }
-      if (msg.type === 'sessions:get') {
-        const id = String(msg.sessionId ?? '');
-        if (!id) {
-          pushError('sessions:get missing sessionId');
-          return;
-        }
-        const session = store.get(id);
-        ws.send(JSON.stringify({ type: 'sessions:history', sessionId: id, session }));
-        return;
-      }
+      if (handleSessionsMessage(msg, { ws, store, push, pushError })) return;
 
       // Companion can request a primary-agent switch.
       if (msg.type === 'set_active_agent') {
         const agentId = typeof msg.agentId === 'string' ? msg.agentId : null;
-        const muAgents = (registry as any).getPlugin('mu-agents');
-        const manager = muAgents?.manager;
+        const manager = getMuAgents(registry)?.manager;
         if (!manager?.setActive || !agentId) {
           pushError('Cannot switch agent: missing agentId or manager');
           return;
@@ -393,16 +221,11 @@ export function createWebSocketChannel(
         // Persist the user input first (mirrors chat semantics, keeps
         // `/help` visible in history).
         try {
-          store.appendMessage(targetSessionId, {
-            id: `${Date.now()}-u`,
-            role: 'user',
-            text: userText,
-            ts: Date.now(),
-          });
+          store.appendMessage(targetSessionId, makeUserMessage(userText));
           push({ type: 'sessions:changed', sessionId: targetSessionId, kind: 'updated' });
           push({ type: 'sessions:listed', sessions: store.list() });
         } catch (err) {
-          console.error('[ws] failed to persist user message:', err);
+          log.error('failed to persist user message:', err);
         }
 
         const match = /^\/([^\s]+)(?:\s+([\s\S]*))?$/.exec(userText);
@@ -421,14 +244,9 @@ export function createWebSocketChannel(
           push({ type: 'stream', text: errText, sessionId: targetSessionId });
           push({ type: 'done', text: '', sessionId: targetSessionId });
           try {
-            store.appendMessage(targetSessionId, {
-              id: `${Date.now()}-a`,
-              role: 'assistant',
-              text: errText,
-              ts: Date.now(),
-            });
+            store.appendMessage(targetSessionId, makeAssistantMessage(errText));
           } catch (err) {
-            console.error('[ws] failed to persist command error:', err);
+            log.error('failed to persist command error:', err);
           }
           return;
         }
@@ -454,20 +272,15 @@ export function createWebSocketChannel(
             if (result && result.trim()) {
               push({ type: 'stream', text: result, sessionId: targetSessionId });
               try {
-                store.appendMessage(targetSessionId, {
-                  id: `${Date.now()}-a`,
-                  role: 'assistant',
-                  text: result,
-                  ts: Date.now(),
-                });
+                store.appendMessage(targetSessionId, makeAssistantMessage(result));
               } catch (err) {
-                console.error('[ws] failed to persist command result:', err);
+                log.error('failed to persist command result:', err);
               }
             }
             push({ type: 'done', text: '', sessionId: targetSessionId });
           } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            console.error(`[ws] command "${cmdName}" failed:`, message);
+            const message = errorMessage(err);
+            log.error(`command "${cmdName}" failed:`, message);
             push({ type: 'error', message, sessionId: targetSessionId });
           }
         })();
@@ -500,18 +313,13 @@ export function createWebSocketChannel(
         // Persist the user turn first. appendMessage auto-creates the
         // session file if this is the first message.
         try {
-          store.appendMessage(targetSessionId, {
-            id: `${Date.now()}-u`,
-            role: 'user',
-            text: userText,
-            ts: Date.now(),
-          });
+          store.appendMessage(targetSessionId, makeUserMessage(userText));
           // Notify all clients so the drawer reflects the new
           // updatedAt/title without polling.
           push({ type: 'sessions:changed', sessionId: targetSessionId, kind: 'updated' });
           push({ type: 'sessions:listed', sessions: store.list() });
         } catch (err) {
-          console.error('[ws] failed to persist user message:', err);
+          log.error('failed to persist user message:', err);
         }
 
         runningSessions.add(targetSessionId);
@@ -562,15 +370,8 @@ export function createWebSocketChannel(
               registry,
             });
           } catch (err) {
-            const raw = err instanceof Error ? err.message : String(err);
-            // Same enrichment as in the stream subscriber: a bare
-            // "Connection error." from the OpenAI SDK is useless without
-            // pointing at the offending endpoint.
-            const message =
-              raw === 'Connection error.'
-                ? `Connection error: cannot reach the LLM endpoint at ${options.providerConfig.baseUrl}. Check that the server is running and the URL is reachable.`
-                : raw;
-            console.error(`[ws] session.runTurn error (${targetSessionId}):`, message);
+            const message = enrichLLMError(errorMessage(err), options.providerConfig.baseUrl);
+            log.error(`session.runTurn error (${targetSessionId}):`, message);
             push({
               type: 'error',
               message,
@@ -581,45 +382,14 @@ export function createWebSocketChannel(
             runningSessions.delete(targetSessionId);
           }
         })();
-      } else if (msg.type === 'approval_response') {
-        // Forward to approval gateway via the mu-agents plugin
-        const gateway = registry.getPlugin('mu-agents')?.approvalGateway as
-          | ApprovalGateway
-          | undefined;
-        if (!gateway) {
-          console.warn('[ws] No approval gateway found');
-          return;
-        }
-        const action = msg.action === 'approve' ? 'approved' : 'denied';
-        const token = String(msg.token ?? msg.requestId ?? '');
-        if (action === 'approved') {
-          gateway.approve(token);
-        } else {
-          gateway.deny(token);
-        }
-        // Notify companion of the result
-        push({
-          type: 'approval_response',
-          requestId: msg.requestId ?? msg.token,
-          token,
-          action,
-        });
+      } else if (handleApprovalResponse(msg, { push, registry })) {
+        return;
       }
     });
 
     const cleanup = () => {
       clients.delete(ws);
-      for (const off of sessionSubs.values()) {
-        try {
-          off();
-        } catch {
-          // ignore
-        }
-      }
-      sessionSubs.clear();
-      runningSessions.clear();
-      latestMessages.clear();
-      persistedMessageCount.clear();
+      tearDownConnectionState(connState);
     };
     ws.on('close', cleanup);
     ws.on('error', cleanup);
@@ -666,7 +436,7 @@ export function createWebSocketChannel(
   const channel: WsChannel = {
     id: 'websocket',
     start: async () => {
-      console.log(`[ws] Listening on port ${options.port}`);
+      log.info(`Listening on port ${options.port}`);
     },
     stop: async () => {
       unsubscribeActiveAgent();

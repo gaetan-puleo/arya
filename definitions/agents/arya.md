@@ -5,10 +5,11 @@ type: primary
 enabled: true
 color: '#3B82F6'
 tools:
-  fs.read_file: allow
-  fs.write_file: ask
-  fs.list_dir: allow
-  shell.execute: ask
+  read: allow
+  write: ask
+  edit: ask
+  list_dir: allow
+  bash: ask
   http.fetch: allow
   subagent: ask
 ---

@@ -20,7 +20,6 @@ interface ChatMessageListProps {
 	onRespondApproval: (msgId: string, action: "approve" | "deny") => void;
 	subAgentRuns: Map<string, SubAgentRunInfo>;
 	showScrollFab: boolean;
-	onScrollToEnd: () => void;
 	onShowScrollFabChange: (show: boolean) => void;
 	keyboardOpen: boolean;
 	keyboardHeight: number;
@@ -42,7 +41,6 @@ export default function ChatMessageList({
 	onRespondApproval,
 	subAgentRuns,
 	showScrollFab,
-	onScrollToEnd,
 	onShowScrollFabChange,
 	keyboardOpen,
 	agents,
@@ -307,7 +305,6 @@ export default function ChatMessageList({
 					<Pressable
 						onPress={() => {
 							listRef.current?.scrollToEnd({ animated: true });
-							onScrollToEnd();
 						}}
 						style={{
 							width: 36,
