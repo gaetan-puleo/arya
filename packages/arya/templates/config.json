@@ -3,6 +3,7 @@
   "model": "qwen2.5-coder:7b",
   "maxTokens": 4096,
   "temperature": 0.7,
-  "streamTimeoutMs": 60000,
-  "wsPort": 3001
+  "streamTimeoutMs": 180000,
+  "wsPort": 3001,
+  "authToken": ""
 }

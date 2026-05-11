@@ -42,10 +42,16 @@ export function createScheduler(
     const filePath = join(tasksDir, file);
     const raw = readFileSync(filePath, 'utf8');
     const parsed = parse(raw);
+    // YAML files that are empty or contain only comments parse to `null` /
+    // `undefined`. Treat those as "no tasks here" rather than crashing on
+    // a downstream property access.
+    if (parsed == null) {
+      continue;
+    }
     const tasks: ScheduledTask[] = Array.isArray(parsed) ? parsed : [parsed as ScheduledTask];
 
     for (const task of tasks) {
-      if (!task.id || !task.cron || !task.prompt) {
+      if (!task || !task.id || !task.cron || !task.prompt) {
         console.warn(`[scheduler] Skipping invalid task in ${file}: missing id/cron/prompt`);
         continue;
       }

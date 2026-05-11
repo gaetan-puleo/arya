@@ -1,5 +1,6 @@
-import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 
 /** Resolve the XDG config home directory. */
@@ -31,26 +32,16 @@ export function init(): void {
     mkdirSync(dir, { recursive: true });
   }
 
-  // Create config.json (only if it doesn't exist)
+  // Create config.json (only if it doesn't exist). The canonical template
+  // lives in `packages/arya/templates/config.json` — read it from there so
+  // we have one source of truth. No inline default: if the template is
+  // missing the install is broken and we want a loud failure.
   const configPath = join(configDir, 'config.json');
   if (!existsSync(configPath)) {
-    writeFileSync(
-      configPath,
-      JSON.stringify(
-        {
-          baseUrl: 'http://localhost:11434/v1',
-          model: 'qwen2.5-coder:7b',
-          maxTokens: 4096,
-          temperature: 0.7,
-          streamTimeoutMs: 60000,
-          wsPort: 3001,
-          authToken: '',
-          plugins: ['arya-tools'],
-        },
-        null,
-        2,
-      ),
-    );
+    const here = dirname(fileURLToPath(import.meta.url));
+    const templatePath = join(here, '..', 'templates', 'config.json');
+    const template = readFileSync(templatePath, 'utf8');
+    writeFileSync(configPath, template);
   }
 
   // Create agent template (only if it doesn't exist)

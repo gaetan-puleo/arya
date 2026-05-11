@@ -100,7 +100,7 @@ export default function ChatInputBar({
 			}}
 		>
 			{/* ── Inline command menu ── */}
-			{/* {showCommandMenu && filteredCommands.length > 0 && (
+			{showCommandMenu && filteredCommands.length > 0 && (
 				<InlineMenu
 					items={filteredCommands}
 					prefix="/"
@@ -117,10 +117,10 @@ export default function ChatInputBar({
 					textColor={textColor}
 					textSecondary={textSecondary}
 				/>
-			)} */}
+			)}
 
 			{/* ── Inline agent menu ── */}
-			{/* {showAgentMenu && filteredAgents.length > 0 && (
+			{showAgentMenu && filteredAgents.length > 0 && (
 				<InlineMenu
 					items={filteredAgents}
 					prefix="@"
@@ -137,7 +137,7 @@ export default function ChatInputBar({
 					textColor={textColor}
 					textSecondary={textSecondary}
 				/>
-			)} */}
+			)}
 
 			<View
 				style={{

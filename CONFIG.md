@@ -1,20 +1,24 @@
 # Arya — Local Configuration
 
-This file explains `config.json` (and its environment-variable equivalents).
-Edit `config.json` directly OR override via environment variables — env vars
-take precedence (see `bootstrap.ts:loadConfig`).
+All runtime configuration lives in `config.json`
+(`~/.config/arya/config.json` by default). Edit it directly — there are no
+environment-variable overrides for runtime config. Environment variables are
+reserved for plugin integrations only (see `.env.example`).
+
+Required fields are validated at boot; arya refuses to start if any are
+missing (see `bootstrap.ts:loadConfig`).
 
 ## Fields
 
-| `config.json` key | Env var | Description | Default |
-|---|---|---|---|
-| `baseUrl` | `ARYA_BASE_URL` | OpenAI-compatible API endpoint | `http://localhost:11434/v1` |
-| `model` | `ARYA_MODEL` | Model name advertised by your provider | `qwen2.5-coder:7b` |
-| `maxTokens` | `ARYA_MAX_TOKENS` | Max tokens per response | `4096` |
-| `temperature` | `ARYA_TEMPERATURE` | Sampling temperature | `0.7` |
-| `streamTimeoutMs` | `ARYA_STREAM_TIMEOUT_MS` | Inactivity timeout for streaming | `60000` |
-| `wsPort` | `ARYA_WS_PORT` | Companion WebSocket port | `3001` |
-| `authToken` | `ARYA_COMPANION_TOKEN` | Token required by companion (empty = none) | _(none)_ |
+| `config.json` key | Description | Default |
+|---|---|---|
+| `baseUrl` | OpenAI-compatible API endpoint | `http://localhost:11434/v1` |
+| `model` | Model name advertised by your provider | `qwen2.5-coder:7b` |
+| `maxTokens` | Max tokens per response | `4096` |
+| `temperature` | Sampling temperature | `0.7` |
+| `streamTimeoutMs` | Inactivity timeout for streaming | `60000` |
+| `wsPort` | Companion WebSocket port | `3001` |
+| `authToken` | Token required by companion (empty = none) | _(none)_ |
 
 ## llama-swap setup
 

@@ -13,14 +13,15 @@
   },
   "dependencies": {
     "croner": "^9.1.0",
-    "mu-agents": "0.15.0",
-    "mu-core": "0.15.0",
-    "mu-openai-provider": "0.15.0",
+    "mu-agents": "file:../../../mu/packages/mu-agents",
+    "mu-core": "file:../../../mu/packages/mu-core",
+    "mu-openai-provider": "file:../../../mu/packages/mu-openai-provider",
     "ws": "^8.18.0",
     "yaml": "^2.8.0"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "@types/ws": "^8.5.13",
-    "@types/node": "^22.0.0"
+    "typescript": "~5.6"
   }
 }

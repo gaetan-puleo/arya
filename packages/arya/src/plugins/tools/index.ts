@@ -11,6 +11,13 @@
  *
  * Each tool declares a `permission.matchKey` so agent definitions can
  * authorise them via globs in their frontmatter.
+ *
+ * ── Integration plugins ──
+ * Additional tools are loaded dynamically from ~/.config/arya/plugins/*.ts
+ * (or $XDG_CONFIG_HOME/arya/plugins/*.ts). These are user-defined plugins
+ * that are NOT shipped with the arya-agent source.
+ *
+ * See ~/.config/arya/plugins/ for available integration plugins.
  */
 
 import type { Plugin } from 'mu-core';
@@ -66,6 +73,8 @@ export function createAryaToolsPlugin(config: AryaToolsConfig = {}): Plugin {
       '- `shell.execute(cmd)` — Execute a shell command via bash.',
       '- `http.fetch(url, method?, headers?, body?, timeoutMs?, responseType?)` — Make HTTP requests.',
       '',
+      '── Integration plugins ──',
+      'Additional tools are loaded from ~/.config/arya/plugins/*.ts.',
       'Permission rules are enforced by the host. Tools may be blocked, require',
       'approval, or be allowed based on the active agent\'s configuration.',
     ].join('\n'),

@@ -1,0 +1,11 @@
+# Periodic inbox triage. Disabled by default — uncomment to enable.
+# The `mail-triage` subagent classifies unread mail and tags spam/processed.
+
+# - id: mail-triage-loop
+#   agent: mail-triage
+#   cron: '*/15 * * * *'
+#   channel: companion
+#   prompt: >
+#     Scan the configured INBOX(es) for unread email and run the standard
+#     triage workflow: classify each message, then tag with `spam` /
+#     `not_spam` and `processed`. Never delete or move messages.

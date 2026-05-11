@@ -74,7 +74,7 @@ arya-agent/
 │       └── default.yaml          # Scheduled tasks
 │
 ├── .env.example                  # Environment variables template
-├── config.example.json           # Config template (legacy)
+├── packages/arya/templates/config.json  # Config template (used by `arya init`)
 ├── package.json                  # Workspace root
 └── tsconfig.json
 ```
@@ -252,17 +252,9 @@ Format YAML dans `~/.config/arya/tasks/` ou `definitions/tasks/` :
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `ARYA_BASE_URL` | LLM API endpoint | `http://localhost:11434/v1` |
-| `ARYA_MODEL` | Model name | `qwen2.5-coder:7b` |
-| `ARYA_WS_PORT` | WebSocket port | `3001` |
-| `ARYA_COMPANION_TOKEN` | Auth token for companion | (empty) |
-| `ARYA_MAX_TOKENS` | Max response tokens | `4096` |
-| `ARYA_TEMPERATURE` | Sampling temperature | `0.7` |
-| `COMPANION_TOKEN` | Alias for auth token | (empty) |
-
-See `.env.example` for all variables.
+All runtime configuration lives in `~/.config/arya/config.json`. Environment
+variables are reserved for plugin integrations — each plugin defines its own
+env vars. See `.env.example` for the loading mechanism.
 
 ## 🧱 Briques mu
 

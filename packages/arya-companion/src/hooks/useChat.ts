@@ -138,14 +138,20 @@ function useSlashAndAt(
 	const showAgentMenu = input.startsWith("@") && !input.includes(" ");
 	const agentQuery = input.slice(1).toLowerCase();
 
+	// Only subagents are dispatchable via `@<name>` — the server's
+	// mu-agents `transformUserInput` hook intercepts mentions of registered
+	// subagents and runs them. Mentioning a primary agent would just become
+	// literal text, so we hide them from the inline menu.
 	const filteredAgents = showAgentMenu
-		? agents.filter((a) => {
-				if (!agentQuery) return true;
-				return (
-					a.id.toLowerCase().includes(agentQuery) ||
-					a.description.toLowerCase().includes(agentQuery)
-				);
-			})
+		? agents
+				.filter((a) => (a.type ?? "primary") === "subagent")
+				.filter((a) => {
+					if (!agentQuery) return true;
+					return (
+						a.id.toLowerCase().includes(agentQuery) ||
+						a.description.toLowerCase().includes(agentQuery)
+					);
+				})
 		: [];
 
 	return {
@@ -419,8 +425,42 @@ export function useChat() {
 					});
 				}
 			} else if (msg.type === "error") {
-				setLoading(false);
+				// Surface the failure to the user. The server emits `error`
+				// followed by `done`, but `done` carries empty text on
+				// failure paths — so if we don't capture the message here
+				// the streaming placeholder ("…") is finalized to nothing
+				// and the user is left staring at an empty bubble forever.
+				if (!isForCurrentSession) {
+					setLoading(false);
+					return;
+				}
+				const errText =
+					typeof msg.message === "string" && msg.message.trim()
+						? `⚠️ ${msg.message}`
+						: "⚠️ The agent failed to respond. Check the server logs.";
 				console.error("[ws] server error:", msg.message);
+				setMessages((m) => {
+					const idx = m.findIndex((x) => x.id === "streaming");
+					if (idx === -1) {
+						return [
+							...m,
+							{
+								id: `err-${Date.now()}`,
+								role: "assistant",
+								text: errText,
+								authorAgentId: activeAgentIdRef.current ?? undefined,
+							},
+						];
+					}
+					const next = [...m];
+					next[idx] = {
+						...next[idx]!,
+						text: errText,
+						id: `err-${Date.now()}`,
+					};
+					return next;
+				});
+				setLoading(false);
 			}
 		};
 
