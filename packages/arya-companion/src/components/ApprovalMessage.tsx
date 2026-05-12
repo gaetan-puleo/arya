@@ -2,20 +2,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useTheme } from "@/theme/ThemeContext";
-import type { ApprovalData } from "@/types/approval";
-
-const ARGS_MAX_LENGTH = 600;
-
-function prettyArgs(args: string | undefined): string | undefined {
-	if (!args) return undefined;
-	let out = args;
-	try {
-		out = JSON.stringify(JSON.parse(args), null, 2);
-	} catch {
-		// keep raw
-	}
-	return out.length > ARGS_MAX_LENGTH ? `${out.slice(0, ARGS_MAX_LENGTH)}…` : out;
-}
+import type { ApprovalSnapshot } from "@/lib/ws";
 
 function Widget({ children }: { children: React.ReactNode }) {
 	return (
@@ -25,19 +12,26 @@ function Widget({ children }: { children: React.ReactNode }) {
 	);
 }
 
-export default function ApprovalMessage({
-	toolName,
-	toolArgs: args,
-	toolResult,
-	status,
-	onApprove,
-	onDeny,
-}: Omit<ApprovalData, "msgId" | "requestId" | "token"> & {
+interface ApprovalMessageProps {
+	snapshot: ApprovalSnapshot;
 	onApprove: () => void;
 	onDeny: () => void;
-}) {
-	const summary = prettyArgs(args);
-	const result = prettyArgs(toolResult);
+}
+
+/**
+ * Renders an approval card from a server-pushed `ApprovalSnapshot`. No
+ * local state machine — the snapshot's `status` field drives the UI.
+ */
+export default function ApprovalMessage({
+	snapshot,
+	onApprove,
+	onDeny,
+}: ApprovalMessageProps) {
+	const summary = snapshot.toolArgsPretty || undefined;
+	const status = snapshot.status;
+	// The companion no longer holds tool results inline on the approval —
+	// resolved tool messages persist via the normal transcript flow.
+	const result: string | undefined = undefined;
 	const [expanded, setExpanded] = useState(
 		status === "pending" && (summary?.length ?? 0) <= 120,
 	);
@@ -52,7 +46,7 @@ export default function ApprovalMessage({
 					const statusColor =
 						status === "approved"
 							? theme.colors.success
-							: status === "denied"
+							: status === "denied" || status === "timeout"
 								? theme.colors.danger
 								: null;
 					return (
@@ -69,7 +63,7 @@ export default function ApprovalMessage({
 								numberOfLines={1}
 								className="text-xs font-medium text-text flex-1"
 							>
-								{toolName}
+								{snapshot.toolName}
 							</Text>
 							{statusColor ? (
 								<View className="flex-row gap-1 items-center">
@@ -86,7 +80,11 @@ export default function ApprovalMessage({
 										className="text-xs font-semibold"
 										style={{ color: statusColor }}
 									>
-										{status === "approved" ? "Approved" : "Denied"}
+										{status === "approved"
+											? "Approved"
+											: status === "timeout"
+												? "Timed out"
+												: "Denied"}
 									</Text>
 								</View>
 							) : null}
@@ -112,27 +110,8 @@ export default function ApprovalMessage({
 							paddingVertical: 8,
 						}}
 					>
-						<Text
-							className="text-xs leading-4 text-text font-mono"
-						>
-							{summary}
-						</Text>
-					</ScrollView>
-				) : null}
-
-				{/* Result preview (resolved only) */}
-				{status !== "pending" && expanded && result ? (
-					<ScrollView
-						horizontal
-						showsHorizontalScrollIndicator={false}
-						className="self-stretch bg-bg-tertiary rounded-lg"
-						contentContainerStyle={{
-							paddingHorizontal: 12,
-							paddingVertical: 8,
-						}}
-					>
 						<Text className="text-xs leading-4 text-text font-mono">
-							{result}
+							{summary}
 						</Text>
 					</ScrollView>
 				) : null}

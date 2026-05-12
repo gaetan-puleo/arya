@@ -5,6 +5,11 @@
  * setters/refs, mutates the transcript state appropriately. Lifted
  * out of `useChat` so the orchestrator stays under ~300 LOC and the
  * `switch` is independently readable / testable.
+ *
+ * Snapshot-oriented protocol (Batch 3): `sub_agent_run` and
+ * `approval_state` events update the store's snapshot Maps, and this
+ * dispatcher only inserts placeholder rows into the transcript on
+ * first appearance.
  */
 
 import type React from "react";
@@ -13,21 +18,15 @@ import type {
 	PersistedSessionWire,
 	WsInboundMessage,
 } from "@/lib/ws";
-import { persistedSessionFromWire } from "@/lib/ws";
-import type { ApprovalData, ApprovalStatus } from "@/types/approval";
+import { chatMessageWireToPersisted, persistedSessionFromWire } from "@/lib/ws";
 
-/**
- * Approval messages share the same requestId across request/response
- * pairs; we suffix with a monotonic counter so a tool emitting many
- * approvals in a row stays uniquely keyed in the React list.
- */
-let approvalSeq = 0;
+/** Module-local counter to key synthetic message ids when meta.id is missing. */
+let syntheticSeq = 0;
 
 export interface DispatchCtx {
 	currentSessionIdRef: React.MutableRefObject<string | null>;
 	activeAgentIdRef: React.MutableRefObject<string | null>;
 	setMessages: React.Dispatch<React.SetStateAction<ChatMessageItem[]>>;
-	setApprovals: React.Dispatch<React.SetStateAction<Map<string, ApprovalData>>>;
 	setLoading: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
@@ -46,13 +45,8 @@ export function handleSessionMessage(
 	msg: WsInboundMessage,
 	ctx: DispatchCtx,
 ): void {
-	const {
-		currentSessionIdRef,
-		activeAgentIdRef,
-		setMessages,
-		setApprovals,
-		setLoading,
-	} = ctx;
+	const { currentSessionIdRef, activeAgentIdRef, setMessages, setLoading } =
+		ctx;
 	const sid = currentSessionIdRef.current;
 	const forCurrent = isForCurrentSession(msg, sid);
 
@@ -85,45 +79,22 @@ export function handleSessionMessage(
 			setLoading(false);
 			return;
 		}
-		case "approval_request": {
-			approvalSeq += 1;
-			const requestId = String(msg.requestId ?? msg.token);
-			const msgId = `approval-${requestId}-${approvalSeq}`;
-			const data: ApprovalData = {
-				msgId,
-				requestId,
-				token: String(msg.token ?? requestId),
-				toolName: String(msg.toolName ?? ""),
-				toolArgs: msg.toolArgs
-					? JSON.stringify(msg.toolArgs, null, 2)
-					: undefined,
-				status: "pending",
-			};
-			setApprovals((prev) => new Map(prev).set(msgId, data));
-			setMessages((m) =>
-				insertBeforeStreaming(m, {
-					id: msgId,
+		case "approval_state": {
+			// Insert a card row on first sighting of a pending approval; for
+			// subsequent transitions the store update is enough (the row
+			// reads the current snapshot live from the store).
+			const snap = msg.snapshot;
+			if (snap.status !== "pending") return;
+			const id = `approval-${snap.approvalId}`;
+			setMessages((m) => {
+				if (m.some((x) => x.id === id)) return m;
+				return insertBeforeStreaming(m, {
+					id,
 					role: "assistant",
 					text: "",
-					authorAgentId: activeAgentIdRef.current ?? undefined,
-				}),
-			);
-			return;
-		}
-		case "approval_response": {
-			const status: ApprovalStatus =
-				msg.action === "approved" ? "approved" : "denied";
-			setApprovals((prev) => {
-				const next = new Map(prev);
-				for (const [key, entry] of next) {
-					if (
-						entry.requestId === String(msg.requestId ?? msg.token) &&
-						entry.status === "pending"
-					) {
-						next.set(key, { ...entry, status });
-					}
-				}
-				return next;
+					authorAgentId:
+						snap.agentId ?? activeAgentIdRef.current ?? undefined,
+				});
 			});
 			return;
 		}
@@ -140,42 +111,44 @@ export function handleSessionMessage(
 					id: m.id,
 					role: m.role,
 					text: m.text,
-					authorAgentId: m.agentId,
+					authorAgentId: m.agent,
 					toolName: m.toolName,
 					toolArgs: m.toolArgs,
 					toolResult: m.toolResult,
 					toolError: m.toolError,
 				})),
 			);
-			const replayed = new Map<string, ApprovalData>();
-			for (const m of session.messages) {
-				if (m.role !== "tool") continue;
-				replayed.set(m.id, {
-					msgId: m.id,
-					requestId: m.id,
-					token: m.id,
-					toolName: m.toolName ?? "tool",
-					toolArgs: m.toolArgs,
-					status: m.toolError ? "denied" : "approved",
-					toolResult: m.toolResult,
-				});
-			}
-			setApprovals(replayed);
 			return;
 		}
-		case "sub_agent_event": {
-			// The store already updated the run map. We just react to
-			// `invocation_start` here so a placeholder card row slots
-			// into the transcript above the streaming "…" bubble.
-			const evt = msg.event;
-			if (evt.kind !== "invocation_start") return;
-			const cardId = `sub-agent-${evt.runId}`;
-			setMessages((m) =>
-				insertBeforeStreaming(m, {
+		case "sub_agent_run": {
+			// Insert a card row on first sighting of a run; subsequent
+			// snapshots update the store, and the card reads from there.
+			const cardId = `sub-agent-${msg.run.runId}`;
+			setMessages((m) => {
+				if (m.some((x) => x.id === cardId)) return m;
+				return insertBeforeStreaming(m, {
 					id: cardId,
 					role: "assistant",
 					text: "",
-					authorAgentId: evt.agentId,
+					authorAgentId: msg.run.agentId,
+				});
+			});
+			return;
+		}
+		case "synthetic_message": {
+			if (msg.sessionId !== sid) return;
+			// Server pre-filters: messages with display.hidden /
+			// customType === 'mu-agents.subagent' / role === 'tool' never
+			// reach us. Convert + insert verbatim.
+			syntheticSeq += 1;
+			const row = chatMessageWireToPersisted(msg.message, syntheticSeq);
+			setMessages((m) =>
+				insertBeforeStreaming(m, {
+					id: row.id || `synth-${syntheticSeq}`,
+					role: row.role === "tool" ? "assistant" : row.role,
+					text: row.text,
+					authorAgentId:
+						row.agent ?? activeAgentIdRef.current ?? undefined,
 				}),
 			);
 			return;

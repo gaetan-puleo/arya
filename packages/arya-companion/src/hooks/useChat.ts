@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useAppStore } from "@/lib/appStore";
 import type { AgentInfo, ChatMessageItem } from "@/lib/ws";
-import type { ApprovalData } from "@/types/approval";
 import { handleSessionMessage } from "@/hooks/chatDispatch";
 import { useKeyboard } from "@/hooks/useKeyboard";
 import { useSlashAndAt } from "@/hooks/useSlashAndAt";
@@ -15,9 +14,11 @@ const SESSION_ID_KEY = "arya-companion-current-session";
 /**
  * Chat-screen orchestrator. Subscribes to the app-level store for the
  * connection + cross-cutting registries (agents, sessions, sub-agent
- * runs) and owns the screen-local transcript state (messages,
- * approvals, loading, scroll-to-bottom fab).
+ * runs, approvals) and owns the screen-local transcript state (messages,
+ * loading, scroll-to-bottom fab, input).
  *
+ * Approval state is server-pushed and lives in the store; this hook
+ * only resolves the snapshot for a given approvalId when rendering.
  * The actual per-message updates live in `chatDispatch.ts` — a pure
  * function over the inbound message and the screen-local setters.
  */
@@ -29,6 +30,7 @@ export function useChat() {
 	const activeAgentId = useAppStore((s) => s.activeAgentId);
 	const sessions = useAppStore((s) => s.sessions);
 	const subAgentRuns = useAppStore((s) => s.subAgentRuns);
+	const approvals = useAppStore((s) => s.approvals);
 	const {
 		setActiveAgent,
 		createSession: storeCreateSession,
@@ -38,7 +40,6 @@ export function useChat() {
 		sendChat: storeSendChat,
 		sendCommand: storeSendCommand,
 		respondApproval: storeRespondApproval,
-		clearSubAgentRuns,
 		subscribeToSessionMessages,
 	} = useAppStore(
 		useShallow((s) => ({
@@ -50,7 +51,6 @@ export function useChat() {
 			sendChat: s.sendChat,
 			sendCommand: s.sendCommand,
 			respondApproval: s.respondApproval,
-			clearSubAgentRuns: s.clearSubAgentRuns,
 			subscribeToSessionMessages: s.subscribeToSessionMessages,
 		})),
 	);
@@ -58,9 +58,6 @@ export function useChat() {
 	// ── Local state ──
 	const { keyboardOpen, keyboardHeight } = useKeyboard();
 	const [messages, setMessages] = useState<ChatMessageItem[]>([]);
-	const [approvals, setApprovals] = useState<Map<string, ApprovalData>>(
-		new Map(),
-	);
 	const [input, setInput] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [showScrollFab, setShowScrollFab] = useState(false);
@@ -98,10 +95,8 @@ export function useChat() {
 
 	const resetTranscript = useCallback(() => {
 		setMessages([]);
-		setApprovals(new Map());
 		setLoading(false);
-		clearSubAgentRuns();
-	}, [clearSubAgentRuns]);
+	}, []);
 
 	// ── Subscribe to inbound store messages ──
 	// activeAgentId is mirrored on a ref so the dispatcher reads it
@@ -117,7 +112,6 @@ export function useChat() {
 				currentSessionIdRef,
 				activeAgentIdRef,
 				setMessages,
-				setApprovals,
 				setLoading,
 			}),
 		);
@@ -200,9 +194,13 @@ export function useChat() {
 	}, [sessions, storeDeleteSession, resetTranscript]);
 
 	const respondApproval = useCallback(
-		(msgId: string, action: "approve" | "deny") => {
-			const data = approvals.get(msgId);
-			if (!data || data.status !== "pending") return;
+		(rowId: string, action: "approve" | "deny") => {
+			// rowId is `approval-${approvalId}`. Find the snapshot.
+			const approvalId = rowId.startsWith("approval-")
+				? rowId.slice("approval-".length)
+				: rowId;
+			const snap = approvals.get(approvalId);
+			if (!snap || snap.status !== "pending") return;
 
 			Haptics.notificationAsync(
 				action === "approve"
@@ -210,16 +208,8 @@ export function useChat() {
 					: Haptics.NotificationFeedbackType.Warning,
 			);
 
-			storeRespondApproval(data.requestId, data.token, action);
-
-			setApprovals((prev) => {
-				const next = new Map(prev);
-				next.set(msgId, {
-					...data,
-					status: action === "approve" ? "approved" : "denied",
-				});
-				return next;
-			});
+			// The token equals the approvalId in mu-agents' gateway.
+			storeRespondApproval(approvalId, approvalId, action);
 		},
 		[approvals, storeRespondApproval],
 	);

@@ -2,8 +2,15 @@
  * Shared wire types exchanged between the companion and the agent's
  * WebSocket server. Pure type definitions — no runtime logic.
  *
- * Session history conversion lives in `./sessionWire.ts`.
+ * Snapshot-oriented protocol: the server pushes ready-to-render
+ * `sub_agent_run` and `approval_state` snapshots. The companion is a
+ * pure renderer — no client-side reducers for these.
  */
+
+import type {
+  ApprovalSnapshot,
+  SubAgentRunSnapshot,
+} from "mu-agents";
 
 export interface CommandInfo {
 	command: string;
@@ -37,22 +44,9 @@ export interface ChatMessageItem {
 	toolError?: boolean;
 }
 
-export type SubAgentEventKind =
-	| "invocation_start"
-	| "text_delta"
-	| "message_end"
-	| "tool_call_start"
-	| "tool_call_end"
-	| "invocation_end";
-
-export interface SubAgentEvent {
-	runId: string;
-	parentRunId?: string;
-	agentId: string;
-	kind: SubAgentEventKind;
-	ts: number;
-	data: Record<string, unknown>;
-}
+// Re-export snapshot wire types so the companion has them under a
+// single import surface.
+export type { ApprovalSnapshot, SubAgentRunSnapshot };
 
 // ── Sessions (persistent, server-managed) ─────────────────────────────
 
@@ -64,14 +58,31 @@ export interface SessionSummary {
 	messageCount: number;
 }
 
-export type { PersistedSessionWire } from "./sessionWire";
-export { persistedSessionFromWire } from "./sessionWire";
+export type { ChatMessageWire, PersistedSessionWire } from "./sessionWire";
+export {
+	chatMessageWireToPersisted,
+	persistedSessionFromWire,
+} from "./sessionWire";
+
+/**
+ * Scheduler lifecycle event mirrored from `mu-scheduler`. The server
+ * pushes one per cron tick. The companion currently uses these only
+ * to keep the sessions list fresh (the task creates a `task:` prefixed
+ * session per run); finer-grained UI is future work.
+ */
+export interface SchedulerEvent {
+	kind: "started" | "output" | "completed" | "failed";
+	taskId: string;
+	sessionId: string;
+	at?: number;
+	text?: string;
+	error?: string;
+}
 
 // ── Inbound WS message discriminated union ─────────────────────────────
 // Each variant matches a `type` value emitted by the agent server.
 // Used by the central store's typed dispatch table — the compiler
-// enforces exhaustive handling, replacing the previous "if (...) return"
-// chain with a `switch` over `msg.type`.
+// enforces exhaustive handling.
 
 export type WsInboundMessage =
 	| { type: "commands"; commands: CommandInfo[] }
@@ -84,21 +95,6 @@ export type WsInboundMessage =
 	| { type: "stream"; sessionId?: string; text: string }
 	| { type: "done"; sessionId?: string; text?: string }
 	| {
-			type: "approval_request";
-			sessionId?: string;
-			requestId?: string | number;
-			token?: string | number;
-			toolName?: string;
-			toolArgs?: unknown;
-	  }
-	| {
-			type: "approval_response";
-			sessionId?: string;
-			requestId?: string | number;
-			token?: string | number;
-			action: "approved" | "denied";
-	  }
-	| {
 			type: "sessions:listed";
 			sessions: SessionSummary[];
 	  }
@@ -107,5 +103,37 @@ export type WsInboundMessage =
 			sessionId: string;
 			session: import("./sessionWire").PersistedSessionWire | null;
 	  }
-	| { type: "sub_agent_event"; event: SubAgentEvent }
+	/**
+	 * Render-ready sub-agent run snapshot. The companion stores it
+	 * verbatim and renders directly — no event reduction.
+	 */
+	| { type: "sub_agent_run"; run: SubAgentRunSnapshot }
+	/** Bootstrap listing on connect. */
+	| { type: "sub_agent_runs:listed"; runs: SubAgentRunSnapshot[] }
+	/**
+	 * Render-ready approval snapshot. Carries pending/approved/denied
+	 * state plus pre-formatted args.
+	 */
+	| { type: "approval_state"; snapshot: ApprovalSnapshot }
+	/** Bootstrap listing on connect. */
+	| { type: "approvals:listed"; approvals: ApprovalSnapshot[] }
+	/**
+	 * Synthetic message published by mu-agents (via Arya's MessageBus
+	 * router) when a hook live-appends a message that the LLM stream
+	 * itself didn't produce — typically the `@<subagent>` dispatch
+	 * path's user echo. Pre-filtered server-side: messages with
+	 * `display.hidden` or `customType === 'mu-agents.subagent'` are
+	 * never sent.
+	 */
+	| {
+			type: "synthetic_message";
+			sessionId: string;
+			message: import("./sessionWire").ChatMessageWire;
+	  }
+	/**
+	 * Scheduler lifecycle event. Forwarded so the companion can keep
+	 * the sessions list in sync when an autonomous task runs; no
+	 * per-message rendering today.
+	 */
+	| { type: "scheduler_event"; event: SchedulerEvent }
 	| { type: "error"; sessionId?: string; message?: string };

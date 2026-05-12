@@ -10,15 +10,21 @@ import ChatMessage from "@/components/ChatMessage";
 import SubAgentCard from "@/components/SubAgentCard";
 import TypingDots from "@/components/TypingDots";
 import { AryaAvatar } from "@/components/Primitives";
-import type { ApprovalData } from "@/types/approval";
-import type { SubAgentRunInfo } from "@/components/SubAgentCard";
-import type { AgentInfo, ChatMessageItem } from "@/lib/ws";
+import type {
+	AgentInfo,
+	ApprovalSnapshot,
+	ChatMessageItem,
+	SubAgentRunSnapshot,
+} from "@/lib/ws";
+
+const APPROVAL_PREFIX = "approval-";
+const SUBAGENT_PREFIX = "sub-agent-";
 
 interface ChatMessageListProps {
 	messages: ChatMessageItem[];
-	approvals: Map<string, ApprovalData>;
-	onRespondApproval: (msgId: string, action: "approve" | "deny") => void;
-	subAgentRuns: Map<string, SubAgentRunInfo>;
+	approvals: Map<string, ApprovalSnapshot>;
+	onRespondApproval: (rowId: string, action: "approve" | "deny") => void;
+	subAgentRuns: Map<string, SubAgentRunSnapshot>;
 	showScrollFab: boolean;
 	onShowScrollFabChange: (show: boolean) => void;
 	keyboardOpen: boolean;
@@ -33,6 +39,26 @@ interface ChatMessageListProps {
 	 * FAB above the bar regardless of how tall the input grows.
 	 */
 	inputBarHeight?: number;
+}
+
+/**
+ * Resolve `msg.id` to an approval snapshot. Row ids carry the
+ * `approval-` prefix so we can look up the snapshot by id slice.
+ */
+function approvalFromRow(
+	msg: ChatMessageItem,
+	approvals: Map<string, ApprovalSnapshot>,
+): ApprovalSnapshot | undefined {
+	if (!msg.id.startsWith(APPROVAL_PREFIX)) return undefined;
+	return approvals.get(msg.id.slice(APPROVAL_PREFIX.length));
+}
+
+function subAgentFromRow(
+	msg: ChatMessageItem,
+	runs: Map<string, SubAgentRunSnapshot>,
+): SubAgentRunSnapshot | undefined {
+	if (!msg.id.startsWith(SUBAGENT_PREFIX)) return undefined;
+	return runs.get(msg.id.slice(SUBAGENT_PREFIX.length));
 }
 
 export default function ChatMessageList({
@@ -169,8 +195,8 @@ export default function ChatMessageList({
 					// gap (user ↔ assistant *and* assistant text ↔ widget).
 					const kindOf = (m: ChatMessageItem): string => {
 						if (m.role === "user") return "user";
-						if (approvals.get(m.id)) return "approval";
-						if (subAgentRuns.get(m.id)) return "subagent";
+						if (m.id.startsWith(APPROVAL_PREFIX)) return "approval";
+						if (m.id.startsWith(SUBAGENT_PREFIX)) return "subagent";
 						if (m.id === "streaming" && m.text === "…") return "streaming";
 						return "assistant";
 					};
@@ -183,22 +209,19 @@ export default function ChatMessageList({
 					const INTER_GROUP = 32; // any kind change
 					const topGap = isFirst ? 0 : sameGroupAsPrev ? INTRA_GROUP : INTER_GROUP;
 
-					const approval = approvals.get(msg.id);
+					const approval = approvalFromRow(msg, approvals);
 					if (approval) {
 						return (
 							<View style={{ paddingTop: topGap }}>
 								<ApprovalMessage
-									toolName={approval.toolName}
-									toolArgs={approval.toolArgs}
-									toolResult={approval.toolResult}
-									status={approval.status}
+									snapshot={approval}
 									onApprove={() => onRespondApproval(msg.id, "approve")}
 									onDeny={() => onRespondApproval(msg.id, "deny")}
 								/>
 							</View>
 						);
 					}
-					const subAgentRun = subAgentRuns.get(msg.id);
+					const subAgentRun = subAgentFromRow(msg, subAgentRuns);
 					if (subAgentRun) {
 						return (
 							<View style={{ paddingTop: topGap }}>

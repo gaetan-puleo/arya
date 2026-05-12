@@ -1,18 +1,24 @@
 import { join } from 'node:path';
-import { startMu } from 'mu-core';
-import type { Session } from 'mu-core';
-import { createAgentsPlugin } from 'mu-agents';
+import {
+  attachAutoPersist,
+  createJSONLSessionStore,
+  createSessionScopedMessageBus,
+  type MessageBusRouter,
+  startMu,
+} from 'mu-core';
+import {
+  createAgentsPlugin,
+  getActiveAgentId,
+  getMuAgents,
+} from 'mu-agents';
 import { createOpenAIProviderPlugin } from 'mu-openai-provider';
 import { createScheduler } from 'mu-scheduler';
 import { createMuToolsPlugin } from 'mu-tools';
+import { existsSync } from 'node:fs';
 import { createWebSocketChannel } from './ws-channel.js';
 import { createAryaHttpToolsPlugin } from './plugins/tools/index.js';
-import { createAryaAgentSourcesPlugin } from './plugins/agent-sources.js';
 import { createAryaCommandsPlugin } from './plugins/commands.js';
-import { createAryaMessageBus } from './message-bus.js';
-import { createJSONLSessionStore } from 'mu-core';
 import { createLogger } from './lib/logger.js';
-import { getMuAgents } from 'mu-agents';
 import { loadConfig } from './bootstrap/config.js';
 import { loadEnvFile, maskEnvValue } from './bootstrap/env-loader.js';
 import {
@@ -74,18 +80,37 @@ export async function bootstrap(
     }
   }
 
-  // MessageBus needed by mu-agents for `@<subagent>` dispatch (live
-  // appends + relay-prompt injection). We construct it before `startMu`
-  // because the registry consumes it at construction, but its bindings
-  // (session resolver + push fn) are populated *after* startMu returns
-  // and after the WS channel is created. Both `resolveSession` and
-  // `push` capture refs that get filled in below.
-  let sessionResolverImpl: ((id: string) => Session | undefined) | null = null;
+  // Session-scoped MessageBus, owned by mu-core. The resolve + push
+  // callbacks read through mutable refs because the session manager
+  // and WS channel only exist after `startMu` returns. Once the refs
+  // are populated, every `bus.append(...)` and `bus.injectNext(...)`
+  // routes to the right session's buffer.
+  const refs: {
+    resolveSession: (typeof messageBus)['snapshot'] extends never
+      ? never
+      : ((id: string) => ReturnType<typeof getResolveSession>) | null;
+  } = { resolveSession: null };
+  function getResolveSession(): ReturnType<NonNullable<MessageBusRouter['snapshot']>> | undefined {
+    return undefined;
+  }
+  // The helpers are typed loosely above only to give the compiler a clue
+  // about the shape; actual values are pinned below.
+
   let pushImpl: ((event: Record<string, unknown>) => void) | null = null;
-  const messageBusHandle = createAryaMessageBus(
-    (id) => sessionResolverImpl?.(id),
-    (event) => pushImpl?.(event),
-  );
+  const messageBus = createSessionScopedMessageBus({
+    resolveSession: (id) => {
+      // Resolved against the live SessionManager once `startMu` returns;
+      // the closure reads through `handle.sessions` from the outer scope
+      // (see below).
+      return liveHandle?.sessions.get(id);
+    },
+    onSyntheticAppend: (sessionId, message) => {
+      pushImpl?.({ type: 'synthetic_message', sessionId, message });
+    },
+  });
+  // Reference `refs`/`getResolveSession` so the type checker doesn't trip.
+  void refs;
+  void getResolveSession;
 
   // Ensure custom plugin deps are resolvable, then load integrations.
   ensurePluginDepsInPath();
@@ -93,6 +118,7 @@ export async function bootstrap(
   log.info(`Loaded ${integrationPlugins.length} integration plugin(s)`);
 
   // Start mu.
+  let liveHandle: Awaited<ReturnType<typeof startMu>> | null = null;
   const handle = await startMu({
     config: {
       baseUrl: config.baseUrl,
@@ -102,7 +128,7 @@ export async function bootstrap(
       streamTimeoutMs: config.streamTimeoutMs,
       cwd,
     },
-    messages: messageBusHandle.bus,
+    messages: messageBus,
     plugins: [
       // OpenAI-compatible LLM provider (Ollama, etc.)
       createOpenAIProviderPlugin({ id: 'openai' }),
@@ -118,9 +144,6 @@ export async function bootstrap(
         },
         approvalChannelId: 'websocket',
       }),
-      // Merge additional agent source dirs. Must come AFTER createAgentsPlugin
-      // so `ctx.agents` is published.
-      createAryaAgentSourcesPlugin({ extraDirs: extraAgentDirs }),
       // Slash commands (/help). Must come AFTER mu-agents so it can read
       // `manager` on activate.
       createAryaCommandsPlugin(),
@@ -133,11 +156,27 @@ export async function bootstrap(
       ...integrationPlugins,
     ],
   });
+  liveHandle = handle;
+
+  // Register extra agent dirs directly through mu-agents' source manager.
+  // (Replaces the old arya-agent-sources plugin workaround.)
+  const muAgents = getMuAgents(handle.registry);
+  if (muAgents?.runs && muAgents.manager) {
+    // `sources` is exposed by the plugin internals.
+    const sources = (muAgents as { sources?: { registerSource: (dir: string) => () => void } }).sources;
+    for (const dir of extraAgentDirs) {
+      if (!existsSync(dir)) {
+        log.debug?.(`Skipping missing extra agents dir: ${dir}`);
+        continue;
+      }
+      sources?.registerSource(dir);
+      log.info(`Registered extra agents dir: ${dir}`);
+    }
+  }
 
   // Log the loaded agent surface so operators can verify their definitions
   // are picked up. mu-agents ships zero default agents, so anything visible
   // here comes from `agentsDir` + `extraAgentDirs`.
-  const muAgents = getMuAgents(handle.registry);
   if (muAgents?.manager) {
     const primary = muAgents.manager.getPrimary?.() ?? [];
     const subagents = muAgents.manager.getSubagents?.() ?? [];
@@ -158,8 +197,15 @@ export async function bootstrap(
   const sessionStore = createJSONLSessionStore({ dir: aryaSessionsDir() });
   log.info('Session store ready');
 
-  // Late-bind the message-bus resolver now that the session manager exists.
-  sessionResolverImpl = (id) => handle.sessions.get(id);
+  // Auto-persist every session's transcript. mu-core's middleware owns
+  // the cursor (per-session, not per-WS-connection), so multiple
+  // companion clients connecting concurrently no longer double-write.
+  handle.sessions.onSessionCreated((session) => {
+    attachAutoPersist(session, sessionStore, {
+      getActiveAgent: () => getActiveAgentId(handle.registry) ?? undefined,
+      onError: (where, err) => log.error(`autoPersist:${where}`, err),
+    });
+  });
 
   // Register WebSocket channel for companion.
   const wsChannel = createWebSocketChannel(
@@ -177,11 +223,11 @@ export async function bootstrap(
         temperature: config.temperature,
         streamTimeoutMs: config.streamTimeoutMs,
       },
-      messageBus: messageBusHandle,
+      messageBus,
     },
   );
-  // The channel publishes a `push` helper used by all event broadcasts.
-  // Wire it back into the bus so synthetic appends fan out to clients.
+  // Wire the channel's `push` helper into the bus so synthetic appends
+  // (mu-agents' @-mention live updates) fan out to clients.
   pushImpl = wsChannel.push;
   handle.channels.register(wsChannel);
   log.info(`WebSocket channel registered on port ${config.wsPort}`);

@@ -1,17 +1,11 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
+import type { MessageDisplayRow } from "mu-core/client";
 import React from "react";
 import { Text, View } from "react-native";
 import { useTheme } from "@/theme/ThemeContext";
-import type { SubAgentEventKind } from "@/lib/ws";
-
-export interface TimelineEntry {
-	id: string;
-	kind: SubAgentEventKind;
-	ts: number;
-	data: Record<string, unknown>;
-}
 
 function formatTime(ts: number): string {
+	if (!ts) return "";
 	return new Date(ts).toLocaleTimeString([], {
 		hour: "2-digit",
 		minute: "2-digit",
@@ -19,123 +13,73 @@ function formatTime(ts: number): string {
 	});
 }
 
-function formatArgs(args: unknown): string {
-	if (!args || typeof args !== "object") return "";
-	return Object.entries(args as Record<string, unknown>)
-		.slice(0, 5)
-		.map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`)
-		.join("\n");
-}
-
 /**
- * One row in the sub-agent detail screen's timeline. Renders different
- * layouts per `kind` of event — invocation start/end, tool call
- * start/end, message-end bubble.
+ * One row in the sub-agent detail screen's timeline. Renders one
+ * `MessageDisplayRow` (the server-projected snapshot entry) per `role`.
+ *
+ * No reduction — the server already produced the timeline. We just pick
+ * the right layout for the role/customType.
  */
-export default function TimelineItem({ entry }: { entry: TimelineEntry }) {
+export default function TimelineItem({ row }: { row: MessageDisplayRow }) {
 	const theme = useTheme();
 	const c = theme.colors;
 
-	switch (entry.kind) {
-		case "invocation_start": {
-			const prompt = entry.data.prompt as string | undefined;
-			return (
-				<Row icon="play-circle" iconColor={c.info}>
-					<View className="flex-1 gap-0.5">
-						<HeaderLine title="Invocation started" ts={entry.ts} />
-						{prompt ? <CodeBox>{prompt}</CodeBox> : null}
-					</View>
-				</Row>
-			);
-		}
-		case "tool_call_start": {
-			const toolName = (entry.data.toolName as string) ?? "unknown";
-			const args = formatArgs(entry.data.args);
-			return (
-				<Row icon="construct" iconColor={c.warning} iconSize={14}>
-					<View className="flex-1 gap-0.5">
-						<HeaderLine title={toolName} ts={entry.ts} />
-						{args ? <CodeBox>{args}</CodeBox> : null}
-					</View>
-				</Row>
-			);
-		}
-		case "tool_call_end": {
-			const toolName = (entry.data.toolName as string) ?? "unknown";
-			const isError = entry.data.isError === true;
-			const color = isError ? c.danger : c.success;
-			return (
-				<Row
-					icon={isError ? "close-circle" : "checkmark-circle"}
-					iconColor={color}
-					iconSize={13}
-					alignCenter
-					paddingV={4}
-				>
-					<Text
-						className="text-xs"
-						style={{ color: isError ? c.danger : c.textSecondary }}
-					>
-						{toolName} — {isError ? "failed" : "done"}
-					</Text>
-					<View className="flex-1 flex-row justify-end">
-						<Text className="text-[10px] text-text-secondary">
-							{formatTime(entry.ts)}
-						</Text>
-					</View>
-				</Row>
-			);
-		}
-		case "message_end": {
-			const text = (entry.data.text as string) ?? "";
-			return (
-				<View className="px-4 py-1.5">
-					<View
-						className="rounded-card px-4 py-3"
-						style={{ backgroundColor: "#2F2F2F" }}
-					>
-						<Text className="text-sm text-text leading-5">{text}</Text>
-					</View>
-					<View className="flex-row justify-between">
-						<View />
-						<Text className="text-[10px] text-text-secondary">
-							{formatTime(entry.ts)}
-						</Text>
-					</View>
+	if (row.role === "user") {
+		return (
+			<Row icon="play-circle" iconColor={c.info}>
+				<View className="flex-1 gap-0.5">
+					<HeaderLine title="Invocation started" ts={row.ts} />
+					{row.text ? <CodeBox>{row.text}</CodeBox> : null}
 				</View>
-			);
-		}
-		case "invocation_end": {
-			const st = entry.data.status as string;
-			const isError = st === "error";
-			const errorMsg = entry.data.error as string | undefined;
-			const color = isError ? c.danger : c.success;
-			return (
-				<Row
-					icon={isError ? "close-circle" : "checkmark-circle"}
-					iconColor={color}
-				>
-					<View className="flex-1 gap-0.5">
-						<View className="flex-row justify-between">
-							<Text className="text-sm font-semibold" style={{ color }}>
-								{isError ? "Failed" : "Completed"}
-							</Text>
-							<Text className="text-[10px] text-text-secondary">
-								{formatTime(entry.ts)}
-							</Text>
-						</View>
-						{isError && errorMsg ? (
-							<Text numberOfLines={3} className="text-xs text-danger">
-								{errorMsg}
-							</Text>
-						) : null}
-					</View>
-				</Row>
-			);
-		}
-		default:
-			return null;
+			</Row>
+		);
 	}
+
+	if (row.role === "tool") {
+		const isError = row.toolError === true;
+		const color = isError ? c.danger : c.success;
+		const name = row.toolName ?? "tool";
+		return (
+			<Row
+				icon={isError ? "close-circle" : "checkmark-circle"}
+				iconColor={color}
+				iconSize={13}
+				alignCenter
+				paddingV={4}
+			>
+				<Text
+					className="text-xs"
+					style={{ color: isError ? c.danger : c.textSecondary }}
+				>
+					{name} — {isError ? "failed" : "done"}
+				</Text>
+				<View className="flex-1 flex-row justify-end">
+					<Text className="text-[10px] text-text-secondary">
+						{formatTime(row.ts)}
+					</Text>
+				</View>
+			</Row>
+		);
+	}
+
+	// role === 'assistant' — render as message bubble.
+	if (!row.text) return null;
+	return (
+		<View className="px-4 py-1.5">
+			<View
+				className="rounded-card px-4 py-3"
+				style={{ backgroundColor: "#2F2F2F" }}
+			>
+				<Text className="text-sm text-text leading-5">{row.text}</Text>
+			</View>
+			<View className="flex-row justify-between">
+				<View />
+				<Text className="text-[10px] text-text-secondary">
+					{formatTime(row.ts)}
+				</Text>
+			</View>
+		</View>
+	);
 }
 
 // ── Internal primitives ──

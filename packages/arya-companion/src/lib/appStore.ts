@@ -1,38 +1,28 @@
 /**
- * App-level store — one owner for the WebSocket connection and every
- * piece of cross-cutting state that used to be duplicated across
- * screens (sockets, sub-agent event cache, agents/commands registry,
- * sessions list).
+ * App-level store — single WebSocket owner + render-ready state cache.
  *
- * Design notes
- * - Single WebSocket. Previously three separate `useReconnectingSocket`
- *   instances (chat screen, sub-agent detail, settings) opened their
- *   own. Now everyone subscribes to one.
- * - Live `reconnect()` action exposed so the settings screen can
- *   re-dial after saving without an app restart.
- * - Sub-agent events tee'd into a per-runId map inside the store
- *   (replaces the module-global `globalSubAgentEvents`). Per-run
- *   subscriptions let the detail screen replay history + receive new
- *   events without opening a second socket.
- * - Per-session message-stream subscriptions used by the chat screen
- *   (`stream`/`done`/`error`/`approval_*`/`sessions:history`/
- *   `sub_agent_event`). The chat orchestrator subscribes via
- *   {@link subscribeToSessionMessages} and decides how each event
- *   updates its own transcript state.
+ * Post-Batch-3, the companion is a pure renderer:
+ *   - `subAgentRuns` and `approvals` are server-pushed snapshots
+ *     mirrored verbatim into Maps. No client-side reducers.
+ *   - `_sessionMessageListeners` lets the chat screen subscribe to
+ *     per-session inbound events for transcript / placeholder UI.
+ *
+ * `connect()` is idempotent — closing the previous socket and any
+ * in-flight reconnect timers before opening a new one.
  */
 
 import * as Haptics from "expo-haptics";
 import { create } from "zustand";
 import type {
 	AgentInfo,
+	ApprovalSnapshot,
 	CommandInfo,
 	SessionSummary,
-	SubAgentEvent,
+	SubAgentRunSnapshot,
 	WsInboundMessage,
 } from "@/lib/ws";
 import { createReconnectingSocket } from "@/lib/ws-client";
 import { readWsConfig } from "@/lib/wsConfig";
-import type { SubAgentRunInfo } from "@/components/SubAgentCard";
 
 type SessionMessageListener = (msg: WsInboundMessage) => void;
 
@@ -49,10 +39,11 @@ interface AppState {
 	// ── Sessions ──
 	sessions: SessionSummary[];
 
-	// ── Sub-agent runs (cards rendered in chat) ──
-	subAgentRuns: Map<string, SubAgentRunInfo>;
-	// Per-run event log; consumed by the detail screen.
-	subAgentEvents: Map<string, SubAgentEvent[]>;
+	// ── Sub-agent runs (server snapshots, keyed by runId) ──
+	subAgentRuns: Map<string, SubAgentRunSnapshot>;
+
+	// ── Approvals (server snapshots, keyed by approvalId) ──
+	approvals: Map<string, ApprovalSnapshot>;
 
 	// ── Internal ──
 	_disposeSocket: (() => void) | null;
@@ -78,18 +69,14 @@ interface AppActions {
 	sendChat: (sessionId: string, text: string) => void;
 	sendCommand: (sessionId: string, text: string) => void;
 	respondApproval: (
-		requestId: string,
+		approvalId: string,
 		token: string,
 		action: "approve" | "deny",
 	) => void;
-	/** Reset the sub-agent run cards (chat-level switch / clear). */
-	clearSubAgentRuns: () => void;
 	/**
 	 * Subscribe to inbound per-session events. Returns an unsubscribe.
-	 * The chat orchestrator owns its own `messages` / `approvals` state
-	 * — the store doesn't try to own those because their lifecycle
-	 * (insertion ordering relative to the streaming row, etc.) is
-	 * tightly coupled to the chat UI.
+	 * The chat orchestrator uses this for streaming placeholder updates
+	 * and transcript inserts (synthetic_message / sessions:history).
 	 */
 	subscribeToSessionMessages: (fn: SessionMessageListener) => () => void;
 }
@@ -113,7 +100,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 	activeAgentId: null,
 	sessions: [],
 	subAgentRuns: new Map(),
-	subAgentEvents: new Map(),
+	approvals: new Map(),
 	_disposeSocket: null,
 	_sessionMessageListeners: new Set(),
 
@@ -233,20 +220,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
 		send(socket, { type: "command", text, sessionId });
 	},
 
-	respondApproval: (requestId, token, action) => {
+	respondApproval: (approvalId, token, action) => {
 		const { socket } = get();
 		if (!isOpen(socket)) return;
 		send(socket, {
 			type: "approval_response",
-			requestId,
+			approvalId,
 			token,
-			action: action === "approve" ? "approved" : "denied",
-			channelId: "websocket",
+			action,
 		});
-	},
-
-	clearSubAgentRuns: () => {
-		set({ subAgentRuns: new Map() });
 	},
 
 	subscribeToSessionMessages: (fn) => {
@@ -261,11 +243,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
 // ── Typed dispatch table ──────────────────────────────────────────────
 // Exhaustive `switch` over `WsInboundMessage["type"]`. Compile-time
 // enforcement that every variant is handled (or explicitly forwarded
-// to the per-session listeners). Replaces the old "if (...) return"
-// chain across multiple hooks.
+// to the per-session listeners).
 function handleInbound(
 	msg: WsInboundMessage,
-	set: (partial: Partial<AppState>) => void,
+	set: (
+		partial:
+			| Partial<AppState>
+			| ((s: AppState) => Partial<AppState>),
+	) => void,
 	get: () => AppStore,
 ): void {
 	switch (msg.type) {
@@ -292,68 +277,58 @@ function handleInbound(
 			set({ sessions: Array.isArray(msg.sessions) ? msg.sessions : [] });
 			return;
 		}
-		case "sub_agent_event": {
-			const evt = msg.event;
-			if (!evt) return;
-			const runId = evt.runId;
-
-			// Append to the per-run event log.
-			const events = new Map(get().subAgentEvents);
-			const stored = events.get(runId) ?? [];
-			events.set(runId, [...stored, evt]);
-
-			// Update the run summary used by the chat-level card.
-			const runs = new Map(get().subAgentRuns);
-			const cardId = `sub-agent-${runId}`;
-			if (evt.kind === "invocation_start") {
-				runs.set(cardId, {
-					runId,
-					agentId: evt.agentId,
-					status: "running",
-					toolCount: 0,
-					startTs: evt.ts,
-				});
-			} else if (evt.kind === "tool_call_start") {
-				const run = runs.get(cardId);
-				if (run) {
-					runs.set(cardId, { ...run, toolCount: run.toolCount + 1 });
-				}
-			} else if (evt.kind === "invocation_end") {
-				const run = runs.get(cardId);
-				if (run) {
-					const st = (evt.data.status as string) ?? "";
-					runs.set(cardId, {
-						...run,
-						status: st === "success" ? "success" : "error",
-						endTs: evt.ts,
-					});
-				}
-			}
-
-			set({ subAgentRuns: runs, subAgentEvents: events });
-
-			// Fan out to per-session listeners (the chat orchestrator
-			// uses this to insert a card row).
+		case "sub_agent_run": {
+			// Functional updater: avoids the read-then-write race when two
+			// snapshots arrive in the same microtask.
+			set((s) => ({
+				subAgentRuns: new Map(s.subAgentRuns).set(msg.run.runId, msg.run),
+			}));
+			// Notify per-session listeners so the chat screen can insert a
+			// card row on first sighting.
 			for (const fn of get()._sessionMessageListeners) fn(msg);
+			return;
+		}
+		case "sub_agent_runs:listed": {
+			set({
+				subAgentRuns: new Map(msg.runs.map((r) => [r.runId, r])),
+			});
+			return;
+		}
+		case "approval_state": {
+			set((s) => ({
+				approvals: new Map(s.approvals).set(
+					msg.snapshot.approvalId,
+					msg.snapshot,
+				),
+			}));
+			for (const fn of get()._sessionMessageListeners) fn(msg);
+			return;
+		}
+		case "approvals:listed": {
+			set({
+				approvals: new Map(
+					msg.approvals.map((a) => [a.approvalId, a]),
+				),
+			});
 			return;
 		}
 		case "stream":
 		case "done":
-		case "approval_request":
-		case "approval_response":
 		case "sessions:history":
+		case "synthetic_message":
 		case "error": {
 			// Per-session payloads — forward to subscribed screens.
 			for (const fn of get()._sessionMessageListeners) fn(msg);
 			return;
 		}
+		case "scheduler_event": {
+			// No per-message rendering; the server's next `sessions:listed`
+			// covers it.
+			return;
+		}
 		default: {
-			// Exhaustiveness check — flags any new WsInboundMessage variant
-			// that we forgot to handle.
 			const _exhaustive: never = msg;
 			void _exhaustive;
 		}
 	}
 }
-
-

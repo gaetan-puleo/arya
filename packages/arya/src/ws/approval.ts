@@ -1,48 +1,50 @@
 /**
- * Approval-channel + approval-response handler for the WS transport.
+ * Approval channel + response handler for the WS transport.
  *
- * The companion is the visual approval UX: when mu-agents wants to run
- * a permission-gated tool it goes through the registered approval
- * channel, which here pushes an `approval_request` to every connected
- * client. The user's reply lands as an `approval_response` WS message;
- * we forward it to the gateway by token.
+ * Post-Batch-3, the *snapshot bridge* (`ws/approval-snapshot.ts`)
+ * pushes `approval_state` events whenever the gateway transitions a
+ * request. This module's only job:
+ *
+ *  - Provide an `ApprovalChannel` implementation that mu-agents
+ *    registers against the gateway. Today the channel is a no-op (it
+ *    returns `undefined` to defer resolution to the snapshot/inbound
+ *    response path), but having a channel registered is what tells
+ *    the gateway to fire snapshot events.
+ *  - Route inbound `approval_response` companion → server messages
+ *    into `gateway.approve(token)` / `gateway.deny(token)`. The
+ *    resulting gateway state transition is what triggers the snapshot
+ *    push; we do not echo the response separately.
  */
 
 import type { ApprovalChannel, ApprovalRequest } from 'mu-agents';
-import type { PluginRegistry } from 'mu-core';
 import { getMuAgents } from 'mu-agents';
+import type { PluginRegistry } from 'mu-core';
 import { createLogger } from '../lib/logger.js';
 
 const log = createLogger('ws:approval');
 
 export interface ApprovalDeps {
-  push: (event: Record<string, unknown>) => void;
   registry: PluginRegistry;
 }
 
-/** Build the approval channel — pushes requests to every connected client. */
-export function createApprovalChannel(push: ApprovalDeps['push']): ApprovalChannel {
+/**
+ * Build the WS approval channel. The channel itself is intentionally
+ * a no-op: the request push is now driven by the snapshot bridge
+ * (which fires on every transition, including the initial "pending"
+ * state). We only need a channel object so the gateway has someone to
+ * deliver requests to — `undefined` return defers resolution.
+ */
+export function createApprovalChannel(): ApprovalChannel {
   return {
-    sendApprovalRequest: async (req: ApprovalRequest) => {
-      push({
-        type: 'approval_request',
-        requestId: req.id,
-        token: req.token,
-        toolName: req.toolName,
-        toolArgs: req.toolArgs,
-        agentId: req.agentId,
-        channelId: req.channelId,
-      });
-      // Return undefined to defer resolution to gateway.approve/deny.
-      return undefined;
-    },
+    sendApprovalRequest: async (_req: ApprovalRequest) => undefined,
   };
 }
 
 /**
  * Handle an `approval_response` companion → server message by routing
- * it to the mu-agents gateway. Returns true when the message was
- * consumed (it always is for this type).
+ * it to the mu-agents gateway. The gateway emits a snapshot on the
+ * resulting state transition; clients learn of the resolution via
+ * `approval_state`. Returns true when the message was consumed.
  */
 export function handleApprovalResponse(
   msg: Record<string, unknown>,
@@ -55,17 +57,11 @@ export function handleApprovalResponse(
     return true;
   }
   const action = msg.action === 'approve' ? 'approved' : 'denied';
-  const token = String(msg.token ?? msg.requestId ?? '');
+  const token = String(msg.token ?? msg.approvalId ?? '');
   if (action === 'approved') {
     gateway.approve(token);
   } else {
     gateway.deny(token);
   }
-  deps.push({
-    type: 'approval_response',
-    requestId: msg.requestId ?? msg.token,
-    token,
-    action,
-  });
   return true;
 }

@@ -9,8 +9,8 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "declaration": true,
-    "outDir": "dist",
+    "noEmit": true,
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "jsx": "react-jsx",
     "paths": {
@@ -22,5 +22,11 @@
     }
   },
   "include": ["packages/**/src/**/*.ts", "packages/**/src/**/*.tsx"],
-  "exclude": ["node_modules", "dist", "packages/arya-companion"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "packages/arya-companion",
+    "packages/**/src/**/*.test.ts",
+    "packages/**/src/**/*.test.tsx"
+  ]
 }

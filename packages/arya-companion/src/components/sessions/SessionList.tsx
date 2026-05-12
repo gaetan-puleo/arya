@@ -3,7 +3,7 @@ import { ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeContext";
 import type { SessionSummary } from "@/lib/ws";
-import { groupByDate } from "@/lib/sessionGrouping";
+import { groupByDate } from "mu-core/client";
 import SessionRow from "./SessionRow";
 
 interface SessionListProps {

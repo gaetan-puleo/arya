@@ -1,43 +1,27 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
+import { formatDuration } from "mu-core/client";
 import { Pressable, Text, View } from "react-native";
 import Animated, { FadeInLeft } from "react-native-reanimated";
 import { useTheme } from "@/theme/ThemeContext";
 import { AryaAvatar } from "@/components/Primitives";
+import type { SubAgentRunSnapshot } from "@/lib/ws";
 
-type SubAgentStatus = "running" | "success" | "error";
-
-export interface SubAgentRunInfo {
-	runId: string;
-	agentId: string;
-	status: SubAgentStatus;
-	toolCount: number;
-	startTs: number;
-	endTs?: number;
-}
-
-function formatDuration(startTs: number, endTs?: number): string {
-	const ms = (endTs ?? Date.now()) - startTs;
-	if (ms < 1000) return `${ms}ms`;
-	const s = Math.round(ms / 100) / 10;
-	return `${s}s`;
-}
-
-export default function SubAgentCard({ run }: { run: SubAgentRunInfo }) {
+export default function SubAgentCard({ run }: { run: SubAgentRunSnapshot }) {
 	const theme = useTheme();
 	const router = useRouter();
 
 	const statusIcon: keyof typeof Ionicons.glyphMap =
 		run.status === "running"
 			? "ellipsis-horizontal"
-			: run.status === "success"
+			: run.status === "done"
 				? "checkmark-circle"
 				: "close-circle";
 
 	const statusColor =
 		run.status === "running"
 			? theme.colors.info
-			: run.status === "success"
+			: run.status === "done"
 				? theme.colors.success
 				: theme.colors.danger;
 

@@ -23,6 +23,8 @@
     "expo-router": "~6.0.23",
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
+    "mu-agents": "file:../../../mu/packages/mu-agents",
+    "mu-core": "file:../../../mu/packages/mu-core",
     "nativewind": "^4.2.3",
     "react": "19.1.0",
     "react-native": "0.81.5",

@@ -11,5 +11,12 @@
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
+  },
+  "overrides": {
+    "mu-core": "file:../mu/packages/mu-core",
+    "mu-agents": "file:../mu/packages/mu-agents",
+    "mu-tools": "file:../mu/packages/mu-tools",
+    "mu-openai-provider": "file:../mu/packages/mu-openai-provider",
+    "mu-scheduler": "file:../mu/packages/mu-scheduler"
   }
 }

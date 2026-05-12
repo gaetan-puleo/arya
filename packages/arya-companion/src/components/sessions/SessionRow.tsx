@@ -1,6 +1,6 @@
 import { Pressable, Text } from "react-native";
 import type { SessionSummary } from "@/lib/ws";
-import { formatRelativeTime } from "@/lib/sessionGrouping";
+import { formatRelativeTime } from "mu-core/client";
 
 // Lighter-than-panel gray for the selected row — picked locally so
 // the highlight is guaranteed to read against SessionsLayout's panel

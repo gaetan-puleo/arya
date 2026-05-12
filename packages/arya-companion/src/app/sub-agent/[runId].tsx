@@ -1,23 +1,18 @@
-import { FlashList } from "@shopify/flash-list";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { FlashList } from "@shopify/flash-list";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeContext";
 import { useAppStore } from "@/lib/appStore";
-import TimelineItem, {
-	type TimelineEntry,
-} from "@/components/sub-agent/TimelineItem";
-import StreamingTextBubble from "@/components/sub-agent/StreamingTextBubble";
+import TimelineItem from "@/components/sub-agent/TimelineItem";
 
 /**
  * Sub-agent run detail screen.
  *
- * Reads the run's timeline straight from the app-level store (no
- * second WebSocket). The store accumulates `sub_agent_event` payloads
- * per `runId`; this screen derives the timeline entries + the live
- * streaming text by folding over that array.
+ * Reads the run's snapshot straight from the app-level store. Snapshots
+ * are server-pushed; the timeline + status + agent id are all
+ * server-derived. The companion has zero reduction logic for this view.
  */
 export default function SubAgentDetailScreen() {
 	const { runId } = useLocalSearchParams<{ runId: string }>();
@@ -25,62 +20,36 @@ export default function SubAgentDetailScreen() {
 	const router = useRouter();
 	const theme = useTheme();
 
-	const events = useAppStore((s) => s.subAgentEvents.get(runId ?? "") ?? []);
+	const snapshot = useAppStore((s) =>
+		runId ? s.subAgentRuns.get(runId) : undefined,
+	);
 
-	const { entries, streamedText, agentId, status } = useMemo(() => {
-		const out: TimelineEntry[] = [];
-		let buffer = "";
-		let aid = "";
-		let st: "running" | "success" | "error" = "running";
-
-		for (const evt of events) {
-			const id = `${evt.kind}-${evt.ts}`;
-
-			if (evt.kind === "invocation_start") {
-				aid = evt.agentId;
-				out.push({ id, kind: evt.kind, ts: evt.ts, data: evt.data });
-				continue;
-			}
-			if (evt.kind === "text_delta") {
-				buffer += (evt.data.delta as string) ?? "";
-				continue;
-			}
-			if (evt.kind === "message_end") {
-				const text = (evt.data.text as string) ?? "";
-				buffer = "";
-				out.push({ id, kind: evt.kind, ts: evt.ts, data: { text } });
-				continue;
-			}
-			if (evt.kind === "invocation_end") {
-				const s = evt.data.status as string;
-				st = s === "success" ? "success" : "error";
-			}
-			out.push({ id, kind: evt.kind, ts: evt.ts, data: evt.data });
-		}
-
-		return { entries: out, streamedText: buffer, agentId: aid, status: st };
-	}, [events]);
+	const entries = snapshot?.timeline ?? [];
+	const status = snapshot?.status ?? "running";
+	const agentId = snapshot?.agentId ?? "";
 
 	const statusIcon: keyof typeof Ionicons.glyphMap =
 		status === "running"
 			? "ellipsis-horizontal-circle"
-			: status === "success"
+			: status === "done"
 				? "checkmark-circle"
 				: "close-circle";
 
 	const statusColor =
 		status === "running"
 			? theme.colors.info
-			: status === "success"
+			: status === "done"
 				? theme.colors.success
 				: theme.colors.danger;
 
 	const statusLabel =
 		status === "running"
 			? "Running…"
-			: status === "success"
+			: status === "done"
 				? "Completed"
-				: "Error";
+				: status === "error"
+					? "Error"
+					: "Aborted";
 
 	return (
 		<View className="flex-1 bg-bg">
@@ -119,10 +88,7 @@ export default function SubAgentDetailScreen() {
 					paddingTop: 8,
 					paddingBottom: insets.bottom + 16,
 				}}
-				ListHeaderComponent={
-					streamedText ? <StreamingTextBubble text={streamedText} /> : null
-				}
-				renderItem={({ item }) => <TimelineItem entry={item} />}
+				renderItem={({ item }) => <TimelineItem row={item} />}
 			/>
 		</View>
 	);

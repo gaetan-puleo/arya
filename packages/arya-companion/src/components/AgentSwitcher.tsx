@@ -1,4 +1,5 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { capitalizeAgentName } from "mu-agents/utils";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
@@ -11,10 +12,6 @@ interface AgentSwitcherProps {
 	activeAgentId: string | null;
 	primaryAgents: AgentInfo[];
 	onSelect: (agentId: string) => void;
-}
-
-function capitalize(s: string): string {
-	return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
 /**
@@ -35,7 +32,7 @@ export default function AgentSwitcher({
 	const canSwitch = primaryAgents.length > 1;
 
 	const rawAgentId = activeAgent?.id ?? "";
-	const agentLabel = rawAgentId ? capitalize(rawAgentId) : "—";
+	const agentLabel = rawAgentId ? capitalizeAgentName(rawAgentId) : "—";
 	const dotColor =
 		activeAgent?.color ??
 		(activeAgent ? theme.colors.success : theme.colors.textPlaceholder);
@@ -120,7 +117,7 @@ export default function AgentSwitcher({
 									<Text
 										className={`text-sm text-text ${isActive ? "font-bold" : "font-medium"}`}
 									>
-										{capitalize(agent.id)}
+										{capitalizeAgentName(agent.id)}
 									</Text>
 									{agent.description ? (
 										<Text
