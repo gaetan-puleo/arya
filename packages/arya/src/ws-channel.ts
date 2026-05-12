@@ -10,19 +10,16 @@ import type {
 } from 'mu-core';
 import {
   type AgentListItem,
+  enrichMessageAuthor,
   getActiveAgentId,
-  getMuAgents,
   listAgents,
   subscribeActiveAgent,
+  subscribeAgentsList,
 } from 'mu-agents';
 import type { MessageBusRouter } from 'mu-core';
 import { createLogger } from './lib/logger.js';
-import { enrichAuthor } from './lib/enrichAuthor.js';
 import { handleSessionsMessage } from './ws/sessions-handler.js';
-import {
-  createApprovalChannel,
-  handleApprovalResponse,
-} from './ws/approval.js';
+import { handleApprovalResponse } from './ws/approval.js';
 import {
   createConnectionState,
   tearDownConnectionState,
@@ -36,6 +33,7 @@ import {
   attachApprovalSnapshotBridge,
   sendApprovalsListing,
 } from './ws/approval-snapshot.js';
+import { handleAgentMessage } from './ws/agent-handler.js';
 import { handleChatMessage } from './ws/chat-handler.js';
 import { handleCommandMessage } from './ws/command-handler.js';
 
@@ -124,9 +122,6 @@ export function createWebSocketChannel(
   const getAgents = (): AgentListItem[] => listAgents(registry);
   const getCommands = buildGetCommandsList(registry);
 
-  // Approval channel — pushes requests to every connected client.
-  const approvalChannel = createApprovalChannel();
-
   wss.on('connection', (ws, req) => {
     // Auth check
     const url = new URL(req.url!, `http://${req.headers.host}`);
@@ -138,12 +133,6 @@ export function createWebSocketChannel(
 
     const sessionId = url.searchParams.get('sessionId') || 'default';
     clients.set(ws, { ws, sessionId });
-
-    // Register approval channel with mu-agents plugin
-    const muAgentsPlugin = getMuAgents(registry);
-    if (muAgentsPlugin?.approvalGateway) {
-      muAgentsPlugin.approvalGateway.registerChannel('websocket', approvalChannel);
-    }
 
     // Send commands, agents and the persisted sessions list on connect
     const commands = getCommands();
@@ -179,44 +168,26 @@ export function createWebSocketChannel(
         return;
       }
 
-      // Companion can request commands/agents list
-      if (msg.type === 'commands') {
-        ws.send(JSON.stringify({ type: 'commands', commands: getCommands() }));
+      // Agent registry frames: `commands` / `agents` requests + `set_active_agent`.
+      if (
+        handleAgentMessage(msg, {
+          ws,
+          registry,
+          getCommands,
+          getAgents,
+          pushError,
+        })
+      )
         return;
-      }
-      if (msg.type === 'agents') {
-        const agents = getAgents();
-        const activeAgentId = getActiveAgentId(registry);
-        ws.send(JSON.stringify({ type: 'agents', agents, activeAgentId }));
-        return;
-      }
 
       // ── Sessions management ────────────────────────────────────────
-      if (handleSessionsMessage(msg, { ws, store, push, pushError })) return;
-
-      // Companion can request a primary-agent switch.
-      if (msg.type === 'set_active_agent') {
-        const agentId = typeof msg.agentId === 'string' ? msg.agentId : null;
-        const manager = getMuAgents(registry)?.manager;
-        if (!manager?.setActive || !agentId) {
-          pushError('Cannot switch agent: missing agentId or manager');
-          return;
-        }
-        const ok = manager.setActive(agentId);
-        // setActive returns false when the name doesn't exist or is already active.
-        // The broadcast (active_agent) only fires when the active name actually changes,
-        // so explicitly echo the current state to the requester for unchanged cases.
-        if (!ok) {
-          const current = getActiveAgentId(registry);
-          ws.send(JSON.stringify({ type: 'active_agent', agentId: current }));
-        }
-        return;
-      }
+      if (handleSessionsMessage(msg, { ws, store, pushError })) return;
 
       if (
         handleCommandMessage(msg, {
           ws,
           defaultSessionId: sessionId,
+          sessions,
           registry,
           store,
           providerConfig: options.providerConfig,
@@ -270,7 +241,7 @@ export function createWebSocketChannel(
     if (event.type === 'synthetic_message' && event.message) {
       return {
         ...event,
-        message: enrichAuthor(event.message as ChatMessage, registry),
+        message: enrichMessageAuthor(event.message as ChatMessage, registry),
       };
     }
     return event;
@@ -290,11 +261,8 @@ export function createWebSocketChannel(
   const unsubscribeSubAgentSnapshots = attachSubAgentSnapshotBridge({ registry, push });
   const unsubscribeApprovalSnapshots = attachApprovalSnapshotBridge({ registry, push });
 
-  // Broadcast active-agent changes (mode switch, hot-reload fallback, etc.).
-  // We also rebroadcast the full commands + agents list because the
-  // arya-commands plugin rebuilds its slash-command set on manager change
-  // (one `/<agent>` per primary agent), so connected companions need to
-  // refresh their inline menu.
+  // Broadcast active-agent changes (manager.setActive flips, hot-reload
+  // fallback that picks a different active name, etc.).
   const unsubscribeActiveAgent = subscribeActiveAgent(registry, (agentId) => {
     push({ type: 'active_agent', agentId });
     push({ type: 'commands', commands: getCommands() });
@@ -305,6 +273,19 @@ export function createWebSocketChannel(
     });
   });
 
+  // Broadcast list mutations even when active doesn't change (hot-reload
+  // adds/removes/edits agents). The arya-commands plugin rebuilds its
+  // slash-command set on every manager change, so connected companions
+  // need to refresh their inline menu.
+  const unsubscribeAgentsList = subscribeAgentsList(registry, (agents) => {
+    push({ type: 'commands', commands: getCommands() });
+    push({
+      type: 'agents',
+      agents,
+      activeAgentId: getActiveAgentId(registry),
+    });
+  });
+
   const channel: WsChannel = {
     id: 'websocket',
     start: async () => {
@@ -312,6 +293,7 @@ export function createWebSocketChannel(
     },
     stop: async () => {
       unsubscribeActiveAgent();
+      unsubscribeAgentsList();
       unsubscribeSubAgentSnapshots();
       unsubscribeApprovalSnapshots();
       for (const [, client] of clients) {

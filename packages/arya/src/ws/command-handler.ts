@@ -3,21 +3,34 @@
  *
  * Slash commands are intercepted host-side: we don't feed the raw
  * `/foo` text to the LLM — we look up the command and run its
- * `execute(args, ctx)`. The user-facing message and the command output
- * (if any) are persisted as normal turns so history reads correctly.
+ * `execute(args, ctx)`. The user-facing message is persisted as a
+ * normal turn. Command OUTPUT is routed through `session.appendSynthetic`
+ * with `display.llmHidden: true` so it:
+ *
+ *  - renders in the transcript (companion mirrors `synthetic_message`),
+ *  - persists to disk via `attachAutoPersist`'s `synthetic_appended`
+ *    handler in mu-core,
+ *  - is stripped from the LLM payload on the next turn (slash command
+ *    output should NOT enter LLM context — `/help` etc. aren't
+ *    conversation).
+ *
+ * Broadcasts of agent-state changes (`commands` / `agents` / `active_agent`)
+ * come from the `subscribeActiveAgent` + `subscribeAgentsList` wires in
+ * `ws-channel.ts` — no defensive rebroadcast here.
  */
 
-import type { WebSocket } from 'ws';
 import {
   errorMessage,
-  makeAssistantMessage,
+  makeSyntheticMessage,
   makeUserMessage,
   type PluginRegistry,
   type ProviderConfig,
+  type SessionManager,
   type SessionStore,
   type SlashCommand,
 } from 'mu-core';
-import { getActiveAgentId, listAgents } from 'mu-agents';
+import { getActiveAgentId } from 'mu-agents';
+import type { WebSocket } from 'ws';
 import { createLogger } from '../lib/logger.js';
 
 const log = createLogger('ws:command');
@@ -25,6 +38,7 @@ const log = createLogger('ws:command');
 export interface CommandHandlerDeps {
   ws: WebSocket;
   defaultSessionId: string;
+  sessions: SessionManager;
   registry: PluginRegistry;
   store: SessionStore;
   providerConfig: ProviderConfig;
@@ -39,6 +53,24 @@ function findCommand(
   return (registry.getCommands() ?? []).find((c) => c.name === name);
 }
 
+/**
+ * Build a synthetic assistant message for command output. Flagged
+ * `llmHidden: true` so it never enters LLM context, and stamped with
+ * the active agent id for attribution.
+ */
+function buildCommandOutput(
+  text: string,
+  registry: PluginRegistry,
+) {
+  return makeSyntheticMessage({
+    role: 'assistant',
+    content: text,
+    display: { llmHidden: true },
+    agent: getActiveAgentId(registry) ?? undefined,
+    source: 'arya.command',
+  });
+}
+
 export function handleCommandMessage(
   msg: Record<string, unknown>,
   deps: CommandHandlerDeps,
@@ -48,16 +80,16 @@ export function handleCommandMessage(
   const targetSessionId = (msg.sessionId as string) || deps.defaultSessionId;
   const userText = String(msg.text ?? '').trim();
 
+  // Ensure the in-memory session exists so `appendSynthetic` lands in
+  // the right transcript. Chat-handler does the same.
+  const session = deps.sessions.getOrCreate(targetSessionId);
+
   // Persist the user input first (mirrors chat semantics, keeps
-  // `/help` visible in history).
+  // `/help` visible in history). The store's own `subscribe(...)`
+  // (wired in `bootstrap.ts`) drives the `sessions:changed` +
+  // `sessions:listed` broadcast.
   try {
     deps.store.appendMessage(targetSessionId, makeUserMessage(userText));
-    deps.push({
-      type: 'sessions:changed',
-      sessionId: targetSessionId,
-      kind: 'updated',
-    });
-    deps.push({ type: 'sessions:listed', sessions: deps.store.list() });
   } catch (err) {
     log.error('failed to persist user message:', err);
   }
@@ -77,11 +109,7 @@ export function handleCommandMessage(
     const errText = `Unknown command: /${cmdName}. Type /help for a list.`;
     deps.push({ type: 'stream', text: errText, sessionId: targetSessionId });
     deps.push({ type: 'done', text: '', sessionId: targetSessionId });
-    try {
-      deps.store.appendMessage(targetSessionId, makeAssistantMessage(errText));
-    } catch (err) {
-      log.error('failed to persist command error:', err);
-    }
+    session.appendSynthetic(buildCommandOutput(errText, deps.registry));
     return true;
   }
 
@@ -93,15 +121,6 @@ export function handleCommandMessage(
         cwd: process.cwd(),
         config: deps.providerConfig,
       });
-      // Any command may have mutated agent state (e.g. /<agent> switch).
-      // Re-broadcast both lists so the UI catches dynamically added
-      // commands and reflects the new active agent.
-      deps.push({ type: 'commands', commands: deps.getCommands() });
-      deps.push({
-        type: 'agents',
-        agents: listAgents(deps.registry),
-        activeAgentId: getActiveAgentId(deps.registry),
-      });
 
       if (result && result.trim()) {
         deps.push({
@@ -109,14 +128,7 @@ export function handleCommandMessage(
           text: result,
           sessionId: targetSessionId,
         });
-        try {
-          deps.store.appendMessage(
-            targetSessionId,
-            makeAssistantMessage(result),
-          );
-        } catch (err) {
-          log.error('failed to persist command result:', err);
-        }
+        session.appendSynthetic(buildCommandOutput(result, deps.registry));
       }
       deps.push({ type: 'done', text: '', sessionId: targetSessionId });
     } catch (err) {

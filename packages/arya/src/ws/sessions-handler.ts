@@ -3,22 +3,23 @@
  *
  * Each handler maps one client message to:
  *   - a direct reply on the requesting socket (`ws.send`), and/or
- *   - a broadcast to every connected client (`push`),
- *   - and a `sessions:listed` rebroadcast so every connected companion
- *     converges to the same list without polling.
+ *   - a mutation on the persistent `SessionStore`. The store has its
+ *     own `subscribe(...)` listener wired in `bootstrap.ts` that fans
+ *     out `sessions:changed` + `sessions:listed` events for every
+ *     mutation. Handlers here no longer push those events manually —
+ *     they'd duplicate what the store-subscription path produces.
  *
  * Pulled out of `ws-channel.ts` to keep the connection-level if/else
  * chain manageable. No state lives here — handlers are pure functions
  * over `(msg, deps)`.
  */
 
-import type { WebSocket } from 'ws';
 import type { SessionStore } from 'mu-core';
+import type { WebSocket } from 'ws';
 
 export interface SessionsHandlerDeps {
   ws: WebSocket;
   store: SessionStore;
-  push: (event: Record<string, unknown>) => void;
   pushError: (message: string) => void;
 }
 
@@ -27,7 +28,7 @@ export function handleSessionsMessage(
   msg: Record<string, unknown>,
   deps: SessionsHandlerDeps,
 ): boolean {
-  const { ws, store, push, pushError } = deps;
+  const { ws, store, pushError } = deps;
 
   if (msg.type === 'sessions:list') {
     ws.send(JSON.stringify({ type: 'sessions:listed', sessions: store.list() }));
@@ -47,12 +48,10 @@ export function handleSessionsMessage(
     // the client would keep talking to a phantom id, and the next
     // `chat` message would auto-create a second (duplicate) session
     // via `appendMessage`'s auto-create branch.
-    const created = store.create({
+    store.create({
       id: typeof msg.sessionId === 'string' ? msg.sessionId : undefined,
       title: typeof msg.title === 'string' ? msg.title : undefined,
     });
-    push({ type: 'sessions:changed', sessionId: created.id, kind: 'created' });
-    push({ type: 'sessions:listed', sessions: store.list() });
     return true;
   }
 
@@ -62,10 +61,7 @@ export function handleSessionsMessage(
       pushError('sessions:delete missing sessionId');
       return true;
     }
-    if (store.delete(id)) {
-      push({ type: 'sessions:changed', sessionId: id, kind: 'deleted' });
-      push({ type: 'sessions:listed', sessions: store.list() });
-    }
+    store.delete(id);
     return true;
   }
 
@@ -76,10 +72,7 @@ export function handleSessionsMessage(
       pushError('sessions:rename missing sessionId');
       return true;
     }
-    if (store.rename(id, title)) {
-      push({ type: 'sessions:changed', sessionId: id, kind: 'renamed' });
-      push({ type: 'sessions:listed', sessions: store.list() });
-    }
+    store.rename(id, title);
     return true;
   }
 

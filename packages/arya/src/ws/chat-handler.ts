@@ -71,16 +71,11 @@ export function handleChatMessage(
   const userText = String(msg.text ?? '');
 
   // Persist the user turn first. The store auto-creates the session
-  // file on first message; the drawer broadcast keeps every connected
-  // companion in sync.
+  // file on first message; the store's own `subscribe(...)` (wired up
+  // in `bootstrap.ts`) handles the `sessions:changed` + `sessions:listed`
+  // broadcast — we don't push them manually here.
   try {
     deps.store.appendMessage(targetSessionId, makeUserMessage(userText));
-    deps.push({
-      type: 'sessions:changed',
-      sessionId: targetSessionId,
-      kind: 'updated',
-    });
-    deps.push({ type: 'sessions:listed', sessions: deps.store.list() });
   } catch (err) {
     log.error('failed to persist user message:', err);
   }

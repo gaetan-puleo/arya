@@ -3,7 +3,6 @@ import {
   attachAutoPersist,
   createJSONLSessionStore,
   createSessionScopedMessageBus,
-  type MessageBusRouter,
   startMu,
 } from 'mu-core';
 import {
@@ -15,6 +14,7 @@ import { createOpenAIProviderPlugin } from 'mu-openai-provider';
 import { createScheduler } from 'mu-scheduler';
 import { createMuToolsPlugin } from 'mu-tools';
 import { existsSync } from 'node:fs';
+import { setupApprovalChannel } from './ws/approval-bootstrap.js';
 import { createWebSocketChannel } from './ws-channel.js';
 import { createAryaHttpToolsPlugin } from './plugins/tools/index.js';
 import { createAryaCommandsPlugin } from './plugins/commands.js';
@@ -80,37 +80,13 @@ export async function bootstrap(
     }
   }
 
-  // Session-scoped MessageBus, owned by mu-core. The resolve + push
-  // callbacks read through mutable refs because the session manager
-  // and WS channel only exist after `startMu` returns. Once the refs
-  // are populated, every `bus.append(...)` and `bus.injectNext(...)`
-  // routes to the right session's buffer.
-  const refs: {
-    resolveSession: (typeof messageBus)['snapshot'] extends never
-      ? never
-      : ((id: string) => ReturnType<typeof getResolveSession>) | null;
-  } = { resolveSession: null };
-  function getResolveSession(): ReturnType<NonNullable<MessageBusRouter['snapshot']>> | undefined {
-    return undefined;
-  }
-  // The helpers are typed loosely above only to give the compiler a clue
-  // about the shape; actual values are pinned below.
-
-  let pushImpl: ((event: Record<string, unknown>) => void) | null = null;
-  const messageBus = createSessionScopedMessageBus({
-    resolveSession: (id) => {
-      // Resolved against the live SessionManager once `startMu` returns;
-      // the closure reads through `handle.sessions` from the outer scope
-      // (see below).
-      return liveHandle?.sessions.get(id);
-    },
-    onSyntheticAppend: (sessionId, message) => {
-      pushImpl?.({ type: 'synthetic_message', sessionId, message });
-    },
-  });
-  // Reference `refs`/`getResolveSession` so the type checker doesn't trip.
-  void refs;
-  void getResolveSession;
+  // Session-scoped MessageBus, owned by mu-core. The `resolveSession`
+  // and `onSyntheticAppend` callbacks need references that don't exist
+  // yet at construction time (the SessionManager comes from `startMu`;
+  // the WS push helper comes from `createWebSocketChannel`). We bind
+  // them via the bus's late-binding setters once those values are in
+  // scope, below.
+  const messageBus = createSessionScopedMessageBus();
 
   // Ensure custom plugin deps are resolvable, then load integrations.
   ensurePluginDepsInPath();
@@ -118,7 +94,6 @@ export async function bootstrap(
   log.info(`Loaded ${integrationPlugins.length} integration plugin(s)`);
 
   // Start mu.
-  let liveHandle: Awaited<ReturnType<typeof startMu>> | null = null;
   const handle = await startMu({
     config: {
       baseUrl: config.baseUrl,
@@ -144,6 +119,23 @@ export async function bootstrap(
         },
         approvalChannelId: 'websocket',
       }),
+      // Register extra agent dirs through mu-agents' public
+      // `ctx.agents` registry. Must come AFTER `createAgentsPlugin` so
+      // the registry is published before this plugin's activate runs.
+      {
+        name: 'arya-extra-agent-sources',
+        version: '0.1.0',
+        activate(ctx) {
+          for (const dir of extraAgentDirs) {
+            if (!existsSync(dir)) {
+              log.debug?.(`Skipping missing extra agents dir: ${dir}`);
+              continue;
+            }
+            ctx.agents?.registerSource(dir);
+            log.info(`Registered extra agents dir: ${dir}`);
+          }
+        },
+      },
       // Slash commands (/help). Must come AFTER mu-agents so it can read
       // `manager` on activate.
       createAryaCommandsPlugin(),
@@ -156,27 +148,16 @@ export async function bootstrap(
       ...integrationPlugins,
     ],
   });
-  liveHandle = handle;
 
-  // Register extra agent dirs directly through mu-agents' source manager.
-  // (Replaces the old arya-agent-sources plugin workaround.)
-  const muAgents = getMuAgents(handle.registry);
-  if (muAgents?.runs && muAgents.manager) {
-    // `sources` is exposed by the plugin internals.
-    const sources = (muAgents as { sources?: { registerSource: (dir: string) => () => void } }).sources;
-    for (const dir of extraAgentDirs) {
-      if (!existsSync(dir)) {
-        log.debug?.(`Skipping missing extra agents dir: ${dir}`);
-        continue;
-      }
-      sources?.registerSource(dir);
-      log.info(`Registered extra agents dir: ${dir}`);
-    }
-  }
+  // Now that the SessionManager exists, wire the message bus's
+  // `resolveSession` callback. Synthetic appends through `bus.append`
+  // mirror into the right session's transcript via this resolver.
+  messageBus.setResolveSession((id) => handle.sessions.get(id));
 
   // Log the loaded agent surface so operators can verify their definitions
   // are picked up. mu-agents ships zero default agents, so anything visible
   // here comes from `agentsDir` + `extraAgentDirs`.
+  const muAgents = getMuAgents(handle.registry);
   if (muAgents?.manager) {
     const primary = muAgents.manager.getPrimary?.() ?? [];
     const subagents = muAgents.manager.getSubagents?.() ?? [];
@@ -192,18 +173,37 @@ export async function bootstrap(
     );
   }
 
+  // Register the WebSocket approval channel against mu-agents' gateway
+  // ONCE, at boot — not per-WS-connection. The gateway stores channels
+  // in a Set and the same instance lives for the life of the process;
+  // re-registering on every reconnect leaked entries.
+  const { unregister: unregisterApprovalChannel } = setupApprovalChannel(
+    handle.registry,
+  );
+
   // Persistent session store (titles, history, list/CRUD). Lives under
   // $XDG_DATA_HOME/arya/sessions (defaults to ~/.local/share/arya/sessions).
   const sessionStore = createJSONLSessionStore({ dir: aryaSessionsDir() });
   log.info('Session store ready');
 
-  // Auto-persist every session's transcript. mu-core's middleware owns
-  // the cursor (per-session, not per-WS-connection), so multiple
-  // companion clients connecting concurrently no longer double-write.
+  // Rehydrate session.messages from disk on first creation, THEN attach
+  // autoPersist. Without rehydration, a restart would start every
+  // restored session with an empty `messages` array — the UI sees the
+  // history (via `sessions:history` reading the store directly) but
+  // the LLM gets no prior context on the first message after restart.
+  //
+  // `initialCursor` is seeded so autoPersist's tool-diff path on the
+  // next `stream_ended` doesn't re-emit messages that are already on
+  // disk.
   handle.sessions.onSessionCreated((session) => {
+    const stored = sessionStore.get(session.id);
+    if (stored && stored.messages.length > 0) {
+      session.setMessages(stored.messages);
+    }
     attachAutoPersist(session, sessionStore, {
       getActiveAgent: () => getActiveAgentId(handle.registry) ?? undefined,
       onError: (where, err) => log.error(`autoPersist:${where}`, err),
+      initialCursor: stored?.messages.length ?? 0,
     });
   });
 
@@ -228,9 +228,22 @@ export async function bootstrap(
   );
   // Wire the channel's `push` helper into the bus so synthetic appends
   // (mu-agents' @-mention live updates) fan out to clients.
-  pushImpl = wsChannel.push;
+  messageBus.setSyntheticAppendListener((sessionId, message) => {
+    wsChannel.push({ type: 'synthetic_message', sessionId, message });
+  });
   handle.channels.register(wsChannel);
   log.info(`WebSocket channel registered on port ${config.wsPort}`);
+
+  // Centralised session-store broadcast. The JSONL store emits
+  // `created` / `updated` / `deleted` / `renamed` for every mutation —
+  // including those driven by `attachAutoPersist`'s assistant + tool
+  // writes. Subscribing once here means handlers don't have to push
+  // `sessions:changed` / `sessions:listed` by hand after every CRUD
+  // call (which they previously did, redundantly, in three places).
+  const unsubscribeStore = sessionStore.subscribe((sessionId, kind) => {
+    wsChannel.push({ type: 'sessions:changed', sessionId, kind });
+    wsChannel.push({ type: 'sessions:listed', sessions: sessionStore.list() });
+  });
 
   // Start scheduler for cron/heartbeat tasks. Lifecycle events bubble
   // up to connected companions via the WS push helper so the UI can
@@ -253,6 +266,8 @@ export async function bootstrap(
   return {
     shutdown: async () => {
       log.info('Shutting down...');
+      unsubscribeStore();
+      unregisterApprovalChannel();
       scheduler.stop();
       await handle.shutdown();
       log.info('Stopped');

@@ -1,0 +1,11 @@
+- id: hello-task
+  agent: arya
+  cron: "0 9 * * *"
+  channel: companion
+  prompt: Say hello and introduce yourself.
+
+- id: daily-summary
+  agent: arya
+  cron: "0 20 * * *"
+  channel: companion
+  prompt: Summarize the day's activities and any pending tasks.
