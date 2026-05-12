@@ -13,7 +13,7 @@ import {
 	View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useUnistyles } from "@/theme/ThemeContext";
+import { useTheme } from "@/theme/ThemeContext";
 
 import type { CommandInfo, AgentInfo } from "@/lib/ws";
 
@@ -49,17 +49,7 @@ export default function ChatInputBar({
 	const [inputExpanded, setInputExpanded] = useState(false);
 	const [textHeight, setTextHeight] = useState(MIN_INPUT_HEIGHT);
 	const insets = useSafeAreaInsets();
-	const { theme } = useUnistyles();
-
-	const bg = theme.colors.background;
-	const bgTranslucent = theme.colors.backgroundTranslucent;
-	const bgSecondary = theme.colors.backgroundSecondary;
-	const bgTertiary = theme.colors.backgroundTertiary;
-	const bgInput = theme.colors.backgroundInput;
-	const textColor = theme.colors.text;
-	const textSecondary = theme.colors.textSecondary;
-	const textPlaceholder = theme.colors.textPlaceholder;
-	const borderColor = theme.colors.border;
+	const theme = useTheme();
 
 	const hasText = input.trim().length > 0;
 
@@ -86,172 +76,104 @@ export default function ChatInputBar({
 
 	return (
 		<>
-		<KeyboardAvoidingView
-			behavior={Platform.OS === "ios" ? "padding" : undefined}
-			keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 48 : 0}
-			style={{
-				flex: 0,
-				paddingBottom:
-					Platform.OS === "android"
-						? keyboardOpen
-							? keyboardHeight + insets.bottom
-							: 0
-						: 0,
-			}}
-		>
-			{/* ── Inline command menu ── */}
-			{showCommandMenu && filteredCommands.length > 0 && (
-				<InlineMenu
-					items={filteredCommands}
-					prefix="/"
-					onSelect={(cmd) => {
-						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-						onInputChange(`/${cmd.command} `);
-					}}
-					label={(item) => `/${item.command}`}
-					description={(item) => item.description}
-					keyExtractor={(item) => item.command}
-					bgSecondary={bgSecondary}
-					bgTertiary={bgTertiary}
-					borderColor={borderColor}
-					textColor={textColor}
-					textSecondary={textSecondary}
-				/>
-			)}
-
-			{/* ── Inline agent menu ── */}
-			{showAgentMenu && filteredAgents.length > 0 && (
-				<InlineMenu
-					items={filteredAgents}
-					prefix="@"
-					onSelect={(agent) => {
-						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-						onInputChange(`@${agent.id} `);
-					}}
-					label={(item) => `@${item.id}`}
-					description={(item) => item.description}
-					keyExtractor={(item) => item.id}
-					bgSecondary={bgSecondary}
-					bgTertiary={bgTertiary}
-					borderColor={borderColor}
-					textColor={textColor}
-					textSecondary={textSecondary}
-				/>
-			)}
-
-			<View
+			<KeyboardAvoidingView
+				behavior={Platform.OS === "ios" ? "padding" : undefined}
+				keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 48 : 0}
 				style={{
-					paddingHorizontal: 12,
-					paddingTop: 4,
-					paddingBottom: keyboardOpen ? 16 : insets.bottom + 8,
-					backgroundColor: bgTranslucent,
+					flex: 0,
+					paddingBottom:
+						Platform.OS === "android"
+							? keyboardOpen
+								? keyboardHeight + insets.bottom
+								: 0
+							: 0,
 				}}
 			>
-				<View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
-					{/* ── More button ──
-					    Hidden for now (no attachment/extras action wired yet).
-					    Kept in source so it can be re-enabled by removing the
-					    `display: "none"` once a handler exists. */}
-					<Pressable
-						onPress={() => {}}
-						style={{
-							display: "none",
-							width: 44,
-							height: 44,
-							justifyContent: "center",
-							alignItems: "center",
-							borderRadius: 24,
-							borderWidth: 1,
-							borderColor,
-							backgroundColor: bgInput,
+				{/* Inline command menu */}
+				{showCommandMenu && filteredCommands.length > 0 && (
+					<InlineMenu
+						items={filteredCommands}
+						onSelect={(cmd) => {
+							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+							onInputChange(`/${cmd.command} `);
 						}}
-					>
-						<Ionicons name="add" size={26} color={textSecondary} />
-					</Pressable>
-
-					{/* ── Input container ── */}
-					<View
-						style={{
-							flex: 1,
-							backgroundColor: bgInput,
-							borderRadius: 24,
-							borderWidth: 1,
-							borderColor,
-							minHeight: 44,
-							paddingHorizontal: 6,
-							paddingVertical: 6,
-							justifyContent: "center",
-							position: "relative",
-						}}
-					>
-					{/* ── TextInput + expand button ── */}
-					<View
-						style={{
-							position: "relative",
-							overflow: "hidden",
-							justifyContent: "center",
-							height: textHeight,
-						}}
-					>
-						<TextInput
-							style={{
-								paddingLeft: 12,
-								paddingRight: 40,
-								paddingVertical: 0,
-								fontSize: 16,
-								lineHeight: 20,
-								color: textColor,
-								minHeight: MIN_INPUT_HEIGHT,
-								maxHeight: COLLAPSED_MAX_HEIGHT,
-							}}
-							value={input}
-							onChangeText={onInputChange}
-							placeholder="Message…"
-							placeholderTextColor={textPlaceholder}
-							multiline
-							onContentSizeChange={handleContentSizeChange}
-							onSubmitEditing={send}
-							returnKeyType="send"
-							blurOnSubmit={false}
-							textAlignVertical="center"
-							scrollEnabled={scrollEnabled}
-						/>
-						{showExpandButton && (
-							<Pressable
-								onPress={() => setInputExpanded(true)}
-								style={{
-									position: "absolute",
-									top: 4,
-									right: 4,
-									width: 28,
-									height: 28,
-									justifyContent: "center",
-									alignItems: "center",
-									borderRadius: 16,
-								}}
-							>
-								<Ionicons name="expand" size={18} color={textSecondary} />
-							</Pressable>
-						)}
-					</View>
-
-					{/* ── Send button — absolute bottom-right ── */}
-					<SendButton
-						hasText={hasText}
-						loading={loading}
-						onSend={send}
+						label={(item) => `/${item.command}`}
+						description={(item) => item.description}
+						keyExtractor={(item) => item.command}
 					/>
-				</View>
-			</View>
-				</View>
+				)}
 
-		</KeyboardAvoidingView>
+				{/* Inline agent menu */}
+				{showAgentMenu && filteredAgents.length > 0 && (
+					<InlineMenu
+						items={filteredAgents}
+						onSelect={(agent) => {
+							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+							onInputChange(`@${agent.id} `);
+						}}
+						label={(item) => `@${item.id}`}
+						description={(item) => item.description}
+						keyExtractor={(item) => item.id}
+					/>
+				)}
 
-			{/* ── Full-screen expanded input overlay ──
-			 * Rendered via React Native Modal so it draws into its own native
-			 * window — sits on top of everything (chat list, mode chip, FAB,
-			 * keyboard avoiding view) and extends over the on-screen keyboard.
-			 */}
+				<View
+					className="px-3 pt-1 bg-bg-translucent"
+					style={{ paddingBottom: keyboardOpen ? 16 : insets.bottom + 8 }}
+				>
+					<View className="flex-row items-end gap-2">
+						{/* Input container */}
+						<View className="flex-1 bg-bg-input rounded-pill border border-border min-h-[44px] px-1.5 py-1.5 justify-center relative">
+							{/* TextInput + expand button */}
+							<View
+								className="relative overflow-hidden justify-center"
+								style={{ height: textHeight }}
+							>
+								<TextInput
+									className="pl-3 pr-10 py-0 text-base text-text"
+									style={{
+										lineHeight: 20,
+										minHeight: MIN_INPUT_HEIGHT,
+										maxHeight: COLLAPSED_MAX_HEIGHT,
+									}}
+									value={input}
+									onChangeText={onInputChange}
+									placeholder="Message…"
+									placeholderTextColor={theme.colors.textPlaceholder}
+									multiline
+									onContentSizeChange={handleContentSizeChange}
+									onSubmitEditing={send}
+									returnKeyType="send"
+									blurOnSubmit={false}
+									textAlignVertical="center"
+									scrollEnabled={scrollEnabled}
+								/>
+								{showExpandButton && (
+									<Pressable
+										onPress={() => setInputExpanded(true)}
+										className="absolute top-1 right-1 w-7 h-7 justify-center items-center rounded-2xl"
+									>
+										<Ionicons
+											name="expand"
+											size={18}
+											color={theme.colors.textSecondary}
+										/>
+									</Pressable>
+								)}
+							</View>
+
+							{/* Send button — absolute bottom-right */}
+							<SendButton hasText={hasText} loading={loading} onSend={send} />
+						</View>
+					</View>
+				</View>
+			</KeyboardAvoidingView>
+
+			{/* Full-screen expanded input overlay
+			    Rendered via React Native Modal so it draws into its own
+			    native window — sits on top of everything (chat list, mode
+			    chip, FAB, keyboard avoiding view) and extends over the
+			    on-screen keyboard. */}
 			<Modal
 				visible={inputExpanded}
 				animationType="fade"
@@ -263,25 +185,21 @@ export default function ChatInputBar({
 				<StatusBar barStyle="light-content" />
 				<KeyboardAvoidingView
 					behavior={Platform.OS === "ios" ? "padding" : undefined}
-					style={{ flex: 1, backgroundColor: bg }}
+					className="flex-1 bg-bg"
 				>
-					<View style={{ flex: 1, backgroundColor: bg }}>
+					<View className="flex-1 bg-bg">
 						<TextInput
+							className="flex-1 w-full px-5 text-lg text-text"
 							style={{
-								flex: 1,
-								width: "100%",
 								paddingTop: insets.top + 56,
-								paddingHorizontal: 20,
 								paddingBottom: 80,
-								fontSize: 18,
-								color: textColor,
 								textAlignVertical: "top",
 								lineHeight: 26,
 							}}
 							value={input}
 							onChangeText={onInputChange}
 							placeholder="Message…"
-							placeholderTextColor={textPlaceholder}
+							placeholderTextColor={theme.colors.textPlaceholder}
 							multiline
 							autoFocus
 							returnKeyType="send"
@@ -292,18 +210,10 @@ export default function ChatInputBar({
 						<Pressable
 							onPress={() => setInputExpanded(false)}
 							hitSlop={8}
-							style={{
-								position: "absolute",
-								top: insets.top + 8,
-								right: 8,
-								width: 44,
-								height: 44,
-								justifyContent: "center",
-								alignItems: "center",
-								zIndex: 10,
-							}}
+							className="absolute right-2 w-11 h-11 justify-center items-center z-10"
+							style={{ top: insets.top + 8 }}
 						>
-							<Ionicons name="close" size={28} color={textColor} />
+							<Ionicons name="close" size={28} color={theme.colors.text} />
 						</Pressable>
 
 						<SendButton
@@ -325,42 +235,19 @@ export default function ChatInputBar({
 
 function InlineMenu<T extends { description: string }>({
 	items,
-	prefix,
 	onSelect,
 	label,
 	description,
 	keyExtractor,
-	bgSecondary,
-	bgTertiary,
-	borderColor,
-	textColor,
-	textSecondary,
 }: {
 	items: T[];
-	prefix: string;
 	onSelect: (item: T) => void;
 	label: (item: T) => string;
 	description: (item: T) => string;
 	keyExtractor: (item: T) => string;
-	bgSecondary: string;
-	bgTertiary: string;
-	borderColor: string;
-	textColor: string;
-	textSecondary: string;
 }) {
 	return (
-		<View
-			style={{
-				backgroundColor: bgSecondary,
-				borderTopLeftRadius: 16,
-				borderTopRightRadius: 16,
-				borderWidth: 1,
-				borderBottomWidth: 0,
-				borderColor,
-				maxHeight: 220,
-				marginHorizontal: 12,
-			}}
-		>
+		<View className="bg-bg-secondary rounded-t-card border border-b-0 border-border max-h-[220px] mx-3">
 			<ScrollView
 				showsVerticalScrollIndicator={false}
 				keyboardShouldPersistTaps="always"
@@ -369,33 +256,13 @@ function InlineMenu<T extends { description: string }>({
 					<Pressable
 						key={keyExtractor(item)}
 						onPress={() => onSelect(item)}
-						style={({ pressed }) => ({
-							flexDirection: "row",
-							gap: 8,
-							alignItems: "center",
-							paddingHorizontal: 16,
-							paddingVertical: 12,
-							borderBottomWidth: i < items.length - 1 ? 1 : 0,
-							borderBottomColor: borderColor,
-							backgroundColor: pressed ? bgTertiary : "transparent",
-						})}
+						className={`flex-row gap-2 items-center px-4 py-3 active:bg-bg-tertiary ${i < items.length - 1 ? "border-b border-border" : ""}`}
 					>
-						<Text
-							style={{
-								fontSize: 14,
-								fontWeight: "700",
-								color: textColor,
-								flexShrink: 0,
-							}}
-						>
+						<Text className="text-sm font-bold text-text shrink-0">
 							{label(item)}
 						</Text>
 						<Text
-							style={{
-								fontSize: 14,
-								color: textSecondary,
-								flex: 1,
-							}}
+							className="text-sm text-text-secondary flex-1"
 							numberOfLines={1}
 						>
 							{description(item)}
@@ -428,15 +295,10 @@ function SendButton({
 		<Pressable
 			onPress={onSend}
 			disabled={!hasText || loading}
+			className="absolute bottom-1 right-1 justify-center items-center rounded-2xl"
 			style={{
-				position: "absolute",
-				bottom: 4,
-				right: 4,
 				width: 34,
 				height: 34,
-				justifyContent: "center",
-				alignItems: "center",
-				borderRadius: 16,
 				backgroundColor: hasText ? "#ECECEC" : "#4A4A4A",
 				opacity: !hasText || loading ? 0.4 : 1,
 				...(fullScreen

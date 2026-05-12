@@ -1,7 +1,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useState } from "react";
-import { Platform, Pressable, ScrollView, Text, View } from "react-native";
-import { useUnistyles } from "@/theme/ThemeContext";
+import { Pressable, ScrollView, Text, View } from "react-native";
+import { useTheme } from "@/theme/ThemeContext";
 import type { ApprovalData } from "@/types/approval";
 
 const ARGS_MAX_LENGTH = 600;
@@ -18,19 +18,8 @@ function prettyArgs(args: string | undefined): string | undefined {
 }
 
 function Widget({ children }: { children: React.ReactNode }) {
-	const { theme } = useUnistyles();
 	return (
-		<View
-			style={{
-				borderRadius: 12,
-				borderWidth: 1,
-				borderColor: theme.colors.border,
-				backgroundColor: theme.colors.backgroundSecondary,
-				paddingHorizontal: 12,
-				paddingVertical: 12,
-				gap: 8,
-			}}
-		>
+		<View className="rounded-xl border border-border bg-bg-secondary px-3 py-3 gap-2">
 			{children}
 		</View>
 	);
@@ -52,63 +41,38 @@ export default function ApprovalMessage({
 	const [expanded, setExpanded] = useState(
 		status === "pending" && (summary?.length ?? 0) <= 120,
 	);
-	const { theme } = useUnistyles();
-
-	const textColor = theme.colors.text;
-	const textSecondary = theme.colors.textSecondary;
-	const bgTertiary = theme.colors.backgroundTertiary;
-	const successColor = theme.colors.success;
-	const dangerColor = theme.colors.danger;
-	const borderColor = theme.colors.border;
-
-	const monoFamily = Platform.OS === "ios" ? "Menlo-Regular" : "monospace";
+	const theme = useTheme();
 
 	return (
-		<View
-			style={{
-				paddingHorizontal: 16,
-			}}
-		>
+		<View className="px-4">
 			<Widget>
 				{/* Header */}
 				{(() => {
 					const canExpand = !!summary || !!result;
 					const statusColor =
 						status === "approved"
-							? successColor
+							? theme.colors.success
 							: status === "denied"
-								? dangerColor
+								? theme.colors.danger
 								: null;
 					return (
 						<Pressable
 							onPress={canExpand ? () => setExpanded((v) => !v) : undefined}
-							style={({ pressed }) => ({
-								flexDirection: "row",
-								gap: 6,
-								alignItems: "center",
-								opacity: canExpand && pressed ? 0.6 : 1,
-							})}
+							className={`flex-row gap-1.5 items-center ${canExpand ? "active:opacity-60" : ""}`}
 						>
-							<Ionicons name="shield-outline" size={12} color={textSecondary} />
+							<Ionicons
+								name="shield-outline"
+								size={12}
+								color={theme.colors.textSecondary}
+							/>
 							<Text
 								numberOfLines={1}
-								style={{
-									fontSize: 12,
-									fontWeight: "500",
-									color: textColor,
-									flex: 1,
-								}}
+								className="text-xs font-medium text-text flex-1"
 							>
 								{toolName}
 							</Text>
 							{statusColor ? (
-								<View
-									style={{
-										flexDirection: "row",
-										gap: 4,
-										alignItems: "center",
-									}}
-								>
+								<View className="flex-row gap-1 items-center">
 									<Ionicons
 										name={
 											status === "approved"
@@ -119,11 +83,8 @@ export default function ApprovalMessage({
 										color={statusColor}
 									/>
 									<Text
-										style={{
-											fontSize: 12,
-											fontWeight: "600",
-											color: statusColor,
-										}}
+										className="text-xs font-semibold"
+										style={{ color: statusColor }}
 									>
 										{status === "approved" ? "Approved" : "Denied"}
 									</Text>
@@ -133,7 +94,7 @@ export default function ApprovalMessage({
 								<Ionicons
 									name={expanded ? "chevron-up" : "chevron-down"}
 									size={12}
-									color={textSecondary}
+									color={theme.colors.textSecondary}
 								/>
 							) : null}
 						</Pressable>
@@ -145,23 +106,14 @@ export default function ApprovalMessage({
 					<ScrollView
 						horizontal
 						showsHorizontalScrollIndicator={false}
-						style={{
-							alignSelf: "stretch",
-							backgroundColor: bgTertiary,
-							borderRadius: 8,
-						}}
+						className="self-stretch bg-bg-tertiary rounded-lg"
 						contentContainerStyle={{
 							paddingHorizontal: 12,
 							paddingVertical: 8,
 						}}
 					>
 						<Text
-							style={{
-								fontFamily: monoFamily,
-								fontSize: 12,
-								lineHeight: 16,
-								color: textColor,
-							}}
+							className="text-xs leading-4 text-text font-mono"
 						>
 							{summary}
 						</Text>
@@ -173,24 +125,13 @@ export default function ApprovalMessage({
 					<ScrollView
 						horizontal
 						showsHorizontalScrollIndicator={false}
-						style={{
-							alignSelf: "stretch",
-							backgroundColor: bgTertiary,
-							borderRadius: 8,
-						}}
+						className="self-stretch bg-bg-tertiary rounded-lg"
 						contentContainerStyle={{
 							paddingHorizontal: 12,
 							paddingVertical: 8,
 						}}
 					>
-						<Text
-							style={{
-								fontFamily: monoFamily,
-								fontSize: 12,
-								lineHeight: 16,
-								color: textColor,
-							}}
-						>
+						<Text className="text-xs leading-4 text-text font-mono">
 							{result}
 						</Text>
 					</ScrollView>
@@ -198,58 +139,20 @@ export default function ApprovalMessage({
 
 				{/* Controls (pending only) */}
 				{status === "pending" ? (
-					<View
-						style={{
-							flexDirection: "row",
-							gap: 6,
-							justifyContent: "flex-end",
-						}}
-					>
+					<View className="flex-row gap-1.5 justify-end">
 						<Pressable
 							onPress={onDeny}
-							style={({ pressed }) => ({
-								height: 28,
-								paddingHorizontal: 12,
-								borderRadius: 16,
-								backgroundColor: "transparent",
-								borderWidth: 1,
-								borderColor,
-								flexDirection: "row",
-								gap: 4,
-								alignItems: "center",
-								justifyContent: "center",
-								opacity: pressed ? 0.7 : 1,
-								transform: [{ scale: pressed ? 0.97 : 1 }],
-							})}
+							className="h-7 px-3 rounded-2xl border border-border flex-row gap-1 items-center justify-center active:opacity-70"
 						>
-							<Ionicons name="close" size={13} color={dangerColor} />
-							<Text
-								style={{ fontSize: 12, fontWeight: "600", color: dangerColor }}
-							>
-								Deny
-							</Text>
+							<Ionicons name="close" size={13} color={theme.colors.danger} />
+							<Text className="text-xs font-semibold text-danger">Deny</Text>
 						</Pressable>
 						<Pressable
 							onPress={onApprove}
-							style={({ pressed }) => ({
-								height: 28,
-								paddingHorizontal: 12,
-								borderRadius: 16,
-								backgroundColor: successColor,
-								flexDirection: "row",
-								gap: 4,
-								alignItems: "center",
-								justifyContent: "center",
-								opacity: pressed ? 0.7 : 1,
-								transform: [{ scale: pressed ? 0.97 : 1 }],
-							})}
+							className="h-7 px-3 rounded-2xl bg-success flex-row gap-1 items-center justify-center active:opacity-70"
 						>
 							<Ionicons name="checkmark" size={13} color="#FFFFFF" />
-							<Text
-								style={{ fontSize: 12, fontWeight: "600", color: "#FFFFFF" }}
-							>
-								Allow
-							</Text>
+							<Text className="text-xs font-semibold text-white">Allow</Text>
 						</Pressable>
 					</View>
 				) : null}

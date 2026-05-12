@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 const sharedSpacing = {
   0: 0,
   0.25: 1,
@@ -70,11 +72,27 @@ const sharedFontWeights = {
   black: '900',
 } as const;
 
+const monoFamily = Platform.OS === 'ios' ? 'Menlo-Regular' : 'monospace';
+
+const sharedFonts = {
+  mono: monoFamily,
+} as const;
+
+// Chrome tokens — shared pill/card geometry used by floating controls
+// and modal cards. Kept here so adjustments stay in one place.
+const sharedChrome = {
+  pillHeight: 44,
+  pillRadius: 24,
+  cardRadius: 16,
+} as const;
+
 const shared = {
   spacing: sharedSpacing,
   radius: sharedRadius,
   fontSizes: sharedFontSizes,
   fontWeights: sharedFontWeights,
+  fonts: sharedFonts,
+  chrome: sharedChrome,
 } as const;
 
 const black = '#000000';

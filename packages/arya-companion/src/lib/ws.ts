@@ -1,179 +1,111 @@
+/**
+ * Shared wire types exchanged between the companion and the agent's
+ * WebSocket server. Pure type definitions — no runtime logic.
+ *
+ * Session history conversion lives in `./sessionWire.ts`.
+ */
+
 export interface CommandInfo {
-  command: string;
-  description: string;
+	command: string;
+	description: string;
 }
 
 export interface AgentInfo {
-  id: string;
-  description: string;
-  type?: 'primary' | 'subagent';
-  color?: string;
+	id: string;
+	description: string;
+	type?: "primary" | "subagent";
+	color?: string;
 }
 
 export interface ChatMessageItem {
-  id: string;
-  role: 'user' | 'assistant' | 'tool';
-  text: string;
-  /**
-   * Id of the agent that authored this assistant message. Optional to allow
-   * historical messages without tagging. When the server doesn't tag, the UI
-   * falls back to the active agent at render time.
-   */
-  authorAgentId?: string;
-  /** Tool invocation name (only when role === 'tool'). */
-  toolName?: string;
-  /** Pretty-printed JSON (or raw string) of the tool call arguments. */
-  toolArgs?: string;
-  /** Tool execution result text. */
-  toolResult?: string;
-  /** True when the tool returned an error. */
-  toolError?: boolean;
+	id: string;
+	role: "user" | "assistant" | "tool";
+	text: string;
+	/**
+	 * Id of the agent that authored this assistant message. Optional to allow
+	 * historical messages without tagging. When the server doesn't tag, the UI
+	 * falls back to the active agent at render time.
+	 */
+	authorAgentId?: string;
+	/** Tool invocation name (only when role === 'tool'). */
+	toolName?: string;
+	/** Pretty-printed JSON (or raw string) of the tool call arguments. */
+	toolArgs?: string;
+	/** Tool execution result text. */
+	toolResult?: string;
+	/** True when the tool returned an error. */
+	toolError?: boolean;
 }
 
 export type SubAgentEventKind =
-  | 'invocation_start'
-  | 'text_delta'
-  | 'message_end'
-  | 'tool_call_start'
-  | 'tool_call_end'
-  | 'invocation_end';
+	| "invocation_start"
+	| "text_delta"
+	| "message_end"
+	| "tool_call_start"
+	| "tool_call_end"
+	| "invocation_end";
 
 export interface SubAgentEvent {
-  runId: string;
-  parentRunId?: string;
-  agentId: string;
-  kind: SubAgentEventKind;
-  ts: number;
-  data: Record<string, unknown>;
+	runId: string;
+	parentRunId?: string;
+	agentId: string;
+	kind: SubAgentEventKind;
+	ts: number;
+	data: Record<string, unknown>;
 }
 
 // ── Sessions (persistent, server-managed) ─────────────────────────────
 
 export interface SessionSummary {
-  id: string;
-  title: string;
-  createdAt: number;
-  updatedAt: number;
-  messageCount: number;
+	id: string;
+	title: string;
+	createdAt: number;
+	updatedAt: number;
+	messageCount: number;
 }
 
-/**
- * Mirror of mu-core's `ChatMessage`. The server emits these directly in
- * `sessions:history` payloads; the companion derives display fields
- * (text, toolName, agentId, …) from them at render time.
- */
-interface ChatMessageWire {
-  role: 'user' | 'assistant' | 'system' | 'tool';
-  content: string;
-  reasoning?: string;
-  toolCallId?: string;
-  toolResult?: {
-    name: string;
-    content: string;
-    error?: boolean;
-  };
-  toolCallArgs?: Record<string, string>;
-  meta?: Record<string, unknown>;
-  customType?: string;
-}
+export type { PersistedSessionWire } from "./sessionWire";
+export { persistedSessionFromWire } from "./sessionWire";
 
-/**
- * Display-shaped row used by the chat UI. Derived from `ChatMessageWire`
- * via `chatMessageWireToPersisted`. Keeps the same field names the rest
- * of the companion has consumed historically so the rendering layer is
- * unchanged.
- */
-interface PersistedMessage {
-  id: string;
-  role: 'user' | 'assistant' | 'tool';
-  text: string;
-  ts: number;
-  agentId?: string;
-  toolName?: string;
-  toolArgs?: string;
-  toolResult?: string;
-  toolError?: boolean;
-}
+// ── Inbound WS message discriminated union ─────────────────────────────
+// Each variant matches a `type` value emitted by the agent server.
+// Used by the central store's typed dispatch table — the compiler
+// enforces exhaustive handling, replacing the previous "if (...) return"
+// chain with a `switch` over `msg.type`.
 
-export interface PersistedSessionWire {
-  version: 1;
-  id: string;
-  title: string;
-  createdAt: number;
-  updatedAt: number;
-  messages: ChatMessageWire[];
-}
-
-interface PersistedSession {
-  version: 1;
-  id: string;
-  title: string;
-  createdAt: number;
-  updatedAt: number;
-  messages: PersistedMessage[];
-}
-
-/** Stringify `ChatMessage.meta.toolArgs` (already a JSON string server-side). */
-function readMetaString(meta: Record<string, unknown> | undefined, key: string): string | undefined {
-  if (!meta) return undefined;
-  const v = meta[key];
-  return typeof v === 'string' ? v : undefined;
-}
-
-function readMetaNumber(meta: Record<string, unknown> | undefined, key: string, fallback: number): number {
-  if (!meta) return fallback;
-  const v = meta[key];
-  return typeof v === 'number' ? v : fallback;
-}
-
-/**
- * Map a mu-core ChatMessage (as serialised by the server) to the flat
- * `PersistedMessage` row the chat UI knows how to render.
- *
- * - `content` → `text` for user/assistant/tool.
- * - `toolResult.name/content/error` → `toolName/toolResult/toolError`.
- * - `meta.agentId` → `agentId`.
- * - `meta.id`/`meta.ts` → row id and timestamp (synthesised when missing
- *   so legacy / minimal messages still render).
- * - Tool args we pretty-print from `toolCallArgs` when present so the
- *   Approval widget keeps showing JSON; mu-coding messages carry the
- *   same data via `toolCallArgs`.
- */
-function chatMessageWireToPersisted(msg: ChatMessageWire, index: number): PersistedMessage {
-  const meta = msg.meta;
-  // Role narrowing: `system` messages are kept out of the visible
-  // transcript by the server, but be defensive — treat them as assistant.
-  const role: PersistedMessage['role'] = msg.role === 'system' ? 'assistant' : msg.role;
-  const text = msg.role === 'tool' ? '' : msg.content;
-  const toolName = msg.toolResult?.name;
-  const toolResultContent = msg.toolResult?.content;
-  const toolError = msg.toolResult?.error === true;
-  const metaToolArgs = readMetaString(meta, 'toolArgs');
-  const toolArgs =
-    metaToolArgs ?? (msg.toolCallArgs ? JSON.stringify(msg.toolCallArgs, null, 2) : undefined);
-  const id = readMetaString(meta, 'id') ?? msg.toolCallId ?? `m-${index}`;
-  const ts = readMetaNumber(meta, 'ts', 0);
-  const agentId = readMetaString(meta, 'agentId');
-  return {
-    id,
-    role,
-    text,
-    ts,
-    agentId,
-    toolName,
-    toolArgs,
-    toolResult: toolResultContent,
-    toolError,
-  };
-}
-
-export function persistedSessionFromWire(session: PersistedSessionWire): PersistedSession {
-  return {
-    version: session.version,
-    id: session.id,
-    title: session.title,
-    createdAt: session.createdAt,
-    updatedAt: session.updatedAt,
-    messages: session.messages.map((m, i) => chatMessageWireToPersisted(m, i)),
-  };
-}
+export type WsInboundMessage =
+	| { type: "commands"; commands: CommandInfo[] }
+	| {
+			type: "agents";
+			agents: AgentInfo[];
+			activeAgentId?: string | null;
+	  }
+	| { type: "active_agent"; agentId: string | null }
+	| { type: "stream"; sessionId?: string; text: string }
+	| { type: "done"; sessionId?: string; text?: string }
+	| {
+			type: "approval_request";
+			sessionId?: string;
+			requestId?: string | number;
+			token?: string | number;
+			toolName?: string;
+			toolArgs?: unknown;
+	  }
+	| {
+			type: "approval_response";
+			sessionId?: string;
+			requestId?: string | number;
+			token?: string | number;
+			action: "approved" | "denied";
+	  }
+	| {
+			type: "sessions:listed";
+			sessions: SessionSummary[];
+	  }
+	| {
+			type: "sessions:history";
+			sessionId: string;
+			session: import("./sessionWire").PersistedSessionWire | null;
+	  }
+	| { type: "sub_agent_event"; event: SubAgentEvent }
+	| { type: "error"; sessionId?: string; message?: string };

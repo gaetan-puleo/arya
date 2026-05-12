@@ -1,820 +1,264 @@
-# arya-agent
+# arya-companion — Simplification Plan
 
-Autonomous multi-agent runtime powered by mu.
-
-## Vision
-
-**arya-agent** = **mu comme moteur** + **Companion channel (WebSocket)** + **Scheduler autonome** + **Plugins métiers**
-
-- **arya** (server) : backend Node.js basé sur mu-core + mu-agents
-- **arya-companion** (mobile) : app Expo/React Native — chat client WebSocket
-
-### Buts
-
-1. **Server arya** : un serveur autonome qui fait tourner des agents mu avec un channel WebSocket pour communiquer avec le companion mobile
-2. **Companion mobile** : une app React Native/Expo pour chatter avec les agents, gérer les approbations d'outils, et suivre les sous-agents
-3. **Extensibilité** : le cœur fournit les outils `fs`, `shell` et `http`. Des plugins additionnels peuvent être chargés dynamiquement au démarrage depuis `~/.config/arya/plugins/*.ts` (hors repo).
-4. **Autonomie** : scheduler cron/heartbeat pour exécuter des tâches automatiques
-
-### Architecture Globale
-
-```
-┌──────────────────────────────────────────────────────┐
-│                    arya (server)                      │
-├──────────────────────────────────────────────────────┤
-│  startMu() — mu-core bootstrap                       │
-│  ├── PluginRegistry (tools, hooks)                   │
-│  ├── SessionManager (multi-session)                  │
-│  ├── ChannelRegistry                                 │
-│  ├── ApprovalGateway (ask permissions)               │
-│  ├── ActivityBus                                     │
-│  └── WebSocketChannel (companion)                    │
-│       ├── InboundMessage → Session.submit()          │
-│       ├── ApprovalRequest → companion (WS)           │
-│       ├── ActivityEvent → companion (WS)             │
-│       └── SubAgentEvent → companion (WS)             │
-├──────────────────────────────────────────────────────┤
-│  Scheduler (croner)                                   │
-│  ├── Cron tasks → Session.submit()                   │
-│  └── Heartbeat tasks → interval                      │
-├──────────────────────────────────────────────────────┤
-│  Configuration XDG                                    │
-│  ├── ~/.config/arya/config.json                      │
-│  ├── ~/.config/arya/agents/*.md                      │
-│  └── ~/.config/arya/tasks/*.yaml                     │
-└──────────────────────────────────────────────────────┘
-                            │ WebSocket
-                            ▼
-┌──────────────────────────────────────────────────────┐
-│              arya-companion (mobile)                   │
-├──────────────────────────────────────────────────────┤
-│  Expo Router + Tamagui UI                             │
-│  ├── ChatScreen (FlashList, streaming)               │
-│  ├── Approval system (approve/deny)                  │
-│  ├── SubAgentCard (invocation tracking)              │
-│  ├── Command menu (/)                                │
-│  └── Agent menu (@)                                  │
-└──────────────────────────────────────────────────────┘
-```
+> Snapshot of the companion-app refactor: what's been done, what was discovered along the way, and what's worth doing next. Scope is `packages/arya-companion/src/` (~6,400 LOC, 31 files, Expo/React Native).
 
 ---
 
-## 📁 Structure du Projet
+## 1. Context
 
-```
-arya-agent/
-├── packages/
-│   ├── arya/                     # Server backend (mu-core + mu-agents)
-│   │   ├── src/
-│   │   │   ├── bootstrap.ts      # startMu wrapper + config XDG
-│   │   │   ├── ws-channel.ts     # WebSocket channel (companion)
-│   │   │   ├── scheduler.ts      # Cron/heartbeat tasks
-│   │   │   ├── definitions.ts    # Load agents from markdown
-│   │   │   ├── init.ts           # arya init command
-│   │   │   └── plugins/
-│   │   │       └── tools/        # Tool plugins (à venir)
-│   │   ├── bin/
-│   │   │   └── arya.js           # CLI entry (arya init | arya)
-│   │   └── package.json
-│   │
-│   └── arya-companion/           # Mobile app (Expo/React Native)
-│       ├── app/                  # Expo Router screens
-│       ├── src/
-│       │   ├── lib/ws.ts         # WebSocket client
-│       │   ├── components/       # Chat, Approval, SubAgentCard
-│       │   └── tamagui.config.ts # Design system
-│       └── package.json
-│
-├── definitions/                  # ← Supprimé (migré vers ~/.config/arya)
-├── config.example.json           # ← Supprimé (migré vers ~/.config/arya)
-├── package.json                  # Workspace root
-├── tsconfig.json
-└── README.md
-```
+The companion app started as an Expo Router scaffold and grew organically: chat + sessions + sub-agent timeline + settings. State, gestures, markdown rendering and styling all evolved inline, leading to a few monolithic files and several cross-cutting indirections.
+
+This plan tracks:
+- **What we already simplified** (Section 3).
+- **What's still expensive** (Section 4).
+- **What to do next, by leverage** (Section 5).
+
+The largest cost driver isn't the line count — it's that **state and side-effects (WebSocket, AsyncStorage, modal coordination) are duplicated across screens** rather than living in one app-level owner.
 
 ---
 
-## 📁 Configuration XDG
+## 2. Constraints
 
-### Structure de `~/.config/arya/`
-
-```
-~/.config/arya/
-├── config.json           # Config LLM, WebSocket, plugins
-├── agents/               # Fichiers .md des agents
-│   └── assistant.md
-├── tasks/                # Fichiers .yaml des tasks
-│   └── default.yaml
-└── plugins/              # Config des plugins (à venir)
-    └── (vide)
-```
-
-### Initialisation
-
-```bash
-arya init
-# Crée automatiquement ~/.config/arya/ avec des templates
-```
-
-### `~/.config/arya/config.json`
-
-```json
-{
-  "baseUrl": "http://localhost:11434/v1",
-  "model": "qwen2.5-coder:7b",
-  "maxTokens": 4096,
-  "temperature": 0.7,
-  "streamTimeoutMs": 60000,
-  "wsPort": 3001,
-  "authToken": "",
-  "plugins": ["arya-tools"]
-}
-```
-
-### `~/.config/arya/agents/assistant.md`
-
-```markdown
----
-id: assistant
-description: Assistant général pour arya-agent
-type: primary
-enabled: true
-model: qwen2.5-coder:7b
-tools:
-  fs.read_file: allow
-  fs.write_file: ask
-  fs.list_dir: allow
-  shell.execute: ask
-  http.fetch: allow
-  subagent: ask
----
-You are a helpful assistant powered by arya-agent. You can use tools to interact with the filesystem, execute shell commands, and make HTTP requests. For sensitive operations, you will need approval from the user.
-
-You may delegate work to subagents when appropriate. Use the `subagent` tool with a clear task description.
-```
-
-### `~/.config/arya/tasks/default.yaml`
-
-```yaml
-- id: hello-task
-  agent: assistant
-  cron: "0 9 * * *"
-  channel: companion
-  prompt: Say hello and introduce yourself.
-
-- id: daily-summary
-  agent: assistant
-  cron: "0 20 * * *"
-  channel: companion
-  prompt: Summarize the day's activities and any pending tasks.
-```
+- **`components/SessionsLayout.tsx` (307 LOC) is off-limits.** The custom PanResponder + Reanimated parallax-reveal drawer stays untouched.
+- **No downgrade of `react-syntax-highlighter`** (v16 → v6) to make the RN-native wrapper work. The existing custom hast renderer in `CodeBlock.tsx` stays.
+- Visual UX should not regress without notice. Streaming-fence rendering, approval-card insertion ordering, drawer gestures, and the agent-chip dropdown are user-visible behaviours that must survive any refactor.
 
 ---
 
-## 🔧 Architecture
+## 3. What has been simplified (round 1)
 
-### 1. Agent Definition (Format mu)
+All seven steps below pass `tsc --noEmit` + `eslint src/`. The 8th item (syntax highlighter swap) was investigated and dropped — see Section 2.
 
-```markdown
----
-id: assistant
-description: Assistant général pour arya-agent
-type: primary
-enabled: true
-model: qwen2.5-coder:7b
-tools:
-  fs.read_file: allow
-  fs.write_file: ask
-  shell.execute: ask
-  http.fetch: allow
-  subagent: ask
----
-You are a helpful assistant powered by arya-agent.
-```
+| # | Change | Files touched | Outcome |
+|---|---|---|---|
+| 3.1 | Dead code removed | `ChatInputBar`, `Primitives` (IconButton inlined), `useChat` (`hasText` export, `more` button, theme aliasing block) | ~50 LOC removed |
+| 3.2 | WebSocket plumbing consolidated | `lib/ws-client.ts`, `lib/ws.ts`, new `lib/sessionWire.ts`, `hooks/useReconnectingSocket.ts` | `createReconnectingSocket` lost the dead `onMessage` arg; `ws.ts` is now pure types; wire-conversion moved out |
+| 3.3 | Tiny single-use files inlined | `utils/format.ts` → `[runId].tsx`; `utils/` removed | 1 fewer indirection |
+| 3.4 | `FloatingPill` primitive extracted | `Primitives.tsx`, `app/index.tsx`, `app/two.tsx` | 3 duplicated 30-line pressables → 1 component |
+| 3.5 | Session modal wrappers merged | `SessionActionsModal.tsx` exports `PromptModal` + `ConfirmModal`; `SessionsDrawer.tsx` consumes them inline | 3 thin wrappers collapsed |
+| 3.6 | `useChat` split into focused hooks | New: `useReconnectingSocket`, `useKeyboard`, `useSlashAndAt`, `useAgents`, `useSessionsStore`, `useSubAgentRuns` | Orchestrator: 751 → 413 LOC |
+| 3.7 | Markdown renderer replaced | New `MessageMarkdown.tsx`; removed `InlineMarkdown.tsx` + `MarkdownTable.tsx` + `parseCodeBlocks.ts` | 669 LOC → 203 LOC. `fence` rule delegates to themed `CodeBlock`. Streaming-fence handled by `closeOpenFence` helper |
+| 3.8 | ~~Replace `react-syntax-highlighter`~~ | — | **Skipped.** RN-native fork peer-depends on v6; v16 path layout differs. Downgrade was off-limits |
 
-**Champs frontmatter :**
-- `id` : Identifiant unique
-- `description` : Description courte
-- `type` : `primary` ou `subagent`
-- `enabled` : `true`/`false`
-- `model` : `provider/model-id` (optionnel)
-- `tools` : Map de permissions (`allow` | `deny` | `ask`)
-- **Body** : Système prompt
+### Net LOC
 
-### 2. Task Definition (YAML)
-
-```yaml
-- id: hello-task
-  agent: assistant
-  cron: "0 9 * * *"
-  channel: companion
-  prompt: Say hello and introduce yourself.
-```
-
-### 3. Bootstrap (Chargement XDG)
-
-```typescript
-function xdgConfig(): string {
-  return process.env.XDG_CONFIG_HOME 
-    ?? join(homedir(), '.config');
-}
-
-function loadConfig(): BootstrapConfig {
-  const configDir = join(xdgConfig(), 'arya');
-  const configPath = join(configDir, 'config.json');
-  
-  if (!existsSync(configPath)) {
-    throw new Error(`Config not found: ${configPath}\nRun: arya init`);
-  }
-  
-  const raw = JSON.parse(readFileSync(configPath, 'utf8'));
-  
-  return {
-    baseUrl: raw.baseUrl ?? 'http://localhost:11434/v1',
-    model: raw.model ?? 'qwen2.5-coder:7b',
-    maxTokens: raw.maxTokens ?? 4096,
-    temperature: raw.temperature ?? 0.7,
-    streamTimeoutMs: raw.streamTimeoutMs ?? 60000,
-    wsPort: raw.wsPort ?? 3001,
-    authToken: raw.authToken ?? '',
-    agentsDir: join(configDir, 'agents'),
-    tasksDir: join(configDir, 'tasks'),
-  };
-}
-```
+- `src/`: **6,205 → 6,356** (+151 net)
+- The total went up because the split-hooks pattern adds ~40 LOC of interface tax per file. But the largest single file went **751 → 413**, and no file is over 700 LOC anymore.
+- Cognitive surface area is materially smaller per file, but global indirection went up (refs exported, cooperative dispatch chain). See Section 4.2.
 
 ---
 
-## 📦 Dépendances
+## 4. What's still expensive (app-wide complexity audit)
 
-**Root `package.json` :**
-```json
-{
-  "name": "arya-agent",
-  "private": true,
-  "workspaces": ["packages/*"],
-  "scripts": {
-    "start": "cd packages/arya && bun run src/index.ts",
-    "dev": "cd packages/arya && bun --watch run src/index.ts"
-  }
-}
+### 4.1 Three independent WebSocket connections 🔴
+
+```
+hooks/useReconnectingSocket.ts:5     const WS_KEY = "arya-companion-ws"
+app/sub-agent/[runId].tsx:29         const WS_KEY = "arya-companion-ws"
+app/two.tsx:19                       const WS_STORAGE_KEY = "arya-companion-ws"
 ```
 
-**`arya/package.json` :**
-```json
-{
-  "name": "arya",
-  "version": "0.1.0",
-  "dependencies": {
-    "mu-core": "0.15.0",
-    "mu-agents": "0.15.0",
-    "mu-openai-provider": "0.15.0",
-    "croner": "^10.0.1",
-    "yaml": "^2.8.4",
-    "ws": "^8.19.0"
-  },
-  "bin": {
-    "arya": "./bin/arya.js"
-  },
-  "scripts": {
-    "start": "bun run src/index.ts",
-    "dev": "bun --watch run src/index.ts",
-    "init": "bun run src/init.ts"
-  }
-}
+- The chat screen opens a socket. The sub-agent detail screen opens a **second** socket to the same backend to receive live `sub_agent_event` pushes. Settings reads/writes the same storage key under a third local name.
+- Reconnect/error/log code lives in `useReconnectingSocket` but the detail screen reimplements connection setup with less robust handling (no `commands`/`agents` bootstrap, no error logging).
+- Renaming the storage key requires editing 3 files.
+
+**This is the single biggest source of indirection in the app.**
+
+### 4.2 The chat-hook split introduced new cross-file invariants 🟡
+
+The refactor's net effect on indirection is mixed:
+
+| Indirection | Source |
+|---|---|
+| Sub-hooks expose **refs** (`activeAgentIdRef`, `currentSessionIdRef`) as part of their public API; orchestrator reads them to keep same-tick callers (`send`) coherent | `useAgents`, `useSessionsStore`, consumed by `useChat` |
+| Cooperative dispatch: `if (handleMessage(msg)) return` chain — no type-system enforcement of "remember to return true" | `useChat.ts:80–81` |
+| `subAgents.handleEvent()` returns `{ insertCardId, agentId }` signal so the orchestrator can insert a message — pure indirection because the hook can't see `messages` state | `useSubAgentRuns` |
+| The "set ref synchronously before setState" rule (for `currentSessionId`) now lives in `useSessionsStore`, but `useChat`'s `send` bypasses it once (line ~336) | split across 2 files |
+
+**Known bug introduced:** the `useEffect` at `useChat.ts:254` lists `agentsApi, sessionsApi, subAgents` as deps. Those objects are fresh literals on every render → the WS `message` listener re-attaches per keystroke. Lint passed because the deps are *correctly listed*; the problem is they're unstable.
+
+> Fix: either wrap each sub-hook return in `useMemo`, or revert the orchestrator effect's deps to `[socket]` and read everything else through refs. See 5.A.
+
+### 4.3 Half-built design system 🟡
+
+`theme/themes.ts` defines `spacing[0..20]`, `radius[0..12]`, `fontSizes`, `fontWeights` — **but only ~10 callsites use them** (all in `CodeBlock.tsx`). Every other file hardcodes `paddingHorizontal: 16`, `borderRadius: 24`, `fontSize: 14`.
+
+Consequences:
+- The monospace font expression `Platform.OS === "ios" ? "Menlo-Regular" : "monospace"` is duplicated in **4 files** (`CodeBlock`, `MessageMarkdown`, `ApprovalMessage`, `two.tsx`).
+- The "pill" shape (`height: 44`, `borderRadius: 24`, etc.) lives both in `FloatingPill` and inline in `SessionsDrawer`'s Settings button.
+- The `useUnistyles` name is misleading: `react-native-unistyles` is **not installed**. The hook is two lines of `useContext`.
+- Components open with 5–10 lines of `theme.colors.X` destructuring boilerplate. `ChatInputBar` was fixed; `[runId].tsx`, `ApprovalMessage`, `ChatMessage`, `ChatMessageList` still do it.
+
+### 4.4 Four files carry 40 % of the app 🟡
+
+| File | LOC | Why heavy |
+|---|---:|---|
+| `components/SessionActionsModal.tsx` | 630 | Anchored popover (150 LOC of clamp math) + `CenteredModalCard` shell + `PromptModal` + `ConfirmModal` + `ActionRow` |
+| `components/SessionsDrawer.tsx` | 610 | Panel JSX + 4 modal coordinators + `groupByDate` (28 LOC) + `formatRelativeTime` (12 LOC) + inline empty state + FAB |
+| `app/two.tsx` | 573 | Settings screen + inline `FormGroup` (51) + `TextField` (45) + `HelpStep` (37) |
+| `app/sub-agent/[runId].tsx` | 526 | Screen + inline `TimelineItem` (5-case switch) + `Row`, `RowInner`, `CodeBox`, `StreamingTextBubble` + own WS connection |
+
+The `two.tsx` source even contains a comment defending the choice ("Kept inline … so the settings screen is fully self-contained"). That self-containment is what costs every reader 500 lines of scroll.
+
+### 4.5 Cross-screen state via module global 🟡
+
+`lib/subAgentStore.ts` is a 4-line file:
+
+```ts
+export const globalSubAgentEvents = new Map<string, SubAgentEvent[]>();
 ```
 
-**`arya-companion/package.json` :**
-```json
-{
-  "name": "arya-companion",
-  "main": "expo-router/entry",
-  "version": "1.0.0",
-  "scripts": {
-    "start": "expo start",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
-    "lint": "expo lint"
-  },
-  "dependencies": {
-    "@expo/vector-icons": "^15.0.3",
-    "@react-native-async-storage/async-storage": "2.2.0",
-    "@react-navigation/native": "^7.1.8",
-    "@shopify/flash-list": "2.0.2",
-    "@tamagui/animations-react-native": "^2.0.0-rc.41",
-    "@tamagui/button": "^2.0.0-rc.41",
-    "@tamagui/core": "^2.0.0-rc.41",
-    "@tamagui/font-inter": "^2.0.0-rc.41",
-    "@tamagui/input": "^2.0.0-rc.41",
-    "@tamagui/label": "^2.0.0-rc.41",
-    "@tamagui/stacks": "^2.0.0-rc.41",
-    "@tamagui/text": "^2.0.0-rc.41",
-    "@tamagui/theme": "^2.0.0-rc.41",
-    "expo": "~54.0.34",
-    "expo-build-properties": "~1.0.10",
-    "expo-clipboard": "~8.0.8",
-    "expo-constants": "~18.0.13",
-    "expo-font": "~14.0.11",
-    "expo-haptics": "~15.0.8",
-    "expo-linking": "~8.0.12",
-    "expo-router": "~6.0.23",
-    "expo-splash-screen": "~31.0.13",
-    "expo-status-bar": "~3.0.9",
-    "react": "19.1.0",
-    "react-native": "0.81.5",
-    "react-native-code-highlighter": "^1.3.0",
-    "react-native-keyboard-controller": "1.18.5",
-    "react-native-reanimated": "~4.1.1",
-    "react-native-safe-area-context": "~5.6.0",
-    "react-native-screens": "~4.16.0",
-    "react-native-worklets": "0.5.1",
-    "react-syntax-highlighter": "^16.1.1",
-    "tamagui": "^2.0.0-rc.41"
-  },
-  "devDependencies": {
-    "@types/react": "~19.1.0",
-    "@types/react-syntax-highlighter": "^15.5.13",
-    "eslint": "^9.0.0",
-    "eslint-config-expo": "~10.0.0",
-    "react-test-renderer": "19.1.0",
-    "typescript": "~5.9.2"
-  },
-  "private": true
-}
-```
+- The chat screen captures every `sub_agent_event` and dumps it into this Map.
+- The detail screen replays the Map on mount, then subscribes to its own socket for live events.
+- It works, but it's a **cross-screen cache outside React** with no eviction, no subscription, no type-system enforcement of "set before read".
+
+### 4.6 Settings screen UX flaw 🟢
+
+`app/two.tsx`'s Save handler currently tells the user *"Restart the app to reconnect with the new settings"*. The app reads WS config once at mount and never re-reads it. This is a real UX bug, separate from code complexity — auto-fixed once an app-level socket owner exists (5.A).
 
 ---
 
-## 🗓️ Phases d'Implémentation
+## 5. Next steps, ranked by leverage
 
-### Phase 1 : Bootstrap (1 jour) ✅
-- [x] `arya/package.json` avec mu-core, mu-agents, ws
-- [x] `arya/src/bootstrap.ts` — `startMu()` wrapper
-- [x] `arya/src/index.ts` — entry point CLI
-- [x] `arya/bin/arya.js` — shebang entry
-- [x] Config Ollama par défaut
+### 🔴 Priority A — One app-level state owner
 
-### Phase 2 : WebSocket Channel (1-2 jours) ✅
-- [x] `arya/src/ws-channel.ts` — implémente `Channel` de mu-core
-- [x] `InboundMessage` → `Session.submit()`
-- [x] `ApprovalRequest` → push WebSocket vers companion
-- [x] `ActivityEvent` → push WebSocket vers companion
-- [x] `SubAgentEvent` → push WebSocket vers companion
-- [x] Auth token optionnel
-- [x] `commands`/`agents` request handling
-- [x] `done` event handling
-- [x] Approval protocol alignment (requestId/token)
+**Why this first:** fixes 4.1, 4.5, and 4.6 in one structural change. Largest leverage in the codebase.
 
-### Phase 3 : Agent Definitions (1 jour) ✅
-- [x] `arya/src/definitions.ts` — `loadAgentsFromDir()`
-- [x] Charger agents depuis `~/.config/arya/agents/*.md`
-- [x] Parser YAML pour tasks (phase 5)
-- [x] Exemple `assistant.md`
+**Goal:** eliminate duplicate sockets, the module-level `globalSubAgentEvents` Map, the 3× `WS_KEY` constant, and the "restart the app" settings flow.
 
-### Phase 4 : Scheduler (1 jour) ✅
-- [x] `arya/src/scheduler.ts` — croner integration
-- [x] Tasks cron → `Session.submit()`
-- [x] Tasks heartbeat → interval
-- [x] Logging des exécutions
+**Approach:**
+1. Promote `useReconnectingSocket` + the sub-hooks into a Provider mounted at `app/_layout.tsx`.
+2. Expose state via Context **or** a small store (Zustand recommended: ~3 kB, no boilerplate, popular in RN).
+3. Sub-agent detail screen reads `subAgentRuns[runId]` and the live event stream from the store — no second socket.
+4. Settings screen calls a `reconnect()` action exposed by the store.
 
-### Phase 5 : Plugins Outils (2-3 jours) ✅
-- [x] Registry de plugins (fs, shell, http)
-- [x] Permissions (`allow`/`deny`/`ask`) via `matchKey` + globs
-- [x] Outils implémentés : `fs.read_file`, `fs.write_file`, `fs.list_dir`, `shell.execute`, `http.fetch`
-- [x] Noms des outils alignés avec les définitions d'agents
+**Effort:** medium (~400 LOC churn). **Saves:** ~150 LOC of duplicated WS plumbing; removes 3 cross-cutting indirections.
 
-### Phase 6 : Configuration XDG (1 jour) ✅
-- [x] `arya/src/init.ts` — `arya init` command
-- [x] `~/.config/arya/config.json` template
-- [x] `~/.config/arya/agents/` template
-- [x] `~/.config/arya/tasks/` template
-- [x] `bootstrap.ts` — chargement config XDG + fallback local
-- [x] `arya.js` — sous-commande `init`
+**Open question:** Context, Zustand, or roll our own? Zustand is the lightest path; Context is zero-dep but verbose; rolling our own is what `globalSubAgentEvents` already half-is.
 
-### Phase 7 : Affinement (1 jour) ✅
-- [x] Logs & error handling
-- [x] README.md à jour
-- [x] `.env.example` avec toutes les variables
-- [x] Variables d'environnement `ARYA_*` dans `bootstrap.ts`
+### 🔴 Priority B — Fix the broken `useEffect` deps
 
----
+**Why:** known bug introduced by 3.6 (see 4.2). Listener re-attaches per keystroke.
 
-## 🔌 WebSocket Protocol
+**Options:**
 
-**Companion → Server :**
-```json
-// Chat message
-{ "type": "chat", "text": "Hello!", "sessionId": "default" }
+- **B.1** — Memoize each sub-hook's return:
+  ```ts
+  return useMemo(() => ({ commands, agents, … }), [commands, agents, …]);
+  ```
+  Apply in `useAgents`, `useSessionsStore`, `useSubAgentRuns`. ~6 LOC each.
 
-// Command
-{ "type": "command", "text": "/help", "sessionId": "default" }
+- **B.2** — Revert orchestrator effect to `[socket]` only; read everything else through a `latestApisRef` mutable ref.
 
-// Commands request (re-fetch)
-{ "type": "commands" }
+B.1 is cleaner; B.2 is closer to the pre-refactor mental model. **Likely subsumed by Priority A** if we adopt Zustand (no React-dep array on the message handler at all — it'd be a store-level subscription).
 
-// Agents request (re-fetch)
-{ "type": "agents" }
+### 🟡 Priority C — Realize the design system
 
-// Approval response
-{ "type": "approval_response", "requestId": "...", "token": "...", "action": "approve" | "deny" }
-```
+**Why:** fixes 4.3. Doesn't remove LOC but kills inconsistency.
 
-**Server → Companion :**
-```json
-// Streaming response
-{ "type": "stream", "text": "partial...", "sessionId": "default" }
+**Approach:**
+1. Add to the theme: `chrome.pillHeight: 44`, `chrome.pillRadius: 24`, `chrome.cardRadius: 16`, `fonts.mono` (the Platform.OS ternary).
+2. Replace top ~30 hardcoded values across the app with theme references.
+3. Decide between hand-rolled `useUnistyles`, NativeWind, or the real `react-native-unistyles`.
 
-// Done
-{ "type": "done", "text": "full response", "sessionId": "default" }
+**Effort:** small (mechanical churn).
 
-// Approval request
-{ "type": "approval_request", "requestId": "...", "token": "...", "toolName": "fs.read_file", "toolArgs": {...}, "agentId": "assistant", "channelId": "websocket" }
+**Open question:** keep hand-rolled, or adopt a library? NativeWind is the obvious choice for Expo SDK 54+ and gives a tailwind-like authoring model; `react-native-unistyles` matches the function name we already use.
 
-// Approval response confirmation
-{ "type": "approval_response", "requestId": "...", "token": "...", "action": "approved" | "denied" }
+### 🟡 Priority D — Reconsider `useSubAgentRuns`
 
-// Activity event
-{ "type": "activity", "event": { "kind": "tool_start", "source": "assistant", "summary": "..." } }
+**Why:** highest-friction part of the 3.6 split. The hook owns 1 state slot and returns an awkward signal (`{ insertCardId, agentId }`) so the orchestrator can insert a message — pure indirection.
 
-// Sub-agent event
-{ "type": "sub_agent_event", "event": { "runId": "...", "agentId": "...", "kind": "invocation_start", "ts": 1234567890 } }
+**Options:**
+- **D.1** — Inline back into `useChat`. Adds ~70 LOC to the orchestrator (still well under 500); removes 90 LOC of file scaffolding + the signal indirection.
+- **D.2** — Keep, but only after Priority A (store owns messages too, sub-agent hook can mutate it directly).
 
-// Commands list (on connect)
-{ "type": "commands", "commands": [{ "command": "help", "description": "Show help" }] }
+**Probably D.1 short-term**, D.2 if/when Priority A lands.
 
-// Agents list (on connect)
-{ "type": "agents", "agents": [{ "id": "assistant", "description": "General assistant" }] }
+### 🟡 Priority E — Split the four fat files
 
-// Error
-{ "type": "error", "message": "..." }
-```
+**Why:** fixes 4.4. No behaviour change — pure navigation improvement.
+
+- **`SessionActionsModal.tsx`** → split into `SessionPopover.tsx` (anchored, unchanged) + `modals/PromptModal.tsx` + `modals/ConfirmModal.tsx` + `modals/CenteredCard.tsx`. **3 small files instead of one 630-line file.**
+- **`SessionsDrawer.tsx`** → extract `SessionRow.tsx`, `SessionList.tsx`, `SessionsHeader.tsx`, `lib/sessionGrouping.ts`. Drawer becomes ~200 LOC of coordination.
+- **`app/two.tsx`** → move `FormGroup`/`TextField`/`HelpStep` to `components/forms/`. Settings screen ~250 LOC.
+- **`app/sub-agent/[runId].tsx`** → extract `TimelineItem.tsx`, `StreamingTextBubble.tsx`. Combined with Priority A: file drops to ~200 LOC.
+
+### 🟢 Priority F — Dedupe screen "chrome" patterns
+
+After C is in place:
+- The `paddingHorizontal: 16` + `paddingVertical: 12` "card padding" → `theme.surfaces.card.padding`.
+- The `borderRadius: 16` + `borderWidth: 1` + `borderColor: theme.colors.border` "card surface" appears ~15 times — extract a `<Card>` primitive next to `FloatingPill`.
+
+### 🟢 Priority G — Typed message dispatch
+
+Replace the `if (handleMessage(msg)) return` chain with a `Record<MsgType, Handler>` table keyed by a discriminated union of incoming WS message types. Removes the "remember to return true" trap and gives exhaustiveness checking.
+
+Only worth doing once Priority A lands (the table would naturally live in the store).
 
 ---
 
-## 📝 Notes Techniques
+## 6. What NOT to do
 
-### Bootstrap (`arya/src/bootstrap.ts`)
-
-```typescript
-import { startMu } from 'mu-core';
-import { createAgentsPlugin, loadAgentsFromDir } from 'mu-agents';
-import { createOpenAIProvider } from 'mu-openai-provider';
-import { createWebSocketChannel } from './ws-channel';
-import { createScheduler } from './scheduler';
-
-export async function bootstrap() {
-  const config = loadConfig(); // ← XDG path
-  const agentsDir = config.agentsDir; // ← ~/.config/arya/agents
-  
-  const handle = await startMu({
-    config: {
-      baseUrl: config.baseUrl,
-      model: config.model,
-      maxTokens: config.maxTokens,
-      temperature: config.temperature,
-      streamTimeoutMs: config.streamTimeoutMs,
-    },
-    plugins: [
-      createOpenAIProviderPlugin({ id: 'openai' }),
-      createAgentsPlugin({
-        agentsDir,
-        config: {
-          baseUrl: config.baseUrl,
-          model: config.model,
-        },
-        approvalChannelId: 'websocket',
-      }),
-    ],
-  });
-
-  // Register WebSocket channel
-  handle.channels.register(createWebSocketChannel(
-    handle.sessions,
-    handle.registry,
-    handle.activity,
-    { port: config.wsPort, authToken: config.authToken }
-  ));
-
-  // Start scheduler
-  const scheduler = createScheduler(handle.sessions, config.tasksDir);
-
-  return { handle, scheduler };
-}
-```
-
-### WebSocket Channel (`arya/src/ws-channel.ts`)
-
-```typescript
-import { WebSocket, WebSocketServer } from 'ws';
-import type { Channel, ChannelResponder, InboundMessage, SessionManager, PluginRegistry, ActivityBus } from 'mu-core';
-import type { ApprovalGateway, ApprovalRequest, ApprovalChannel } from 'mu-agents';
-
-export interface WsChannelOptions {
-  port: number;
-  authToken?: string;
-}
-
-export function createWebSocketChannel(
-  sessions: SessionManager,
-  registry: PluginRegistry,
-  activity: ActivityBus,
-  options: WsChannelOptions,
-): Channel {
-  const wss = new WebSocketServer({ port: options.port });
-  const clients = new Map<WebSocket, ConnectedClient>();
-
-  // Create approval channel
-  const approvalChannel: ApprovalChannel = {
-    sendApprovalRequest: async (req: ApprovalRequest) => {
-      push({
-        type: 'approval_request',
-        requestId: req.id,
-        token: req.token,
-        toolName: req.toolName,
-        toolArgs: req.toolArgs,
-        agentId: req.agentId,
-        channelId: req.channelId,
-      });
-      return undefined;
-    },
-  };
-
-  wss.on('connection', (ws, req) => {
-    // Auth check
-    const url = new URL(req.url!, `http://${req.headers.host}`);
-    const token = url.searchParams.get('token');
-    if (options.authToken && token !== options.authToken) {
-      ws.close(4001, 'Unauthorized');
-      return;
-    }
-
-    const sessionId = url.searchParams.get('sessionId') || 'default';
-    clients.set(ws, { ws, sessionId });
-
-    // Register approval channel
-    const muAgentsPlugin = registry.getPlugin('mu-agents');
-    if (muAgentsPlugin?.approvalGateway) {
-      muAgentsPlugin.approvalGateway.registerChannel('websocket', approvalChannel);
-    }
-
-    // Send commands and agents on connect
-    ws.send(JSON.stringify({ type: 'commands', commands: registry.getCommands?.() ?? [] }));
-    ws.send(JSON.stringify({ type: 'agents', agents: registry.getAgents?.() ?? [] }));
-
-    ws.on('message', (data) => {
-      const msg = JSON.parse(data.toString());
-
-      // Commands/agents request
-      if (msg.type === 'commands') {
-        ws.send(JSON.stringify({ type: 'commands', commands: registry.getCommands?.() ?? [] }));
-        return;
-      }
-      if (msg.type === 'agents') {
-        ws.send(JSON.stringify({ type: 'agents', agents: registry.getAgents?.() ?? [] }));
-        return;
-      }
-
-      if (msg.type === 'chat' || msg.type === 'command') {
-        const targetSessionId = msg.sessionId || sessionId;
-        const session = sessions.getOrCreate(targetSessionId);
-        const inbound: InboundMessage = {
-          kind: 'text',
-          channelId: 'websocket',
-          sessionId: targetSessionId,
-          text: String(msg.text ?? ''),
-        };
-        session.submit(inbound, {
-          sendText: async (text) => {
-            push({ type: 'stream', text, sessionId: targetSessionId });
-          },
-          onDone: async (text) => {
-            push({ type: 'done', text, sessionId: targetSessionId });
-          },
-        });
-      } else if (msg.type === 'approval_response') {
-        const gateway = registry.getPlugin('mu-agents')?.approvalGateway as ApprovalGateway | undefined;
-        if (!gateway) {
-          console.warn('[ws] No approval gateway found');
-          return;
-        }
-        const action = msg.action === 'approve' ? 'approved' : 'denied';
-        const token = String(msg.token ?? msg.requestId ?? '');
-        if (action === 'approved') {
-          gateway.approve(token);
-        } else {
-          gateway.deny(token);
-        }
-        push({ type: 'approval_response', requestId: msg.requestId ?? msg.token, token, action });
-      }
-    });
-
-    ws.on('close', () => clients.delete(ws));
-    ws.on('error', () => clients.delete(ws));
-  });
-
-  // Helper to push events to all clients
-  function push(event: Record<string, unknown>) {
-    const data = JSON.stringify(event);
-    for (const [, client] of clients) {
-      if (client.ws.readyState === WebSocket.OPEN) {
-        client.ws.send(data);
-      }
-    }
-  }
-
-  // Subscribe to activity bus
-  activity.subscribe((event) => push({ type: 'activity', event }));
-  activity.subscribeSubAgent((event) => push({ type: 'sub_agent_event', event }));
-
-  return {
-    id: 'websocket',
-    start: async () => console.log(`[ws] Listening on port ${options.port}`),
-    stop: async () => {
-      for (const [, client] of clients) {
-        if (client.ws.readyState === WebSocket.OPEN) client.ws.close();
-      }
-      wss.close();
-    },
-    push,
-    pushError: (message: string) => push({ type: 'error', message }),
-  };
-}
-```
-
-### Scheduler (`arya/src/scheduler.ts`)
-
-```typescript
-import { readdirSync, readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
-import { Cron } from 'croner';
-import { parse } from 'yaml';
-import type { SessionManager } from 'mu-core';
-
-export interface ScheduledTask {
-  id: string;
-  agent: string;
-  cron: string;
-  channel: string;
-  prompt: string;
-}
-
-export function createScheduler(sessions: SessionManager, tasksDir?: string) {
-  const jobs: Array<{ stop: () => void }> = [];
-
-  if (!tasksDir || !existsSync(tasksDir)) {
-    console.log('[scheduler] No tasks directory configured');
-    return { stop: () => {} };
-  }
-
-  const files = readdirSync(tasksDir).filter((f) => f.endsWith('.yaml') || f.endsWith('.yml'));
-  if (files.length === 0) {
-    console.log('[scheduler] No task files found in', tasksDir);
-    return { stop: () => {} };
-  }
-
-  for (const file of files) {
-    const filePath = join(tasksDir, file);
-    const raw = readFileSync(filePath, 'utf8');
-    const parsed = parse(raw);
-    const tasks: ScheduledTask[] = Array.isArray(parsed) ? parsed : [parsed as ScheduledTask];
-
-    for (const task of tasks) {
-      if (!task.id || !task.cron || !task.prompt) {
-        console.warn(`[scheduler] Skipping invalid task in ${file}: missing id/cron/prompt`);
-        continue;
-      }
-
-      const job = Cron(task.cron, async () => {
-        try {
-          const sessionId = `task:${task.id}:${Date.now()}`;
-          const session = sessions.getOrCreate(sessionId, {
-            systemPrompt: `You are a task agent for arya-agent. Task: ${task.id}`,
-          });
-
-          const inbound = {
-            kind: 'text' as const,
-            channelId: 'scheduler',
-            sessionId,
-            text: task.prompt,
-          };
-
-          await session.submit(inbound, {
-            sendText: async (text) => {
-              console.log(`[scheduler:${task.id}] ${text.slice(0, 200)}`);
-            },
-          });
-        } catch (err) {
-          console.error(`[scheduler:${task.id}] Error:`, err);
-        }
-      }, { timezone: 'UTC', catch: false });
-
-      jobs.push({ stop: () => job.stop() });
-    }
-  }
-
-  return {
-    stop: () => {
-      for (const job of jobs) job.stop();
-    },
-  };
-}
-```
-
-### Init (`arya/src/init.ts`)
-
-```typescript
-import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
-import { homedir } from 'node:os';
-
-function xdgConfig(): string {
-  return process.env.XDG_CONFIG_HOME 
-    ?? join(homedir(), '.config');
-}
-
-export function init() {
-  const configDir = join(xdgConfig(), 'arya');
-  const dirs = [
-    join(configDir, 'agents'),
-    join(configDir, 'tasks'),
-    join(configDir, 'plugins'),
-  ];
-
-  // Create directories
-  for (const dir of dirs) {
-    mkdirSync(dir, { recursive: true });
-  }
-
-  // Create config.json
-  const configPath = join(configDir, 'config.json');
-  if (!existsSync(configPath)) {
-    writeFileSync(configPath, JSON.stringify({
-      baseUrl: 'http://localhost:11434/v1',
-      model: 'qwen2.5-coder:7b',
-      maxTokens: 4096,
-      temperature: 0.7,
-      streamTimeoutMs: 60000,
-      wsPort: 3001,
-      authToken: '',
-      plugins: ['arya-tools'],
-    }, null, 2));
-  }
-
-  // Create agent template
-  const agentPath = join(configDir, 'agents', 'assistant.md');
-  if (!existsSync(agentPath)) {
-    writeFileSync(agentPath, `---
-id: assistant
-description: Assistant général pour arya-agent
-type: primary
-enabled: true
-model: qwen2.5-coder:7b
-tools:
-  fs.read_file: allow
-  fs.write_file: ask
-  fs.list_dir: allow
-  shell.execute: ask
-  http.fetch: allow
-  subagent: ask
----
-You are a helpful assistant powered by arya-agent. You can use tools to interact with the filesystem, execute shell commands, and make HTTP requests. For sensitive operations, you will need approval from the user.
-
-You may delegate work to subagents when appropriate. Use the \`subagent\` tool with a clear task description.`);
-  }
-
-  // Create tasks template
-  const tasksPath = join(configDir, 'tasks', 'default.yaml');
-  if (!existsSync(tasksPath)) {
-    writeFileSync(tasksPath, `- id: hello-task
-  agent: assistant
-  cron: "0 9 * * *"
-  channel: companion
-  prompt: Say hello and introduce yourself.
-
-- id: daily-summary
-  agent: assistant
-  cron: "0 20 * * *"
-  channel: companion
-  prompt: Summarize the day's activities and any pending tasks.`);
-  }
-
-  console.log('✅ Arya initialized!');
-  console.log(`   Config: ${configDir}`);
-  console.log(`   Agents: ${join(configDir, 'agents')}`);
-  console.log(`   Tasks: ${join(configDir, 'tasks')}`);
-}
-```
+- **Don't extract more sub-hooks from `useChat`.** The marginal hook (≤100 LOC) adds more indirection than it removes — we saw that with `useSubAgentRuns`.
+- **Don't unify `useChat` and the sub-agent detail screen's data layer until Priority A lands.** Without an app-level store, "sharing" between screens means passing props through the router, which is worse than the current module global.
+- **Don't pre-extract small components.** Components like `Widget` in `ApprovalMessage` or `StreamingTextBubble` in `[runId].tsx` are correctly co-located. Only extract when (a) reused in ≥2 files, or (b) the parent file is over ~300 LOC and the extraction restores cohesion.
+- **Don't touch `SessionsLayout`** (user constraint).
+- **Don't downgrade `react-syntax-highlighter`** (user constraint).
 
 ---
 
-## 🚀 Prochaines Étapes
+## 7. Quantified complexity reference
 
-1. ✅ Créer `arya/package.json` avec mu-core, mu-agents, ws
-2. ✅ Implémenter `bootstrap.ts` — `startMu()` wrapper
-3. ✅ Implémenter `ws-channel.ts` — WebSocket channel pour companion
-4. ✅ Implémenter `scheduler.ts` — cron/heartbeat tasks
-5. ✅ Ajouter la configuration XDG (`arya init`)
-6. ✅ Implémenter les plugins outils (fs, shell, http) — noms alignés
-7. ✅ Variables d'environnement `ARYA_*` dans `bootstrap.ts`
-8. ⬜ Tests unitaires
-9. ⬜ Documentation pour les plugins additionnels chargés depuis `~/.config/arya/plugins/`
+### By area
+
+| Area | Files | LOC | Cyclomatic / 100 LOC |
+|---|---:|---:|---:|
+| Chat data layer (`useChat` + sub-hooks) | 7 | 943 | 5.3 |
+| Sessions UI (Layout + Drawer + Modal) | 3 | 1,547 | 3.6 |
+| Sub-agent detail screen | 1 | 526 | 5.3 |
+| Settings screen | 1 | 573 | 2.4 |
+| Markdown + code rendering | 3 | 627 | 3.5 |
+| Chat presentational | 6 | 1,395 | 2.2 |
+| Shared (theme, primitives, types, lib) | 10 | 745 | 1.3 |
+
+Dense areas (≥5): chat data layer (by design — concentrated logic) and sub-agent detail screen (un-refactored, mixes concerns).
+
+### Top 10 files by LOC (post-refactor)
+
+| LOC | File |
+|---:|---|
+| 630 | `components/SessionActionsModal.tsx` |
+| 610 | `components/SessionsDrawer.tsx` |
+| 573 | `app/two.tsx` |
+| 526 | `app/sub-agent/[runId].tsx` |
+| 413 | `hooks/useChat.ts` *(was 751)* |
+| 406 | `components/ChatInputBar.tsx` *(was 460)* |
+| 331 | `components/ChatMessageList.tsx` |
+| 307 | `components/SessionsLayout.tsx` *(untouched)* |
+| 259 | `components/ApprovalMessage.tsx` |
+| 252 | `app/index.tsx` *(was 287)* |
+
+---
+
+## 8. Decision log
+
+| Decision | Outcome | Date / context |
+|---|---|---|
+| Don't touch `SessionsLayout` | Constraint | User direction during round 1 |
+| Skip syntax-highlighter swap (no downgrade) | Skipped | RN-native fork needs v6, we have v16 |
+| Accept subtle visual diffs from markdown library swap | Accepted | User picked option in round 1 |
+| Split `useChat` into focused hooks | Done | Round 1 — introduced known dep-array bug (4.2) |
+| Three-WS-connection problem | Open | Identified in app-wide audit; blocked on Priority A direction |
+
+---
+
+## 9. Open questions before round 2
+
+1. **App-level store: Context, Zustand, or roll-our-own?** Choice gates Priority A.
+2. **Styling: keep hand-rolled `useUnistyles`, adopt NativeWind, or adopt the real `react-native-unistyles`?** Each is a 1–2 day migration with different code-style implications.
+3. **Settings UX: live reconnect on save, or keep the restart flow?** Live reconnect is the right answer but requires Priority A.
+4. **Should we do Priority B (memoize sub-hooks) now as a hot-fix, or fold it into Priority A?** B as hot-fix is ~30 LOC; A subsumes it.
+5. **Are file-move PRs (Priority E) acceptable** as standalone changes, or should they ride alongside their related logic changes?
+
+Pick a priority and we'll deepen the design before any edits.

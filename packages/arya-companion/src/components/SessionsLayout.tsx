@@ -15,7 +15,7 @@ import Animated, {
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import SessionsDrawer from "@/components/SessionsDrawer";
-import { useUnistyles } from "@/theme/ThemeContext";
+import { useTheme } from "@/theme/ThemeContext";
 import type { SessionSummary } from "@/lib/ws";
 
 interface SessionsLayoutProps {
@@ -77,7 +77,7 @@ export default function SessionsLayout({
 	onRename,
 	children,
 }: SessionsLayoutProps) {
-	const { theme } = useUnistyles();
+	const theme = useTheme();
 	const screenWidth = Dimensions.get("window").width;
 
 	// Single source of truth for the slide. 0 → closed (chat covers
@@ -243,8 +243,8 @@ export default function SessionsLayout({
 	);
 
 	return (
-		<View style={{ flex: 1, backgroundColor: theme.colors.background }}>
-			{/* ── Sessions panel (back layer) ──
+		<View className="flex-1 bg-bg">
+			{/* Sessions panel (back layer)
 			    Always rendered, full screen width. Sits parallax-offset
 			    to the left when the chat is closed and slides to 0 in
 			    sync with the chat to feel like a layered reveal. The
@@ -255,7 +255,8 @@ export default function SessionsLayout({
 				// backgroundColor lives in panelStyle (animated tint), so
 				// it intentionally isn't set here — the inline value
 				// would otherwise override the interpolated one.
-				style={[{ flex: 1 }, panelStyle]}
+				className="flex-1"
+				style={panelStyle}
 			>
 				<SessionsDrawer
 					sessions={sessions}
@@ -270,7 +271,7 @@ export default function SessionsLayout({
 				/>
 			</Animated.View>
 
-			{/* ── Chat overlay (front layer) ──
+			{/* Chat overlay (front layer)
 			    Absolutely positioned, full screen width, slides off to
 			    the right when the drawer opens. The open pan responder
 			    is attached here so a right-swipe anywhere on the chat
@@ -280,14 +281,9 @@ export default function SessionsLayout({
 			    vertical scrolls in the message list working. */}
 			<Animated.View
 				{...openPanResponder.panHandlers}
+				className="absolute inset-0 bg-bg"
 				style={[
 					{
-						position: "absolute",
-						top: 0,
-						bottom: 0,
-						left: 0,
-						right: 0,
-						backgroundColor: theme.colors.background,
 						// Soft shadow on the left edge so during the drag
 						// the chat feels like a card hovering above the
 						// panel. iOS uses shadow*; Android uses elevation.

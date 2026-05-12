@@ -3,7 +3,6 @@ import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { useCallback } from "react";
 import {
-	Platform,
 	Pressable,
 	ScrollView,
 	StyleSheet,
@@ -13,7 +12,7 @@ import {
 import type { TextStyle } from "react-native";
 import SyntaxHighlighter from "react-syntax-highlighter/dist/esm/default-highlight";
 import { atomOneDark } from "react-syntax-highlighter/dist/esm/styles/hljs";
-import { useUnistyles } from "@/theme/ThemeContext";
+import { useTheme } from "@/theme/ThemeContext";
 
 interface CodeBlockProps {
 	code: string;
@@ -110,7 +109,7 @@ function renderNode(
 }
 
 export default function CodeBlock({ code, language }: CodeBlockProps) {
-	const { theme } = useUnistyles();
+	const theme = useTheme();
 
 	const rawLang = language?.trim() || "text";
 	const displayLang = rawLang.charAt(0).toUpperCase() + rawLang.slice(1);
@@ -126,21 +125,12 @@ export default function CodeBlock({ code, language }: CodeBlockProps) {
 	}, [code]);
 
 	const grayBg = "#2A2A2A";
-	const headerBg = grayBg;
-	const codeBg = grayBg;
-	const textSecondary = theme.colors.textSecondary;
-	const textColor = theme.colors.text;
-
-	const monoFamily = Platform.OS === "ios" ? "Menlo-Regular" : "monospace";
-
 	const stylesheet = atomOneDark as Record<string, TextStyle>;
 
 	const baseTextStyle: TextStyle = {
-		color: textColor,
-		fontFamily: monoFamily,
+		color: theme.colors.text,
+		fontFamily: theme.fonts.mono,
 		fontSize: theme.fontSizes.sm,
-		// Use stylesheet's `hljs` background only on the outer container
-		// (already applied via `codeBg`), not on every nested Text.
 	};
 
 	// Custom renderer: receives `{ rows, stylesheet, useInlineStyles }`.
@@ -169,40 +159,21 @@ export default function CodeBlock({ code, language }: CodeBlockProps) {
 			<Text style={baseTextStyle}>{children}</Text>
 		),
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[textColor, monoFamily, theme.fontSizes.sm],
+		[theme.colors.text, theme.fonts.mono, theme.fontSizes.sm],
 	);
 
 	return (
 		<View
-			style={{
-				alignSelf: "stretch",
-				marginTop: 16,
-				marginBottom: 16,
-				borderRadius: theme.radius[6],
-				overflow: "hidden",
-				backgroundColor: codeBg,
-			}}
+			className="self-stretch my-4 rounded-card overflow-hidden"
+			style={{ backgroundColor: grayBg }}
 		>
-			{/* ── Header ── */}
+			{/* Header */}
 			<View
-				style={{
-					flexDirection: "row",
-					alignItems: "center",
-					justifyContent: "space-between",
-					paddingLeft: theme.spacing[3],
-					paddingRight: theme.spacing[2],
-					paddingTop: theme.spacing[1],
-					paddingBottom: theme.spacing[1],
-					backgroundColor: headerBg,
-				}}
+				className="flex-row items-center justify-between pl-3 pr-2 py-1"
+				style={{ backgroundColor: grayBg }}
 			>
 				<Text
-					style={{
-						fontSize: theme.fontSizes.sm,
-						color: "#FFFFFF",
-						fontWeight: theme.fontWeights.medium,
-						fontFamily: monoFamily,
-					}}
+					className="text-sm font-medium text-white font-mono"
 				>
 					{displayLang}
 				</Text>
@@ -210,29 +181,22 @@ export default function CodeBlock({ code, language }: CodeBlockProps) {
 				<Pressable
 					onPress={handleCopy}
 					hitSlop={8}
-					style={({ pressed }) => ({
-						width: 32,
-						height: 32,
-						alignItems: "center",
-						justifyContent: "center",
-						borderRadius: 9999,
-						backgroundColor: pressed
-							? "rgba(255,255,255,0.12)"
-							: "transparent",
-						opacity: pressed ? 0.85 : 1,
-						transform: [{ scale: pressed ? 0.92 : 1 }],
-					})}
+					className="w-8 h-8 items-center justify-center rounded-full active:opacity-85"
 				>
-					<Ionicons name="copy-outline" size={20} color={textSecondary} />
+					<Ionicons
+						name="copy-outline"
+						size={20}
+						color={theme.colors.textSecondary}
+					/>
 				</Pressable>
 			</View>
 
-			{/* ── Code ── */}
-			<View style={{ padding: theme.spacing[3] }}>
+			{/* Code */}
+			<View className="p-3">
 				<SyntaxHighlighter
 					language={highlightLang}
 					style={stylesheet as never}
-					customStyle={{ margin: 0, padding: 0, backgroundColor: codeBg }}
+					customStyle={{ margin: 0, padding: 0, backgroundColor: grayBg }}
 					PreTag={PreTag as never}
 					CodeTag={CodeTag as never}
 					renderer={renderer as never}

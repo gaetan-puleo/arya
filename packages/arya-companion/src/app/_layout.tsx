@@ -1,4 +1,5 @@
 import { ThemeProvider as ThemeProviderUI } from '@/theme/ThemeContext';
+import { useAppStore } from '@/lib/appStore';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
@@ -10,6 +11,7 @@ import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
+import '../../global.css';
 
 export {
   ErrorBoundary,
@@ -36,6 +38,13 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [loaded]);
+
+  // Open the app-level WebSocket once at mount. The store handles the
+  // reconnect loop and exposes a `reconnect()` action for the settings
+  // screen.
+  useEffect(() => {
+    useAppStore.getState().connect();
+  }, []);
 
   if (!loaded) {
     return null;

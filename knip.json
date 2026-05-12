@@ -9,7 +9,9 @@
       "ignoreDependencies": [
         "babel-preset-expo",
         "expo-updates",
-        "expo-system-ui"
+        "expo-system-ui",
+        "react-native-css-interop",
+        "@babel/plugin-transform-react-jsx"
       ]
     }
   }

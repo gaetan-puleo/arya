@@ -2,7 +2,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 import Animated, { FadeInLeft } from "react-native-reanimated";
-import { useUnistyles } from "@/theme/ThemeContext";
+import { useTheme } from "@/theme/ThemeContext";
 import { AryaAvatar } from "@/components/Primitives";
 
 type SubAgentStatus = "running" | "success" | "error";
@@ -24,16 +24,8 @@ function formatDuration(startTs: number, endTs?: number): string {
 }
 
 export default function SubAgentCard({ run }: { run: SubAgentRunInfo }) {
-	const { theme } = useUnistyles();
+	const theme = useTheme();
 	const router = useRouter();
-
-	const textColor = theme.colors.text;
-	const textSecondary = theme.colors.textSecondary;
-	const bgTertiary = theme.colors.backgroundTertiary;
-	const borderColor = theme.colors.border;
-	const successColor = theme.colors.success;
-	const dangerColor = theme.colors.danger;
-	const infoColor = theme.colors.info;
 
 	const statusIcon: keyof typeof Ionicons.glyphMap =
 		run.status === "running"
@@ -44,27 +36,15 @@ export default function SubAgentCard({ run }: { run: SubAgentRunInfo }) {
 
 	const statusColor =
 		run.status === "running"
-			? infoColor
+			? theme.colors.info
 			: run.status === "success"
-				? successColor
-				: dangerColor;
+				? theme.colors.success
+				: theme.colors.danger;
 
 	return (
 		<Animated.View entering={FadeInLeft.duration(250).springify()}>
-			<View
-				style={{
-					alignItems: "flex-start",
-					paddingHorizontal: 16,
-				}}
-			>
-				<View
-					style={{
-						flexDirection: "row",
-						gap: 8,
-						alignItems: "flex-end",
-						maxWidth: "85%",
-					}}
-				>
+			<View className="items-start px-4">
+				<View className="flex-row gap-2 items-end max-w-[85%]">
 					<AryaAvatar size={24} />
 
 					<Pressable
@@ -74,31 +54,22 @@ export default function SubAgentCard({ run }: { run: SubAgentRunInfo }) {
 								params: { runId: run.runId },
 							})
 						}
-						style={{ flex: 1 }}
+						className="flex-1"
 					>
 						<View
-							style={{
-								backgroundColor: bgTertiary,
-								borderRadius: 16,
-								borderBottomLeftRadius: 6,
-								borderWidth: 1,
-								borderColor,
-								paddingHorizontal: 12,
-								paddingVertical: 12,
-								gap: 6,
-							}}
+							className="bg-bg-tertiary rounded-card border border-border px-3 py-3 gap-1.5"
+							style={{ borderBottomLeftRadius: 6 }}
 						>
 							{/* Header row */}
-							<View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
-								<Ionicons name="git-branch-outline" size={13} color={textSecondary} />
+							<View className="flex-row gap-1.5 items-center">
+								<Ionicons
+									name="git-branch-outline"
+									size={13}
+									color={theme.colors.textSecondary}
+								/>
 								<Text
 									numberOfLines={1}
-									style={{
-										fontSize: 14,
-										fontWeight: "600",
-										color: textColor,
-										flex: 1,
-									}}
+									className="text-sm font-semibold text-text flex-1"
 								>
 									@{run.agentId}
 								</Text>
@@ -106,25 +77,37 @@ export default function SubAgentCard({ run }: { run: SubAgentRunInfo }) {
 							</View>
 
 							{/* Meta row */}
-							<View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+							<View className="flex-row gap-2 items-center">
 								{run.toolCount > 0 && (
-									<View style={{ flexDirection: "row", gap: 4, alignItems: "center" }}>
-										<Ionicons name="construct-outline" size={11} color={textSecondary} />
-										<Text style={{ fontSize: 12, color: textSecondary }}>
+									<View className="flex-row gap-1 items-center">
+										<Ionicons
+											name="construct-outline"
+											size={11}
+											color={theme.colors.textSecondary}
+										/>
+										<Text className="text-xs text-text-secondary">
 											{run.toolCount} tool{run.toolCount > 1 ? "s" : ""}
 										</Text>
 									</View>
 								)}
-								<View style={{ flexDirection: "row", gap: 4, alignItems: "center" }}>
-									<Ionicons name="time-outline" size={11} color={textSecondary} />
-									<Text style={{ fontSize: 12, color: textSecondary }}>
+								<View className="flex-row gap-1 items-center">
+									<Ionicons
+										name="time-outline"
+										size={11}
+										color={theme.colors.textSecondary}
+									/>
+									<Text className="text-xs text-text-secondary">
 										{formatDuration(run.startTs, run.endTs)}
 									</Text>
 								</View>
-								<View style={{ flex: 1, flexDirection: "row", justifyContent: "flex-end" }}>
-									<View style={{ flexDirection: "row", gap: 2, alignItems: "center" }}>
-										<Text style={{ fontSize: 12, color: infoColor }}>Details</Text>
-										<Ionicons name="chevron-forward" size={11} color={infoColor} />
+								<View className="flex-1 flex-row justify-end">
+									<View className="flex-row gap-0.5 items-center">
+										<Text className="text-xs text-info">Details</Text>
+										<Ionicons
+											name="chevron-forward"
+											size={11}
+											color={theme.colors.info}
+										/>
 									</View>
 								</View>
 							</View>

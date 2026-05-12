@@ -4,11 +4,9 @@ import * as Haptics from "expo-haptics";
 import { useCallback, useState } from "react";
 import { Pressable, Share, View } from "react-native";
 import Animated, { FadeInLeft, FadeInRight } from "react-native-reanimated";
-import { useUnistyles } from "@/theme/ThemeContext";
-import { parseCodeBlocks } from "@/utils/parseCodeBlocks";
+import { useTheme } from "@/theme/ThemeContext";
 import type { AgentInfo } from "@/lib/ws";
-import CodeBlock from "./CodeBlock";
-import InlineMarkdown from "./InlineMarkdown";
+import MessageMarkdown from "./MessageMarkdown";
 
 interface ChatMessageProps {
 	role: "user" | "assistant";
@@ -20,42 +18,16 @@ interface ChatMessageProps {
 	authorAgent?: AgentInfo | null;
 }
 
-function MessageContent({ text, textColor }: { text: string; textColor: string }) {
-	const segments = parseCodeBlocks(text);
-
-	if (segments.length === 1 && segments[0].type === "text") {
-		return <InlineMarkdown text={text} color={textColor} />;
-	}
-
-	return (
-		<View>
-			{segments.map((seg, i) =>
-				seg.type === "code" ? (
-					<CodeBlock key={i} code={seg.content} language={seg.language} />
-				) : (
-					<InlineMarkdown key={i} text={seg.content} color={textColor} />
-				),
-			)}
-		</View>
-	);
-}
-
 export default function ChatMessage({
 	role,
 	text,
 	isFirstInGroup = true,
 	isLastInGroup = true,
 	animate = true,
-	authorAgent,
 }: ChatMessageProps) {
 	const isUser = role === "user";
-	const { theme } = useUnistyles();
+	const theme = useTheme();
 	const [copied, setCopied] = useState(false);
-
-	const textColor = theme.colors.text;
-	const textSecondary = theme.colors.textSecondary;
-	const successColor = theme.colors.success;
-	const bgTertiary = theme.colors.backgroundTertiary;
 
 	// User bubbles slide in from the right; assistant bubbles from the
 	// left, mirroring their alignment.
@@ -87,26 +59,17 @@ export default function ChatMessage({
 		// User: right-aligned bubble.
 		return (
 			<Animated.View entering={entering}>
-				<View
-					style={{
-						alignItems: "flex-end",
-						paddingHorizontal: 16,
-					}}
-				>
+				<View className="items-end px-4">
 					<Pressable onLongPress={handleLongPress}>
 						<View
+							className={`max-w-[85%] bg-bg-tertiary px-4 py-3 ${copied ? "opacity-60" : ""}`}
 							style={{
-								maxWidth: "85%",
-								backgroundColor: bgTertiary,
 								borderRadius: 20,
 								borderBottomRightRadius: isLastInGroup ? 6 : 16,
 								borderTopRightRadius: isFirstInGroup ? 20 : 16,
-								paddingHorizontal: 16,
-								paddingVertical: 12,
-								opacity: copied ? 0.6 : 1,
 							}}
 						>
-							<MessageContent text={text} textColor={textColor} />
+							<MessageMarkdown text={text} color={theme.colors.text} />
 						</View>
 					</Pressable>
 				</View>
@@ -117,62 +80,38 @@ export default function ChatMessage({
 	// Assistant: left-aligned, no avatar
 	return (
 		<Animated.View entering={entering}>
-			<View
-				style={{
-					paddingHorizontal: 16,
-				}}
-			>
-				<View style={{ width: "100%" }}>
-					<View style={{ width: "100%" }}>
+			<View className="px-4">
+				<View className="w-full">
+					<View className="w-full">
 						<Pressable onLongPress={handleLongPress}>
-							<View
-								style={{
-									opacity: copied ? 0.6 : 1,
-								}}
-							>
-								<MessageContent text={text} textColor={textColor} />
+							<View className={copied ? "opacity-60" : ""}>
+								<MessageMarkdown text={text} color={theme.colors.text} />
 							</View>
 						</Pressable>
 
-						{/* ── Actions (only on last message in group) ── */}
+						{/* Actions (only on last message in group) */}
 						{isLastInGroup && text.trim().length > 0 ? (
-							<View
-								style={{
-									flexDirection: "row",
-									alignItems: "center",
-									gap: 4,
-									marginTop: 6,
-									marginLeft: -6,
-								}}
-							>
+							<View className="flex-row items-center gap-1 mt-1.5 -ml-1.5">
 								<Pressable
 									onPress={handleCopy}
 									hitSlop={8}
-									style={({ pressed }) => ({
-										padding: 6,
-										borderRadius: 6,
-										opacity: pressed ? 0.5 : 1,
-									})}
+									className="p-1.5 rounded-md active:opacity-50"
 								>
 									<Ionicons
 										name={copied ? "checkmark" : "copy-outline"}
 										size={16}
-										color={copied ? successColor : textSecondary}
+										color={copied ? theme.colors.success : theme.colors.textSecondary}
 									/>
 								</Pressable>
 								<Pressable
 									onPress={handleShare}
 									hitSlop={8}
-									style={({ pressed }) => ({
-										padding: 6,
-										borderRadius: 6,
-										opacity: pressed ? 0.5 : 1,
-									})}
+									className="p-1.5 rounded-md active:opacity-50"
 								>
 									<Ionicons
 										name="share-social-outline"
 										size={16}
-										color={textSecondary}
+										color={theme.colors.textSecondary}
 									/>
 								</Pressable>
 							</View>

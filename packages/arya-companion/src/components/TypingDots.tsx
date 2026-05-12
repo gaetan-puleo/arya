@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -36,34 +36,18 @@ function Dot({ color, delay }: { color: string; delay: number }) {
 
   return (
     <Animated.View
-      style={[
-        {
-          width: 6,
-          height: 6,
-          borderRadius: 4,
-          backgroundColor: color,
-        },
-        style,
-      ]}
+      className="w-1.5 h-1.5 rounded-full"
+      style={[{ backgroundColor: color }, style]}
     />
   );
 }
 
 export default function TypingDots({ color }: TypingDotsProps) {
   return (
-    <View style={styles.container}>
+    <View className="flex-row items-center gap-1 pt-0.5">
       <Dot color={color} delay={0} />
       <Dot color={color} delay={200} />
       <Dot color={color} delay={400} />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingTop: 2,
-  },
-});

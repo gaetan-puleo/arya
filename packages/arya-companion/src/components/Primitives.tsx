@@ -1,6 +1,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
+import type { ReactNode } from "react";
 import { Pressable, Text, View, type ViewStyle } from "react-native";
-import { useUnistyles } from "@/theme/ThemeContext";
+import { useTheme } from "@/theme/ThemeContext";
 
 // ── AryaAvatar ──────────────────────────────────────────────────────────
 
@@ -44,61 +45,102 @@ export function AryaAvatar({ size = 24, style, agent }: AryaAvatarProps) {
 	const useAgentHint = !!agent && !!agent.id;
 	const bgColor = useAgentHint ? agent!.color ?? "#FFFFFF" : "#FFFFFF";
 	const textColor = useAgentHint ? readableTextOn(bgColor) : "#000000";
-	const letter = useAgentHint
-		? agent!.id.charAt(0).toUpperCase()
-		: "A";
+	const letter = useAgentHint ? agent!.id.charAt(0).toUpperCase() : "A";
 
 	return (
 		<View
+			className="justify-center items-center shrink-0"
 			style={[
 				{
 					width: size,
 					height: size,
 					borderRadius: size / 2,
 					backgroundColor: bgColor,
-					justifyContent: "center",
-					alignItems: "center",
-					flexShrink: 0,
 					marginBottom: size === 52 ? 4 : 2,
 				},
 				style,
 			]}
 		>
-			<Text style={{ fontSize: size * 0.54, fontWeight: "700", color: textColor }}>
+			<Text
+				className="font-bold"
+				style={{ fontSize: size * 0.54, color: textColor }}
+			>
 				{letter}
 			</Text>
 		</View>
 	);
 }
 
-// ── IconButton ──────────────────────────────────────────────────────────
+// ── FloatingPill ────────────────────────────────────────────────────────
 
-interface IconButtonProps {
-	name: keyof typeof Ionicons.glyphMap;
-	size?: number;
-	onPress?: () => void;
+interface FloatingPillProps {
+	onPress: () => void;
+	/** Optional leading Ionicon name. */
+	icon?: keyof typeof Ionicons.glyphMap;
+	/** Optional leading colored dot (e.g. agent indicator). */
+	leftDot?: string;
+	/**
+	 * Label slot — string for simple cases, `ReactNode` when the caller
+	 * wants colored runs (e.g. "Agent: <bold>Name</bold>").
+	 */
+	label?: ReactNode;
+	/** Trailing slot, e.g. a chevron icon for dropdown affordances. */
+	trailing?: ReactNode;
+	/** Override the border color (e.g. focus state). */
+	borderColor?: string;
+	/** Override the absolute placement; defaults to none (inline). */
 	style?: ViewStyle;
+	hitSlop?: number;
+	accessibilityLabel?: string;
 }
 
-export function IconButton({ name, size = 20, onPress, style }: IconButtonProps) {
-	const { theme } = useUnistyles();
-	const textColor = theme.colors.text;
-
+/**
+ * Pill-shaped floating button used for chrome controls (burger, agent
+ * chip, settings back button). Shape is fixed: height 44, radius 24,
+ * translucent background, themed border, horizontal layout with gap 8.
+ *
+ * Renders the optional dot/icon, label, then trailing slot. Caller
+ * positions the pill via `style` (typically `position: 'absolute'`).
+ */
+export function FloatingPill({
+	onPress,
+	icon,
+	leftDot,
+	label,
+	trailing,
+	borderColor,
+	style,
+	hitSlop = 6,
+	accessibilityLabel,
+}: FloatingPillProps) {
+	const theme = useTheme();
 	return (
 		<Pressable
 			onPress={onPress}
-			style={({ pressed }) => ({
-				width: 34,
-				height: 34,
-				borderRadius: 16,
-				backgroundColor: "transparent",
-				justifyContent: "center",
-				alignItems: "center",
-				opacity: pressed ? 0.6 : 1,
-				...style,
-			})}
+			hitSlop={hitSlop}
+			accessibilityLabel={accessibilityLabel}
+			accessibilityRole="button"
+			className="h-pill flex-row items-center gap-2 px-3 rounded-pill bg-bg-translucent border active:opacity-70"
+			style={[{ borderColor: borderColor ?? theme.colors.border }, style]}
 		>
-			<Ionicons name={name} size={size} color={textColor} />
+			{leftDot ? (
+				<View
+					className="w-2 h-2 rounded-full"
+					style={{ backgroundColor: leftDot }}
+				/>
+			) : null}
+			{icon ? <Ionicons name={icon} size={18} color={theme.colors.text} /> : null}
+			{typeof label === "string" ? (
+				<Text
+					numberOfLines={1}
+					className="shrink text-sm text-text font-semibold"
+				>
+					{label}
+				</Text>
+			) : (
+				label
+			)}
+			{trailing}
 		</Pressable>
 	);
 }

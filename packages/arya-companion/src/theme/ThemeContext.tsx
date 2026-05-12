@@ -16,7 +16,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
-export function useUnistyles() {
-  const ctx = useContext(ThemeContext);
-  return { theme: ctx.theme };
+/** Returns the active theme object. */
+export function useTheme(): Theme {
+  return useContext(ThemeContext).theme;
 }

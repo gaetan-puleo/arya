@@ -1,5 +1,9 @@
 /**
- * Shared WebSocket utilities: URL coercion, token params, reconnecting socket.
+ * Shared WebSocket utilities: URL coercion + auto-reconnecting socket.
+ *
+ * Callers attach their own `message` listeners on the returned socket
+ * (via `socket.addEventListener`); the reconnect loop creates a new
+ * socket on close and invokes `onSocket` so the consumer can re-bind.
  */
 
 function buildWsUrl(url: string, token?: string): string {
@@ -13,27 +17,15 @@ function buildWsUrl(url: string, token?: string): string {
 export function createReconnectingSocket(
 	url: string,
 	token: string | undefined,
-	onMessage: (data: unknown) => void,
-	onSocket?: (socket: WebSocket) => void,
+	onSocket: (socket: WebSocket) => void,
 ): WebSocket {
-	const wsUrl = buildWsUrl(url, token);
-	const socket = new WebSocket(wsUrl);
-
-	onSocket?.(socket);
-
-	socket.onmessage = (e) => {
-		try {
-			const msg = JSON.parse(e.data);
-			onMessage(msg);
-		} catch {
-			// ignore
-		}
-	};
+	const socket = new WebSocket(buildWsUrl(url, token));
+	onSocket(socket);
 
 	socket.onclose = () => {
 		setTimeout(() => {
 			if (socket.readyState !== WebSocket.OPEN) {
-				createReconnectingSocket(url, token, onMessage, onSocket);
+				createReconnectingSocket(url, token, onSocket);
 			}
 		}, 3000);
 	};

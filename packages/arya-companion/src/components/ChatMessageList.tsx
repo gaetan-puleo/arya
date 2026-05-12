@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useUnistyles } from "@/theme/ThemeContext";
+import { useTheme } from "@/theme/ThemeContext";
 import ApprovalMessage from "@/components/ApprovalMessage";
 import ChatMessage from "@/components/ChatMessage";
 import SubAgentCard from "@/components/SubAgentCard";
@@ -47,6 +47,9 @@ export default function ChatMessageList({
 	activeAgent,
 	inputBarHeight,
 }: ChatMessageListProps) {
+	const theme = useTheme();
+	const insets = useSafeAreaInsets();
+
 	// Resolve a message's author agent: prefer the message's own
 	// authorAgentId, fall back to the active primary agent.
 	const resolveAuthorAgent = (m: ChatMessageItem): AgentInfo | null => {
@@ -60,14 +63,6 @@ export default function ChatMessageList({
 		}
 		return activeAgent ?? null;
 	};
-	const { theme } = useUnistyles();
-	const insets = useSafeAreaInsets();
-
-	const bgTertiary = theme.colors.backgroundTertiary;
-	const textColor = theme.colors.text;
-	const textSecondary = theme.colors.textSecondary;
-	const textPlaceholder = theme.colors.textPlaceholder;
-	const borderColor = theme.colors.border;
 
 	// Reserve space at top (chip ~60) and bottom (input bar height). The
 	// measured `inputBarHeight` already includes the input bar's own
@@ -82,8 +77,8 @@ export default function ChatMessageList({
 		inputBarHeight && inputBarHeight > 0
 			? inputBarHeight
 			: FALLBACK_INPUT_BAR_HEIGHT;
-	// Gap kept between the input bar's top edge and either the FAB or the
-	// last message. Tweak in one place.
+	// Gap kept between the input bar's top edge and either the FAB or
+	// the last message. Tweak in one place.
 	const FAB_GAP_ABOVE_INPUT = 16;
 	const BOTTOM_OVERLAY_PAD = effectiveInputBarHeight + FAB_GAP_ABOVE_INPUT;
 	// FAB sits FAB_GAP_ABOVE_INPUT above the top of the input bar.
@@ -121,7 +116,7 @@ export default function ChatMessageList({
 	}, [contentSignature, messages.length]);
 
 	return (
-		<View style={{ flex: 1 }}>
+		<View className="flex-1">
 			<FlashList
 				ref={listRef}
 				data={messages}
@@ -151,8 +146,6 @@ export default function ChatMessageList({
 					isUserScrolling.current = true;
 				}}
 				onScrollEndDrag={() => {
-					// User lifted finger. If momentum follows, onScroll keeps
-					// updating isPinnedToBottom; if not, we clear here.
 					isUserScrolling.current = false;
 				}}
 				onMomentumScrollEnd={() => {
@@ -160,35 +153,12 @@ export default function ChatMessageList({
 				}}
 				scrollEventThrottle={32}
 				ListEmptyComponent={
-					<View
-						style={{
-							flex: 1,
-							alignItems: "center",
-							justifyContent: "center",
-							paddingHorizontal: 40,
-							paddingVertical: 120,
-							gap: 12,
-						}}
-					>
+					<View className="flex-1 items-center justify-center px-10 py-32 gap-3">
 						<AryaAvatar size={52} agent={activeAgent} />
-						<Text
-							style={{
-								fontSize: 20,
-								fontWeight: "600",
-								color: textColor,
-								textAlign: "center",
-							}}
-						>
+						<Text className="text-xl font-semibold text-text text-center">
 							Comment puis-je vous aider ?
 						</Text>
-						<Text
-							style={{
-								fontSize: 14,
-								color: textSecondary,
-								textAlign: "center",
-								lineHeight: 20,
-							}}
-						>
+						<Text className="text-sm text-text-secondary text-center leading-5">
 							Posez une question ou envoyez un message pour démarrer.
 						</Text>
 					</View>
@@ -240,30 +210,19 @@ export default function ChatMessageList({
 						const streamingAuthor = resolveAuthorAgent(msg);
 						return (
 							<View
-								style={{
-									alignItems: "flex-start",
-									paddingHorizontal: 16,
-									paddingTop: topGap,
-								}}
+								className="items-start px-4"
+								style={{ paddingTop: topGap }}
 							>
-								<View
-									style={{
-										flexDirection: "row",
-										gap: 8,
-										alignItems: "flex-end",
-									}}
-								>
+								<View className="flex-row gap-2 items-end">
 									<AryaAvatar size={24} agent={streamingAuthor} />
 									<View
+										className="bg-bg-tertiary px-4 py-3"
 										style={{
-											backgroundColor: bgTertiary,
 											borderRadius: 20,
 											borderBottomLeftRadius: 6,
-											paddingHorizontal: 16,
-											paddingVertical: 12,
 										}}
 									>
-										<TypingDots color={textPlaceholder} />
+										<TypingDots color={theme.colors.textPlaceholder} />
 									</View>
 								</View>
 							</View>
@@ -290,31 +249,20 @@ export default function ChatMessageList({
 				}}
 			/>
 
-			{/* ── Scroll-to-bottom FAB ── */}
+			{/* Scroll-to-bottom FAB */}
 			{showScrollFab && (
 				<Animated.View
 					entering={FadeIn.duration(200)}
 					exiting={FadeOut.duration(200)}
-					style={{
-						position: "absolute",
-						right: 16,
-						bottom: fabBottom,
-						zIndex: 10,
-					}}
+					className="absolute right-4 z-10"
+					style={{ bottom: fabBottom }}
 				>
 					<Pressable
 						onPress={() => {
 							listRef.current?.scrollToEnd({ animated: true });
 						}}
+						className="w-9 h-9 rounded-[20px] bg-bg-tertiary border border-border justify-center items-center"
 						style={{
-							width: 36,
-							height: 36,
-							borderRadius: 20,
-							backgroundColor: bgTertiary,
-							borderWidth: 1,
-							borderColor,
-							justifyContent: "center",
-							alignItems: "center",
 							shadowColor: "#000",
 							shadowOffset: { width: 0, height: 2 },
 							shadowOpacity: 0.15,
@@ -322,7 +270,11 @@ export default function ChatMessageList({
 							elevation: 4,
 						}}
 					>
-						<Ionicons name="chevron-down" size={18} color={textSecondary} />
+						<Ionicons
+							name="chevron-down"
+							size={18}
+							color={theme.colors.textSecondary}
+						/>
 					</Pressable>
 				</Animated.View>
 			)}
