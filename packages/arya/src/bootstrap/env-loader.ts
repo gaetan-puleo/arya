@@ -22,7 +22,6 @@ export function loadEnvFile(path: string): LoadEnvResult {
     content = readFileSync(path, 'utf8');
     result.found = true;
   } catch {
-    // .env file not found or unreadable — ignore.
     return result;
   }
   for (const line of content.split('\n')) {

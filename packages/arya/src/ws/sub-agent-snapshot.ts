@@ -32,9 +32,7 @@ export function attachSubAgentSnapshotBridge(deps: SubAgentSnapshotDeps): () => 
   const mu = getMuAgents(deps.registry);
   const runs: SubagentRunRegistry | undefined = mu?.runs;
   if (!runs) {
-    return () => {
-      // No mu-agents → nothing to subscribe.
-    };
+    return () => {};
   }
   return runs.subscribeAllSnapshots((snapshot: SubAgentRunSnapshot) => {
     deps.push({ type: 'sub_agent_run', run: snapshot });

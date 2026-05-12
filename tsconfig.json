@@ -18,7 +18,8 @@
       "mu-agents": ["../mu/packages/mu-agents/src"],
       "mu-openai-provider": ["../mu/packages/mu-openai-provider/src"],
       "mu-scheduler": ["../mu/packages/mu-scheduler/src"],
-      "mu-tools": ["../mu/packages/mu-tools/src"]
+      "mu-tools": ["../mu/packages/mu-tools/src"],
+      "mu-webfetch": ["../mu/packages/mu-webfetch/src"]
     }
   },
   "include": ["packages/**/src/**/*.ts", "packages/**/src/**/*.tsx"],

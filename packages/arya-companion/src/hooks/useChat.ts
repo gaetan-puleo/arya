@@ -32,7 +32,7 @@ export function useChat() {
 	const subAgentRuns = useAppStore((s) => s.subAgentRuns);
 	const approvals = useAppStore((s) => s.approvals);
 	const {
-		setActiveAgent,
+		setActiveAgent: storeSetActiveAgent,
 		createSession: storeCreateSession,
 		deleteSession: storeDeleteSession,
 		renameSession,
@@ -43,7 +43,7 @@ export function useChat() {
 		subscribeToSessionMessages,
 	} = useAppStore(
 		useShallow((s) => ({
-			setActiveAgent: s.setActiveAgent,
+			setActiveAgent: s.setActiveAgent as (agentId: string, sessionId?: string | null) => void,
 			createSession: s.createSession,
 			deleteSession: s.deleteSession,
 			renameSession: s.renameSession,
@@ -147,6 +147,14 @@ export function useChat() {
 
 	const { showCommandMenu, filteredCommands, showAgentMenu, filteredAgents } =
 		useSlashAndAt(input, commands, agents);
+
+	// ── Agent switching (session-scoped) ──
+	const setActiveAgent = useCallback(
+		(agentId: string) => {
+			storeSetActiveAgent(agentId, currentSessionIdRef.current);
+		},
+		[storeSetActiveAgent],
+	);
 
 	// ── Session actions ──
 	const selectSession = useCallback(

@@ -164,7 +164,7 @@ need approval from the user.
 | `edit` | Remplacer une portion exacte | `path` |
 | `list_dir` | Lister un répertoire | `path` |
 | `bash` | Exécuter une commande bash | `cmd` |
-| `http.fetch` | Requêtes HTTP | `url` |
+| `webfetch` | Fetch URL content as markdown/text/html | `url` |
 | `subagent` | Déclencher un sous-agent | aucun |
 
 ## 📅 Task Definition
@@ -268,10 +268,11 @@ arya-consomme les packages mu suivants :
 | `mu-openai-provider` | Provider OpenAI-compatible (Ollama, vLLM, etc.) |
 | `mu-tools` | Outils partagés `read`, `write`, `edit`, `bash`, `list_dir` |
 | `mu-scheduler` | Runner cron pour tâches autonomes |
+| `mu-webfetch` | Fetch URL content as markdown/text/html |
 
 ## 🔌 Ajouter des Outils
 
-Le repo ne ship que `http.fetch` localement (`packages/arya/src/plugins/tools/`).
+Le repo utilise `mu-webfetch` pour le web fetching (`webfetch` tool).
 Les outils filesystem + shell viennent de `mu-tools` (partagé avec
 mu-coding). Des plugins additionnels peuvent être chargés dynamiquement
 au démarrage depuis `~/.config/arya/plugins/*.ts` — ces plugins ne vivent

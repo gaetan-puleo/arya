@@ -10,7 +10,7 @@
 import type {
   ApprovalSnapshot,
   SubAgentRunSnapshot,
-} from "mu-agents";
+} from "mu-agents/client";
 
 export interface CommandInfo {
 	command: string;

@@ -28,7 +28,6 @@ for (const c of candidates) {
     configPath = c;
     break;
   } catch {
-    // try next
   }
 }
 if (!configPath) {

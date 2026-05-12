@@ -1,14 +1,10 @@
 /**
  * WS message handlers for the `commands` / `agents` request frames and
- * the `set_active_agent` mutation. Pulled out of `ws-channel.ts` so the
- * connection-level dispatch chain stays focused on routing, not on
- * each handler's body.
+ * the `set_active_agent` mutation.
  *
- * Read-only frames echo the current registry state to the requester;
- * `set_active_agent` flips the primary agent via mu-agents' manager.
- * Broadcasts of "active changed" / "agents list changed" come from
- * `subscribeActiveAgent` / `subscribeAgentsList` subscriptions wired
- * in `ws-channel.ts` — these handlers do NOT push themselves.
+ * `set_active_agent` is session-scoped: the client sends a `sessionId`
+ * and the override applies only to that session. Without a `sessionId`,
+ * the global default is changed.
  */
 
 import type { PluginRegistry } from 'mu-core';
@@ -24,7 +20,6 @@ export interface AgentHandlerDeps {
   pushError: (message: string) => void;
 }
 
-/** Tells caller whether this handler consumed the message. */
 export function handleAgentMessage(
   msg: Record<string, unknown>,
   deps: AgentHandlerDeps,
@@ -45,18 +40,16 @@ export function handleAgentMessage(
 
   if (msg.type === 'set_active_agent') {
     const agentId = typeof msg.agentId === 'string' ? msg.agentId : null;
+    const sessionId = typeof msg.sessionId === 'string' ? msg.sessionId : null;
     const manager = getMuAgents(registry)?.manager;
-    if (!manager?.setActive || !agentId) {
+    if (!agentId || !manager) {
       pushError('Cannot switch agent: missing agentId or manager');
       return true;
     }
-    const ok = manager.setActive(agentId);
-    // setActive returns false when the name doesn't exist or is already
-    // active. The broadcast (active_agent) only fires when the active
-    // name actually changes, so explicitly echo the current state to
-    // the requester for unchanged cases.
+
+    const ok = manager.setActiveFor(agentId, sessionId);
     if (!ok) {
-      const current = getActiveAgentId(registry);
+      const current = getActiveAgentId(registry, sessionId);
       ws.send(JSON.stringify({ type: 'active_agent', agentId: current }));
     }
     return true;

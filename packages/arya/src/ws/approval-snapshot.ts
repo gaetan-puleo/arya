@@ -18,9 +18,7 @@ export interface ApprovalSnapshotDeps {
 export function attachApprovalSnapshotBridge(deps: ApprovalSnapshotDeps): () => void {
   const gateway = getMuAgents(deps.registry)?.approvalGateway;
   if (!gateway) {
-    return () => {
-      // No gateway → nothing to subscribe.
-    };
+    return () => {};
   }
   return gateway.subscribeAllSnapshots((snapshot: ApprovalSnapshot) => {
     deps.push({ type: 'approval_state', snapshot });

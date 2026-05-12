@@ -17,6 +17,7 @@
     "mu-openai-provider": "file:../../../mu/packages/mu-openai-provider",
     "mu-scheduler": "file:../../../mu/packages/mu-scheduler",
     "mu-tools": "file:../../../mu/packages/mu-tools",
+    "mu-webfetch": "file:../../../mu/packages/mu-webfetch",
     "ws": "^8.18.0"
   },
   "devDependencies": {

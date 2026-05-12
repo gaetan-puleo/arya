@@ -27,7 +27,6 @@ export function init(): void {
     join(configDir, 'plugins'),
   ];
 
-  // Create directories
   for (const dir of dirs) {
     mkdirSync(dir, { recursive: true });
   }
@@ -39,21 +38,18 @@ export function init(): void {
   const here = dirname(fileURLToPath(import.meta.url));
   const templatesDir = join(here, '..', 'templates');
 
-  // Create config.json (only if it doesn't exist).
   const configPath = join(configDir, 'config.json');
   if (!existsSync(configPath)) {
     const template = readFileSync(join(templatesDir, 'config.json'), 'utf8');
     writeFileSync(configPath, template);
   }
 
-  // Create agent template (only if it doesn't exist)
   const agentPath = join(configDir, 'agents', 'arya.md');
   if (!existsSync(agentPath)) {
     const agentTemplate = readFileSync(join(templatesDir, 'agent.md'), 'utf8');
     writeFileSync(agentPath, agentTemplate);
   }
 
-  // Create tasks template (only if it doesn't exist)
   const tasksPath = join(configDir, 'tasks', 'default.yaml');
   if (!existsSync(tasksPath)) {
     const tasksTemplate = readFileSync(join(templatesDir, 'tasks.yaml'), 'utf8');
@@ -66,7 +62,6 @@ export function init(): void {
   console.log(`   Tasks:  ${join(configDir, 'tasks')}`);
 }
 
-// Run when executed directly (not imported)
 if (import.meta.main) {
   init();
 }

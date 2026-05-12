@@ -1,18 +1,13 @@
 /**
  * Subscribe to a mu-core Session and forward its lifecycle to the WS.
  *
- *  - `stream_partial` → push live `stream` events (cumulative text).
+ *  - `stream_partial` → push live `stream` events.
  *  - `stream_ended` → push `done`.
  *  - `error` → enrich and push `error`.
  *
- * Persistence is NOT this module's job — mu-core's `attachAutoPersist`
- * handles writing the assistant + tool messages to the SessionStore.
- * Arya wires `attachAutoPersist` once at boot via
- * `sessions.onSessionCreated`. This subscriber only forwards events
- * to the WS clients.
- *
- * The subscription is lazy (created on first chat message for a given
- * session id) and lifetime-tied to the WS connection.
+ * Persistence is handled by the runtime's auto-persist (wired via
+ * `startMu({ store })`). This subscriber only forwards events to
+ * WS clients.
  */
 
 import { enrichLLMError, type PluginRegistry, type SessionManager } from 'mu-core';

@@ -1,11 +1,8 @@
 import { WebSocket, WebSocketServer } from 'ws';
 import type {
-  ActivityBus,
   Channel,
   ChatMessage,
-  PluginRegistry,
-  ProviderConfig,
-  SessionManager,
+  MuRuntime,
   SessionStore,
 } from 'mu-core';
 import {
@@ -42,19 +39,7 @@ const log = createLogger('ws');
 export interface WsChannelOptions {
   port: number;
   authToken?: string;
-  /** Persistent on-disk session store (history, titles, list/CRUD). */
   store: SessionStore;
-  /**
-   * Resolved provider config. Threaded into `CommandContext` so slash
-   * commands that need an LLM (none today, but reserved for future
-   * `/summarize` etc.) can dispatch through the active provider.
-   */
-  providerConfig: ProviderConfig;
-  /**
-   * Per-session MessageBus router. Mounted by `bootstrap` and shared with
-   * `ctx.messages` so mu-agents' `@<subagent>` dispatch can live-append
-   * synthetic messages and queue relay prompts for the next turn.
-   */
   messageBus: MessageBusRouter;
 }
 
@@ -63,16 +48,11 @@ interface ConnectedClient {
   sessionId: string;
 }
 
-/**
- * Map mu-core's `SlashCommand` shape (`{ name, description, execute }`)
- * to the wire shape the companion expects (`{ command, description }`).
- * `execute` is intentionally dropped — it's a non-serialisable function.
- */
 function buildGetCommandsList(
-  registry: PluginRegistry,
+  runtime: MuRuntime,
 ): () => Array<{ command: string; description: string }> {
   return () =>
-    (registry.getCommands() ?? []).map((c) => ({
+    (runtime.registry.getCommands() ?? []).map((c) => ({
       command: c.name,
       description: c.description,
     }));
@@ -81,152 +61,22 @@ function buildGetCommandsList(
 /**
  * WebSocket channel — implements the `Channel` interface from mu-core.
  *
- * Companion → Server:
- *   { type: "chat", text: "...", sessionId?: string }
- *   { type: "command", text: "/help", sessionId?: string }
- *   { type: "approval_response", approvalId: "...", token: "...", action: "approve"|"deny" }
- *   { type: "set_active_agent", agentId: "arya" }
- *   { type: "sessions:list" }
- *   { type: "sessions:create", sessionId?: string, title?: string }
- *   { type: "sessions:delete", sessionId: string }
- *   { type: "sessions:rename", sessionId: string, title: string }
- *   { type: "sessions:get", sessionId: string }
- *
- * Server → Companion (snapshots, not deltas):
- *   { type: "stream", text: "...", sessionId?: string }
- *   { type: "done", text: "...", sessionId?: string }
- *   { type: "approval_state", snapshot: ApprovalSnapshot }
- *   { type: "approvals:listed", approvals: ApprovalSnapshot[] }
- *   { type: "activity", event: ActivityEvent }
- *   { type: "sub_agent_run", run: SubAgentRunSnapshot }
- *   { type: "sub_agent_runs:listed", runs: SubAgentRunSnapshot[] }
- *   { type: "commands", commands: [...] }
- *   { type: "agents", agents: [...], activeAgentId: "arya" | null }
- *   { type: "active_agent", agentId: "arya" | null }
- *   { type: "sessions:listed", sessions: [...] }
- *   { type: "sessions:history", sessionId, session: {..., messages: [...]} | null }
- *   { type: "sessions:changed", sessionId, kind: "created"|"updated"|"deleted"|"renamed" }
- *   { type: "synthetic_message", sessionId, message: ChatMessage & { author? } }
- *   { type: "scheduler_event", event: SchedulerTaskEvent }
- *   { type: "error", message: "..." }
+ * The WebSocket server is created in `start()`, not in the constructor,
+ * per the channel contract: constructors only capture options.
  */
 export function createWebSocketChannel(
-  sessions: SessionManager,
-  registry: PluginRegistry,
-  activity: ActivityBus,
+  runtime: MuRuntime,
   options: WsChannelOptions,
 ): WsChannel {
   const store = options.store;
-  const wss = new WebSocketServer({ port: options.port });
-  const clients = new Map<WebSocket, ConnectedClient>();
+  const { registry, sessions, activity } = runtime;
   const getAgents = (): AgentListItem[] => listAgents(registry);
-  const getCommands = buildGetCommandsList(registry);
+  const getCommands = buildGetCommandsList(runtime);
 
-  wss.on('connection', (ws, req) => {
-    // Auth check
-    const url = new URL(req.url!, `http://${req.headers.host}`);
-    const token = url.searchParams.get('token');
-    if (options.authToken && token !== options.authToken) {
-      ws.close(4001, 'Unauthorized');
-      return;
-    }
+  let wss: WebSocketServer | null = null;
+  const clients = new Map<WebSocket, ConnectedClient>();
+  const cleanups: Array<() => void> = [];
 
-    const sessionId = url.searchParams.get('sessionId') || 'default';
-    clients.set(ws, { ws, sessionId });
-
-    // Send commands, agents and the persisted sessions list on connect
-    const commands = getCommands();
-    const agents = getAgents();
-    const activeAgentId = getActiveAgentId(registry);
-    ws.send(JSON.stringify({ type: 'commands', commands }));
-    ws.send(JSON.stringify({ type: 'agents', agents, activeAgentId }));
-    ws.send(JSON.stringify({ type: 'sessions:listed', sessions: store.list() }));
-    // Bootstrap the new snapshot wire types so a fresh client doesn't
-    // have to wait for the next transition.
-    sendSubAgentRunsListing(ws, registry);
-    sendApprovalsListing(ws, registry);
-
-    // Per-connection bookkeeping (running turns, lazy subscriptions,
-    // stream-state caches). See `connection-state.ts` for field docs.
-    const connState = createConnectionState();
-    const { runningSessions } = connState;
-
-    const ensureSubscribed = makeEnsureSubscribed({
-      sessions,
-      registry,
-      state: connState,
-      push,
-      baseUrl: options.providerConfig.baseUrl,
-    });
-
-    ws.on('message', (data) => {
-      let msg: Record<string, unknown>;
-      try {
-        msg = JSON.parse(data.toString());
-      } catch {
-        pushError('Invalid JSON');
-        return;
-      }
-
-      // Agent registry frames: `commands` / `agents` requests + `set_active_agent`.
-      if (
-        handleAgentMessage(msg, {
-          ws,
-          registry,
-          getCommands,
-          getAgents,
-          pushError,
-        })
-      )
-        return;
-
-      // ── Sessions management ────────────────────────────────────────
-      if (handleSessionsMessage(msg, { ws, store, pushError })) return;
-
-      if (
-        handleCommandMessage(msg, {
-          ws,
-          defaultSessionId: sessionId,
-          sessions,
-          registry,
-          store,
-          providerConfig: options.providerConfig,
-          push,
-          getCommands,
-        })
-      )
-        return;
-
-      if (
-        handleChatMessage(msg, {
-          ws,
-          defaultSessionId: sessionId,
-          sessions,
-          store,
-          registry,
-          messageBus: options.messageBus,
-          providerConfig: options.providerConfig,
-          runningSessions,
-          ensureSubscribed,
-          push,
-        })
-      )
-        return;
-
-      if (handleApprovalResponse(msg, { registry })) return;
-    });
-
-    const cleanup = () => {
-      clients.delete(ws);
-      tearDownConnectionState(connState);
-    };
-    ws.on('close', cleanup);
-    ws.on('error', cleanup);
-  });
-
-  // Helper to push events to all clients. We enrich message payloads
-  // with the resolved `author` info at this wire boundary so clients
-  // never have to look agents up themselves.
   function push(event: Record<string, unknown>) {
     const enriched = enrichOutboundEvent(event);
     const data = JSON.stringify(enriched);
@@ -251,66 +101,118 @@ export function createWebSocketChannel(
     push({ type: 'error', message });
   }
 
-  // Subscribe to activity bus to push events to companion
-  activity.subscribe((event) => {
-    push({ type: 'activity', event });
-  });
+  function handleConnection(ws: WebSocket, req: { url?: string; headers: { host?: string } }) {
+    const url = new URL(req.url!, `http://${req.headers.host}`);
+    const token = url.searchParams.get('token');
+    if (options.authToken && token !== options.authToken) {
+      ws.close(4001, 'Unauthorized');
+      return;
+    }
 
-  // Snapshot bridges — push render-ready sub-agent + approval state to
-  // every client. Clients are pure renderers; no client-side reducer.
-  const unsubscribeSubAgentSnapshots = attachSubAgentSnapshotBridge({ registry, push });
-  const unsubscribeApprovalSnapshots = attachApprovalSnapshotBridge({ registry, push });
+    const sessionId = url.searchParams.get('sessionId') || 'default';
+    clients.set(ws, { ws, sessionId });
 
-  // Broadcast active-agent changes (manager.setActive flips, hot-reload
-  // fallback that picks a different active name, etc.).
-  const unsubscribeActiveAgent = subscribeActiveAgent(registry, (agentId) => {
-    push({ type: 'active_agent', agentId });
-    push({ type: 'commands', commands: getCommands() });
-    push({
-      type: 'agents',
-      agents: getAgents(),
-      activeAgentId: agentId,
+    ws.send(JSON.stringify({ type: 'commands', commands: getCommands() }));
+    ws.send(JSON.stringify({ type: 'agents', agents: getAgents(), activeAgentId: getActiveAgentId(registry) }));
+    ws.send(JSON.stringify({ type: 'sessions:listed', sessions: store.list() }));
+    sendSubAgentRunsListing(ws, registry);
+    sendApprovalsListing(ws, registry);
+
+    const connState = createConnectionState();
+    const { runningSessions } = connState;
+
+    const ensureSubscribed = makeEnsureSubscribed({
+      sessions,
+      registry,
+      state: connState,
+      push,
+      baseUrl: runtime.config.baseUrl,
     });
-  });
 
-  // Broadcast list mutations even when active doesn't change (hot-reload
-  // adds/removes/edits agents). The arya-commands plugin rebuilds its
-  // slash-command set on every manager change, so connected companions
-  // need to refresh their inline menu.
-  const unsubscribeAgentsList = subscribeAgentsList(registry, (agents) => {
-    push({ type: 'commands', commands: getCommands() });
-    push({
-      type: 'agents',
-      agents,
-      activeAgentId: getActiveAgentId(registry),
+    ws.on('message', (data) => {
+      let msg: Record<string, unknown>;
+      try {
+        msg = JSON.parse(data.toString());
+      } catch {
+        pushError('Invalid JSON');
+        return;
+      }
+
+      if (handleAgentMessage(msg, { ws, registry, getCommands, getAgents, pushError })) return;
+      if (handleSessionsMessage(msg, { ws, store, pushError })) return;
+      if (
+        handleCommandMessage(msg, {
+          ws,
+          defaultSessionId: sessionId,
+          runtime,
+          store,
+          push,
+          getCommands,
+        })
+      ) return;
+      if (
+        handleChatMessage(msg, {
+          ws,
+          defaultSessionId: sessionId,
+          runtime,
+          runningSessions,
+          ensureSubscribed,
+          push,
+        })
+      ) return;
+      if (handleApprovalResponse(msg, { registry })) return;
     });
-  });
+
+    const cleanup = () => {
+      clients.delete(ws);
+      tearDownConnectionState(connState);
+    };
+    ws.on('close', cleanup);
+    ws.on('error', cleanup);
+  }
 
   const channel: WsChannel = {
     id: 'websocket',
-    start: async () => {
+    async start() {
+      wss = new WebSocketServer({ port: options.port });
+      wss.on('connection', handleConnection);
+
+      cleanups.push(activity.subscribe((event) => {
+        push({ type: 'activity', event });
+      }));
+      cleanups.push(attachSubAgentSnapshotBridge({ registry, push }));
+      cleanups.push(attachApprovalSnapshotBridge({ registry, push }));
+      cleanups.push(subscribeActiveAgent(registry, (agentId, sessionId) => {
+        push({ type: 'active_agent', agentId, sessionId });
+        push({ type: 'commands', commands: getCommands() });
+        push({ type: 'agents', agents: getAgents(), activeAgentId: agentId });
+      }));
+      cleanups.push(subscribeAgentsList(registry, (agents) => {
+        push({ type: 'commands', commands: getCommands() });
+        push({ type: 'agents', agents, activeAgentId: getActiveAgentId(registry) });
+      }));
+
       log.info(`Listening on port ${options.port}`);
     },
-    stop: async () => {
-      unsubscribeActiveAgent();
-      unsubscribeAgentsList();
-      unsubscribeSubAgentSnapshots();
-      unsubscribeApprovalSnapshots();
+    async stop() {
+      for (const fn of cleanups) fn();
+      cleanups.length = 0;
       for (const [, client] of clients) {
         if (client.ws.readyState === WebSocket.OPEN) {
           client.ws.close();
         }
       }
-      wss.close();
+      if (wss) {
+        wss.close();
+        wss = null;
+      }
     },
-    // Expose push for internal use (e.g. approval/activity events)
     push,
     pushError,
   };
   return channel;
 }
 
-// Extend Channel type to include push helpers
 export interface WsChannel extends Channel {
   push: (event: Record<string, unknown>) => void;
   pushError: (message: string) => void;

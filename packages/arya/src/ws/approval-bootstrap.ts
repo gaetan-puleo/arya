@@ -34,10 +34,8 @@ export function setupApprovalChannel(
     sendApprovalRequest: async () => undefined,
   };
   const gateway = getMuAgents(registry)?.approvalGateway;
-  const unregister = gateway
-    ? gateway.registerChannel('websocket', channel)
-    : (): void => {
-        // gateway absent — nothing to unregister
-      };
+    const unregister = gateway
+      ? gateway.registerChannel('websocket', channel)
+      : () => {};
   return { channel, unregister };
 }

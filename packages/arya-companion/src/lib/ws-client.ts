@@ -1,9 +1,13 @@
 /**
- * Shared WebSocket utilities: URL coercion + auto-reconnecting socket.
+ * Disposable auto-reconnecting WebSocket.
  *
- * Callers attach their own `message` listeners on the returned socket
- * (via `socket.addEventListener`); the reconnect loop creates a new
- * socket on close and invokes `onSocket` so the consumer can re-bind.
+ * `createReconnectingSocket` returns a `dispose` function that:
+ *   - closes the current socket
+ *   - cancels any pending reconnect timer
+ *   - prevents further reconnect attempts
+ *
+ * This fixes the leak where closing the store's socket left an orphaned
+ * `setTimeout` that would reopen a connection after 3s.
  */
 
 function buildWsUrl(url: string, token?: string): string {
@@ -14,21 +18,46 @@ function buildWsUrl(url: string, token?: string): string {
 	return `${wsUrl}${params}`;
 }
 
+export interface ReconnectingSocket {
+	/** Dispose: close the socket and cancel any pending reconnect. */
+	dispose: () => void;
+}
+
 export function createReconnectingSocket(
 	url: string,
 	token: string | undefined,
 	onSocket: (socket: WebSocket) => void,
-): WebSocket {
-	const socket = new WebSocket(buildWsUrl(url, token));
-	onSocket(socket);
+): ReconnectingSocket {
+	let disposed = false;
+	let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+	let currentSocket: WebSocket | null = null;
 
-	socket.onclose = () => {
-		setTimeout(() => {
-			if (socket.readyState !== WebSocket.OPEN) {
-				createReconnectingSocket(url, token, onSocket);
+	function connect() {
+		if (disposed) return;
+		const socket = new WebSocket(buildWsUrl(url, token));
+		currentSocket = socket;
+		onSocket(socket);
+
+		socket.onclose = () => {
+			if (disposed) return;
+			reconnectTimer = setTimeout(() => {
+				reconnectTimer = null;
+				connect();
+			}, 3000);
+		};
+	}
+
+	connect();
+
+	return {
+		dispose() {
+			disposed = true;
+			if (reconnectTimer !== null) {
+				clearTimeout(reconnectTimer);
+				reconnectTimer = null;
 			}
-		}, 3000);
+			currentSocket?.close();
+			currentSocket = null;
+		},
 	};
-
-	return socket;
 }

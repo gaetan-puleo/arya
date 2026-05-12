@@ -41,13 +41,9 @@ export function handleSessionsMessage(
     // switches into it before the round-trip completes) ends up
     // pointing at the same session the server actually persisted.
     // The underlying store is idempotent on existing ids — see
-    // `createJSONLSessionStore.create` in mu-core — so re-sending
-    // the same id is a safe no-op.
-    //
-    // Without this forwarding, the server would mint its own id,
-    // the client would keep talking to a phantom id, and the next
-    // `chat` message would auto-create a second (duplicate) session
-    // via `appendMessage`'s auto-create branch.
+    // Honor client-supplied id so the companion's optimistic switch
+    // points at the same session the server persists. The store's
+    // `create` is idempotent on existing ids.
     store.create({
       id: typeof msg.sessionId === 'string' ? msg.sessionId : undefined,
       title: typeof msg.title === 'string' ? msg.title : undefined,

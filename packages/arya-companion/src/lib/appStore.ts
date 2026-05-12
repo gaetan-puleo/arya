@@ -61,7 +61,7 @@ interface AppActions {
 	 * credentials.
 	 */
 	reconnect: () => Promise<void>;
-	setActiveAgent: (agentId: string) => void;
+	setActiveAgent: (agentId: string, sessionId?: string | null) => void;
 	createSession: (sessionId: string) => void;
 	deleteSession: (sessionId: string) => void;
 	renameSession: (sessionId: string, title: string) => void;
@@ -105,7 +105,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 	_sessionMessageListeners: new Set(),
 
 	connect: async () => {
-		// Tear down any previous socket before opening a new one.
+		// Tear down any previous socket + reconnect timers.
 		get()._disposeSocket?.();
 
 		const cfg = await readWsConfig();
@@ -118,15 +118,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 			`[ws] connecting to ${cfg.url}${cfg.token ? " (with token)" : ""}`,
 		);
 
-		let current: WebSocket | null = null;
-		let cancelled = false;
-
-		createReconnectingSocket(cfg.url, cfg.token, (s) => {
-			if (cancelled) {
-				s.close();
-				return;
-			}
-			current = s;
+		const handle = createReconnectingSocket(cfg.url, cfg.token, (s) => {
 			set({ socket: s, connected: false });
 
 			s.addEventListener("open", () => {
@@ -163,8 +155,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
 		set({
 			_disposeSocket: () => {
-				cancelled = true;
-				current?.close();
+				handle.dispose();
 				set({ socket: null, connected: false });
 			},
 		});
@@ -174,12 +165,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
 		await get().connect();
 	},
 
-	setActiveAgent: (agentId) => {
+	setActiveAgent: (agentId, sessionId) => {
 		const { socket, activeAgentId } = get();
 		if (!isOpen(socket)) return;
 		if (agentId === activeAgentId) return;
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-		send(socket, { type: "set_active_agent", agentId });
+		send(socket, { type: "set_active_agent", agentId, sessionId: sessionId ?? undefined });
 		// Optimistic — server will echo back via `active_agent`.
 		set({ activeAgentId: agentId });
 	},

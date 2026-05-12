@@ -48,7 +48,6 @@ export async function loadIntegrationPlugins(): Promise<Plugin[]> {
   try {
     entries = readdirSync(pluginsDir);
   } catch {
-    // Plugins directory not found — operator may not have any. OK.
     return plugins;
   }
 
@@ -59,7 +58,6 @@ export async function loadIntegrationPlugins(): Promise<Plugin[]> {
       const modulePath = join(pluginsDir, file);
       const mod = await import(modulePath);
 
-      // Collect all exported `createXxx` factories.
       const factories: [string, unknown][] = [];
       for (const [key, value] of Object.entries(mod)) {
         if (typeof value === 'function' && key.startsWith('create')) {
