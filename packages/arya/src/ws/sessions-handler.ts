@@ -36,11 +36,6 @@ export function handleSessionsMessage(
   }
 
   if (msg.type === 'sessions:create') {
-    // Honor a client-supplied `sessionId` when present so the
-    // companion's optimistic switch (it pre-generates an id and
-    // switches into it before the round-trip completes) ends up
-    // pointing at the same session the server actually persisted.
-    // The underlying store is idempotent on existing ids — see
     // Honor client-supplied id so the companion's optimistic switch
     // points at the same session the server persists. The store's
     // `create` is idempotent on existing ids.

@@ -58,7 +58,7 @@ export interface SessionSummary {
 	messageCount: number;
 }
 
-export type { ChatMessageWire, PersistedSessionWire } from "./sessionWire";
+export type { PersistedSessionWire } from "./sessionWire";
 export {
 	chatMessageWireToPersisted,
 	persistedSessionFromWire,
@@ -70,7 +70,7 @@ export {
  * to keep the sessions list fresh (the task creates a `task:` prefixed
  * session per run); finer-grained UI is future work.
  */
-export interface SchedulerEvent {
+interface SchedulerEvent {
 	kind: "started" | "output" | "completed" | "failed";
 	taskId: string;
 	sessionId: string;

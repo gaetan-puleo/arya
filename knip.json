@@ -2,12 +2,11 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     "packages/arya": {
-      "entry": ["src/index.ts", "src/init.ts", "bin/arya.js"]
+      "entry": ["src/init.ts"]
     },
     "packages/arya-companion": {
-      "entry": ["src/app/**/*.{ts,tsx}", "babel.config.js"],
+      "entry": ["src/app/**/*.{ts,tsx}"],
       "ignoreDependencies": [
-        "babel-preset-expo",
         "expo-updates",
         "expo-system-ui",
         "react-native-css-interop",
