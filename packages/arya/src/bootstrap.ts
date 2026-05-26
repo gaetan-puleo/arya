@@ -1,211 +1,168 @@
+/**
+ * arya bootstrap — composes the shared `mu-harness` bootstrap with the
+ * arya-specific bits (config file, local provider, WS transport).
+ */
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { existsSync } from 'node:fs';
-import {
-  createJSONLSessionStore,
-  createSessionScopedMessageBus,
-  type MuRuntime,
-  startMu,
-} from 'mu-core';
-import {
-  createAgentsPlugin,
-  getMuAgents,
-} from 'mu-agents';
-import { createOpenAIProviderPlugin } from 'mu-openai-provider';
-import { createScheduler } from 'mu-scheduler';
-import { createMuToolsPlugin } from 'mu-tools';
-import { createWebFetchPlugin } from 'mu-webfetch';
-import { setupApprovalChannel } from './ws/approval-bootstrap.js';
-import { createWebSocketChannel } from './ws-channel.js';
-import { createAryaCommandsPlugin } from './plugins/commands.js';
-import { createLogger } from './lib/logger.js';
-import { loadConfig } from './bootstrap/config.js';
-import { loadEnvFile, maskEnvValue } from './bootstrap/env-loader.js';
-import {
-  aryaAgentsDir as xdgAgentsDir,
-  aryaEnvPath,
-  aryaPluginsDir,
-  aryaSessionsDir,
-} from './bootstrap/paths.js';
-import {
-  ensurePluginDepsInPath,
-  loadIntegrationPlugins,
-} from './bootstrap/plugin-loader.js';
 
-const log = createLogger('arya');
+import {
+  type AgentRuntime,
+  bootstrap as harnessBootstrap,
+  createAgentRuntime,
+  createLogger,
+  createSchedulerPlugin,
+  createXdgPaths,
+  maskEnvValue,
+} from 'mu-harness';
+import { createLocalProviderPlugin, type LocalBackendKind } from 'mu-local-provider';
+import { createMuTools } from 'mu-tools';
+import webfetchPlugin from 'mu-webfetch';
 
-export interface BootstrapHandle {
-  runtime: MuRuntime;
-  shutdown: () => Promise<void>;
+import { createWebSocketServer } from './ws';
+
+const log = createLogger('arya', { levelEnvVar: 'ARYA_LOG_LEVEL' });
+
+export interface BootstrapConfig {
+  /** Local provider backend kind (currently only 'llama-swap' is supported). */
+  kind?: LocalBackendKind;
+  baseUrl: string;
+  model: string;
+  apiKey?: string;
+  wsPort: number;
+  authToken?: string;
+  /** Override agents directory (defaults to `<cwd>/definitions/agents` if present). */
+  agentsDir?: string;
+  /** Override skills directory (defaults to `<cwd>/definitions/skills` if present). */
+  skillsDir?: string;
+  /** Override tasks directory (defaults to `<cwd>/definitions/tasks` if present). */
+  tasksDir?: string;
 }
 
-/**
- * Bootstrap arya — creates the MuRuntime, registers the WebSocket channel,
- * wires auto-persistence via the core store, and starts the scheduler.
- */
+function loadConfig(cwd: string, configPath?: string): BootstrapConfig {
+  const result: Partial<BootstrapConfig> = {};
+  if (configPath) {
+    try {
+      Object.assign(result, JSON.parse(readFileSync(configPath, 'utf-8')));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`[arya] Failed to load config from ${configPath}: ${msg}`);
+    }
+  }
+  const missing: string[] = [];
+  if (!result.baseUrl) missing.push('baseUrl');
+  if (!result.model) missing.push('model');
+  if (result.wsPort == null) missing.push('wsPort');
+  if (missing.length > 0) {
+    throw new Error(
+      `[arya] Missing required config field(s): ${missing.join(', ')}.\n` +
+        `       Edit ${configPath ?? '~/.config/arya/config.json'}.`,
+    );
+  }
+  return {
+    kind: result.kind,
+    baseUrl: result.baseUrl as string,
+    model: result.model as string,
+    apiKey: result.apiKey,
+    wsPort: result.wsPort as number,
+    authToken: result.authToken,
+    agentsDir: result.agentsDir ?? join(cwd, 'definitions', 'agents'),
+    skillsDir: result.skillsDir ?? join(cwd, 'definitions', 'skills'),
+    tasksDir: result.tasksDir ?? join(cwd, 'definitions', 'tasks'),
+  };
+}
+
+export interface BootstrapHandle {
+  shutdown: () => Promise<void>;
+  /** Exposed for tests / introspection. */
+  agent: AgentRuntime;
+}
+
 export async function bootstrap(
   cwd: string = process.cwd(),
   configPath?: string,
 ): Promise<BootstrapHandle> {
-  const envPath = aryaEnvPath();
-  const envResult = loadEnvFile(envPath);
-
   const config = loadConfig(cwd, configPath);
-  const agentsDir = config.agentsDir ?? join(cwd, 'definitions', 'agents');
-  const extraAgentDirs = [xdgAgentsDir()].filter((d) => d !== agentsDir);
+  const paths = createXdgPaths('arya');
 
+  // Provider plugin (arya-specific).
+  const providerPlugin = createLocalProviderPlugin({
+    kind: config.kind,
+    baseUrl: config.baseUrl,
+    model: config.model,
+    apiKey: config.apiKey,
+  });
+
+  // mu-tools (filesystem + shell) made available to the runtime, scoped to cwd.
+  const baseTools = createMuTools({ getCwd: () => cwd, restrictToCwd: false });
+
+  // Bootstrap with project-local overrides on top of the XDG layout.
+  const result = await harnessBootstrap({
+    hostName: 'arya',
+    paths,
+    extraAgentsDirs: config.agentsDir ? [config.agentsDir] : [],
+    extraSkillsDirs: config.skillsDir ? [config.skillsDir] : [],
+    providerPlugin,
+    extraPlugins: [webfetchPlugin],
+    baseTools,
+    permissionSource: 'primary-agent',
+    defaultPermissionDecision: 'ask',
+    sessionStore: 'jsonl',
+  });
+
+  // Logging.
   log.info(`Bootstrap — cwd: ${cwd}`);
   log.info(`Config — baseUrl: ${config.baseUrl}, model: ${config.model}`);
-  log.info(`Agents dir: ${agentsDir}`);
-  if (extraAgentDirs.length > 0) {
-    log.info(`Extra agents dirs: ${extraAgentDirs.join(', ')}`);
-  }
-  log.info(`Plugins dir: ${aryaPluginsDir()}`);
-
-  if (!envResult.found) {
-    log.info(`.env: not found at ${envPath}`);
+  if (!result.envResult.found) {
+    log.info(`.env: not found at ${paths.envFile}`);
   } else {
-    log.info(`.env: loaded ${envResult.loaded.length} var(s) from ${envPath}`);
-    for (const key of envResult.loaded) {
-      log.info(`  ${key} = ${maskEnvValue(process.env[key])}`);
-    }
-    if (envResult.skipped.length > 0) {
-      log.info(
-        `.env: skipped ${envResult.skipped.length} var(s) (already set): ${envResult.skipped.join(', ')}`,
-      );
+    log.info(`.env: loaded ${result.envResult.loaded.length} var(s) from ${paths.envFile}`);
+    for (const key of result.envResult.loaded) log.info(`  ${key} = ${maskEnvValue(process.env[key])}`);
+    if (result.envResult.skipped.length > 0) {
+      log.info(`.env: skipped ${result.envResult.skipped.length} var(s) (already set)`);
     }
   }
+  log.info(`Loaded ${result.plugins.length - 1} runtime plugin(s) + provider`);
+  log.info(`Loaded ${result.subAgents.length + (result.primaryAgent ? 1 : 0)} agent(s)`);
+  log.info(`Primary agent: ${result.primaryAgent?.name ?? '<none>'}`);
+  log.info(`Loaded ${result.skills.length} skill(s)`);
 
-  const messageBus = createSessionScopedMessageBus();
+  // Add the scheduler plugin (it needs the bus, which is only available now).
+  const scheduler = createSchedulerPlugin({
+    tasksDir: config.tasksDir && existsSync(config.tasksDir) ? config.tasksDir : undefined,
+    bus: result.bus,
+    onEvent: (event) => ws.push({ type: 'scheduler_event', event }),
+  });
+  result.plugins.push(scheduler);
 
-  // Persistent session store. Passed to startMu — the runtime wires
-  // exact transcript persistence on stream_ended automatically.
-  const sessionStore = createJSONLSessionStore({ dir: aryaSessionsDir() });
-  log.info('Session store ready');
-
-  ensurePluginDepsInPath();
-  const integrationPlugins = await loadIntegrationPlugins();
-  log.info(`Loaded ${integrationPlugins.length} integration plugin(s)`);
-
-  const runtime = await startMu({
-    config: {
-      baseUrl: config.baseUrl,
-      model: config.model,
-      maxTokens: config.maxTokens,
-      temperature: config.temperature,
-      streamTimeoutMs: config.streamTimeoutMs,
-      cwd,
-    },
-    messages: messageBus,
-    store: sessionStore,
-    plugins: [
-      createOpenAIProviderPlugin({ id: 'openai' }),
-      createAgentsPlugin({
-        agentsDir,
-        config: {
-          baseUrl: config.baseUrl,
-          model: config.model,
-          maxTokens: config.maxTokens,
-          temperature: config.temperature,
-          streamTimeoutMs: config.streamTimeoutMs,
-        },
-        approvalChannelId: 'websocket',
-      }),
-      {
-        name: 'arya-extra-agent-sources',
-        version: '0.1.0',
-        activate(ctx) {
-          for (const dir of extraAgentDirs) {
-            if (!existsSync(dir)) {
-              log.debug?.(`Skipping missing extra agents dir: ${dir}`);
-              continue;
-            }
-            ctx.agents?.registerSource(dir);
-            log.info(`Registered extra agents dir: ${dir}`);
-          }
-        },
-      },
-      createAryaCommandsPlugin(),
-      createMuToolsPlugin({ getCwd: () => cwd, restrictToCwd: true }),
-      createWebFetchPlugin(),
-      ...integrationPlugins,
-    ],
+  // ── Agent runtime (managed by harness, multi-session) ───────────────
+  const agent = createAgentRuntime({
+    tools: result.tools,
+    plugins: result.plugins,
+    hooks: result.hooks,
+    systemPrompt: result.systemPrompt,
+    model: config.model,
+    store: result.store,
+    bus: result.bus,
   });
 
-  messageBus.setResolveSession((id) => runtime.sessions.get(id));
-
-  const muAgents = getMuAgents(runtime.registry);
-  if (muAgents?.manager) {
-    const primary = muAgents.manager.getPrimary?.() ?? [];
-    const subagents = muAgents.manager.getSubagents?.() ?? [];
-    log.info(
-      `Loaded ${primary.length} primary agent(s): ${
-        primary.map((a) => a.name).join(', ') || 'none'
-      }`,
-    );
-    log.info(
-      `Loaded ${subagents.length} subagent(s)${
-        subagents.length > 0 ? `: ${subagents.map((a) => a.name).join(', ')}` : ''
-      }`,
-    );
-  }
-
-  const { unregister: unregisterApprovalChannel } = setupApprovalChannel(
-    runtime.registry,
-  );
-
-  // Rehydrate sessions from disk on first creation. Auto-persist is
-  // already wired by startMu (via the store option) so we only need to
-  // seed the in-memory transcript from the stored one.
-  runtime.sessions.onSessionCreated((session) => {
-    const stored = sessionStore.get(session.id);
-    if (stored && stored.messages.length > 0) {
-      session.setMessages(stored.messages);
-    }
+  // ── WS transport (arya-specific) ────────────────────────────────────
+  const ws = createWebSocketServer({
+    port: config.wsPort,
+    authToken: config.authToken,
+    agent,
+    approvalQueue: result.approvalQueue,
+    commandRegistry: result.commandRegistry,
+    getSubAgents: () => result.subAgents,
   });
 
-  const wsChannel = createWebSocketChannel(
-    runtime,
-    {
-      port: config.wsPort,
-      authToken: config.authToken,
-      store: sessionStore,
-      messageBus,
-    },
-  );
-  messageBus.setSyntheticAppendListener((sessionId, message) => {
-    wsChannel.push({ type: 'synthetic_message', sessionId, message });
-  });
-  runtime.channels.register(wsChannel);
-  log.info(`WebSocket channel registered on port ${config.wsPort}`);
-
-  const unsubscribeStore = sessionStore.subscribe((sessionId, kind) => {
-    wsChannel.push({ type: 'sessions:changed', sessionId, kind });
-    wsChannel.push({ type: 'sessions:listed', sessions: sessionStore.list() });
-  });
-
-  const scheduler = createScheduler({
-    submitText: (input) => runtime.submitText(input),
-    tasksDir: config.tasksDir,
-    onTaskEvent: (event) => {
-      wsChannel.push({ type: 'scheduler_event', event });
-      if (event.kind === 'output') {
-        log.info(`[task ${event.taskId}] ${event.text.slice(0, 200)}`);
-      } else if (event.kind === 'failed') {
-        log.error(`[task ${event.taskId}] failed: ${event.error}`);
-      }
-    },
-  });
-
-  log.info('Ready — accepting connections');
+  await ws.start();
+  log.info(`Listening on port ${config.wsPort} — accepting connections`);
 
   return {
-    runtime,
+    agent,
     shutdown: async () => {
       log.info('Shutting down...');
-      unsubscribeStore();
-      unregisterApprovalChannel();
-      scheduler.stop();
-      await runtime.shutdown();
+      await ws.stop();
       log.info('Stopped');
     },
   };

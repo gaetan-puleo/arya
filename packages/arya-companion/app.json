@@ -29,6 +29,8 @@
     },
     "plugins": [
       "expo-router",
+      "expo-system-ui",
+      "./plugins/withSuppressKotlinWarnings",
       [
         "expo-build-properties",
         {

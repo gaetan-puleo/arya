@@ -1,23 +1,5 @@
 {
   "name": "arya-agent",
   "private": true,
-  "workspaces": ["packages/*"],
-  "scripts": {
-    "start": "cd packages/arya && bun run start",
-    "dev:server": "cd packages/arya && bun run dev",
-    "dev:companion": "cd packages/arya-companion && bun run dev",
-    "dev": "concurrently -n server,companion -c blue,magenta \"cd packages/arya && bun run dev\" \"cd packages/arya-companion && bun run dev\"",
-    "init": "cd packages/arya && bun run init"
-  },
-  "devDependencies": {
-    "concurrently": "^9.2.1"
-  },
-  "overrides": {
-    "mu-core": "file:../mu/packages/mu-core",
-    "mu-agents": "file:../mu/packages/mu-agents",
-    "mu-tools": "file:../mu/packages/mu-tools",
-    "mu-openai-provider": "file:../mu/packages/mu-openai-provider",
-    "mu-scheduler": "file:../mu/packages/mu-scheduler",
-    "mu-webfetch": "file:../mu/packages/mu-webfetch"
-  }
+  "workspaces": ["packages/arya", "packages/arya-companion"]
 }

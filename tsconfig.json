@@ -14,12 +14,11 @@
     "baseUrl": ".",
     "jsx": "react-jsx",
     "paths": {
-      "mu-core": ["../mu/packages/mu-core/src"],
-      "mu-agents": ["../mu/packages/mu-agents/src"],
-      "mu-openai-provider": ["../mu/packages/mu-openai-provider/src"],
-      "mu-scheduler": ["../mu/packages/mu-scheduler/src"],
-      "mu-tools": ["../mu/packages/mu-tools/src"],
-      "mu-webfetch": ["../mu/packages/mu-webfetch/src"]
+      "mu-core": ["../mu/packages/core/src"],
+      "mu-harness": ["../mu/packages/harness/src"],
+      "mu-local-provider": ["../mu/packages/local-provider/src"],
+      "mu-tools": ["../mu/packages/tools/src"],
+      "mu-webfetch": ["../mu/packages/webfetch/src/plugin"]
     }
   },
   "include": ["packages/**/src/**/*.ts", "packages/**/src/**/*.tsx"],

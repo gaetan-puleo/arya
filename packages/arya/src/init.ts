@@ -1,65 +1,81 @@
-import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { homedir } from 'node:os';
-
-/** Resolve the XDG config home directory. */
-function xdgConfig(): string {
-  return process.env.XDG_CONFIG_HOME ?? join(homedir(), '.config');
-}
-
 /**
- * Initialize arya configuration in ~/.config/arya/.
+ * `arya init` — write a default XDG config layout.
  *
- * Creates:
- *   ~/.config/arya/config.json          — LLM + WebSocket config
- *   ~/.config/arya/agents/arya.md        — Default agent definition
- *   ~/.config/arya/tasks/default.yaml    — Default scheduled tasks
- *   ~/.config/arya/plugins/              — Plugin config directory (empty)
+ *   ~/.config/arya/config.json
+ *   ~/.config/arya/agents/arya.md       (primary, per-agent permissions)
+ *   ~/.config/arya/skills/              (empty placeholder)
+ *   ~/.config/arya/tasks/default.yaml
+ *   ~/.config/arya/plugins/             (empty placeholder)
  *
- * Existing files are never overwritten.
+ * Existing files are NEVER overwritten.
  */
+
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { createXdgPaths } from 'mu-harness';
+
+const CONFIG_TEMPLATE = `${JSON.stringify(
+  {
+    kind: 'llama-swap',
+    baseUrl: 'http://localhost:8080',
+    model: 'qwen2.5-coder:7b',
+    wsPort: 3001,
+    authToken: '',
+  },
+  null,
+  2,
+)}\n`;
+
+const AGENT_TEMPLATE = `---
+name: arya
+description: Default Arya primary agent
+type: primary
+color: '#3B82F6'
+tools:
+  read: allow
+  list_dir: allow
+  webfetch: allow
+  write:
+    "**/.env*": deny
+    "**": ask
+  edit:
+    "**/.env*": deny
+    "**": ask
+  bash:
+    "git *": allow
+    "**": ask
+  subagent: ask
+  subagent_parallel: ask
+---
+You are Arya, an autonomous primary assistant powered by arya-agent. You can
+use tools to interact with the filesystem, execute shell commands, fetch URLs,
+and delegate work to sub-agents. Sensitive operations will prompt the user.
+`;
+
+const TASKS_TEMPLATE = `# Example scheduled tasks. Edit or remove as needed.
+# - id: daily-hello
+#   cron: "0 9 * * *"
+#   prompt: Say hello and summarize anything pending.
+`;
+
 export function init(): void {
-  const configDir = join(xdgConfig(), 'arya');
-  const dirs = [
-    join(configDir, 'agents'),
-    join(configDir, 'tasks'),
-    join(configDir, 'plugins'),
+  const paths = createXdgPaths('arya');
+  const dirs = [paths.agentsDir, paths.skillsDir, paths.tasksDir, paths.pluginsDir];
+  for (const dir of dirs) mkdirSync(dir, { recursive: true });
+
+  const files: Array<[string, string]> = [
+    [paths.configFile, CONFIG_TEMPLATE],
+    [`${paths.agentsDir}/arya.md`, AGENT_TEMPLATE],
+    [`${paths.tasksDir}/default.yaml`, TASKS_TEMPLATE],
   ];
-
-  for (const dir of dirs) {
-    mkdirSync(dir, { recursive: true });
+  for (const [path, content] of files) {
+    if (!existsSync(path)) writeFileSync(path, content);
   }
 
-  // Resolve templates dir relative to this file (works both when run
-  // from `bun run src/init.ts` and from a packaged install). The
-  // canonical templates live in `packages/arya/templates/` — single
-  // source of truth. Missing templates fail loud (broken install).
-  const here = dirname(fileURLToPath(import.meta.url));
-  const templatesDir = join(here, '..', 'templates');
-
-  const configPath = join(configDir, 'config.json');
-  if (!existsSync(configPath)) {
-    const template = readFileSync(join(templatesDir, 'config.json'), 'utf8');
-    writeFileSync(configPath, template);
-  }
-
-  const agentPath = join(configDir, 'agents', 'arya.md');
-  if (!existsSync(agentPath)) {
-    const agentTemplate = readFileSync(join(templatesDir, 'agent.md'), 'utf8');
-    writeFileSync(agentPath, agentTemplate);
-  }
-
-  const tasksPath = join(configDir, 'tasks', 'default.yaml');
-  if (!existsSync(tasksPath)) {
-    const tasksTemplate = readFileSync(join(templatesDir, 'tasks.yaml'), 'utf8');
-    writeFileSync(tasksPath, tasksTemplate);
-  }
-
-  console.log('✅ Arya initialized!');
-  console.log(`   Config: ${configDir}`);
-  console.log(`   Agents: ${join(configDir, 'agents')}`);
-  console.log(`   Tasks:  ${join(configDir, 'tasks')}`);
+  console.log('Arya initialized!');
+  console.log(`  Config: ${paths.configDir}`);
+  console.log(`  Agents: ${paths.agentsDir}`);
+  console.log(`  Skills: ${paths.skillsDir}`);
+  console.log(`  Tasks:  ${paths.tasksDir}`);
 }
 
 if (import.meta.main) {

@@ -1,5 +1,5 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import type { MessageDisplayRow } from "mu-core/client";
+import type { MessageDisplayRow } from "@/types/domain";
 import React from "react";
 import { Text, View } from "react-native";
 import { useTheme } from "@/theme/ThemeContext";

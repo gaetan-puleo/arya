@@ -1,0 +1,38 @@
+{
+  "tasks": {
+    "start": "deno run -A --sloppy-imports packages/arya/src/index.ts",
+    "dev": "deno run -A --watch --sloppy-imports packages/arya/src/index.ts",
+    "init": "deno run -A --sloppy-imports packages/arya/src/init.ts",
+    "check": "deno check --sloppy-imports packages/arya/src/",
+    "test": "deno test -A --sloppy-imports packages/arya/src/"
+  },
+  "imports": {
+    "ws": "npm:ws@^8.18.0",
+    "croner": "npm:croner@^9.0.0",
+    "openai": "npm:openai@^6.38.0",
+    "openai/": "npm:/openai@^6.38.0/",
+    "turndown": "npm:turndown@^7.2.2",
+    "@std/yaml": "jsr:@std/yaml@^1.0.0",
+    "mu-core": "../mu/packages/core/src/index.ts",
+    "mu-core/": "../mu/packages/core/src/",
+    "mu-harness": "../mu/packages/harness/src/index.ts",
+    "mu-harness/": "../mu/packages/harness/src/",
+    "mu-local-provider": "../mu/packages/local-provider/src/index.ts",
+    "mu-local-provider/": "../mu/packages/local-provider/src/",
+    "mu-tools": "../mu/packages/tools/src/index.ts",
+    "mu-tools/": "../mu/packages/tools/src/",
+    "mu-webfetch": "../mu/packages/webfetch/src/plugin.ts"
+  },
+  "unstable": ["sloppy-imports"],
+  "nodeModulesDir": "none",
+  "compilerOptions": {
+    "strict": true
+  },
+  "fmt": {
+    "lineWidth": 120,
+    "indentWidth": 2,
+    "singleQuote": true,
+    "semiColons": true
+  },
+  "exclude": ["**/node_modules", "**/dist", "packages/arya-companion"]
+}

@@ -2,8 +2,8 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeContext";
-import type { SessionSummary } from "@/lib/ws";
-import { groupByDate } from "mu-core/client";
+import type { SessionSummary } from "@/types/domain";
+import { groupByDate } from "@/services/formatters";
 import SessionRow from "./SessionRow";
 
 interface SessionListProps {

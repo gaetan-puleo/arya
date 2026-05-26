@@ -1,28 +1,20 @@
 {
   "name": "arya",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Autonomous multi-agent runtime powered by mu",
   "bin": {
     "arya": "./bin/arya.js"
   },
-  "scripts": {
-    "start": "bun run src/index.ts",
-    "dev": "bun --watch run src/index.ts",
-    "init": "bun -e \"import { init } from './src/init.js'; init()\""
-  },
   "dependencies": {
-    "mu-agents": "file:../../../mu/packages/mu-agents",
-    "mu-core": "file:../../../mu/packages/mu-core",
-    "mu-openai-provider": "file:../../../mu/packages/mu-openai-provider",
-    "mu-scheduler": "file:../../../mu/packages/mu-scheduler",
-    "mu-tools": "file:../../../mu/packages/mu-tools",
-    "mu-webfetch": "file:../../../mu/packages/mu-webfetch",
-    "ws": "^8.18.0"
-  },
-  "devDependencies": {
-    "@types/node": "^22.0.0",
-    "@types/ws": "^8.5.13",
-    "typescript": "~5.6"
+    "mu-core": "file:../../../mu/packages/core",
+    "mu-harness": "file:../../../mu/packages/harness",
+    "mu-local-provider": "file:../../../mu/packages/local-provider",
+    "mu-tools": "file:../../../mu/packages/tools",
+    "mu-webfetch": "file:../../../mu/packages/webfetch",
+    "ws": "^8.18.0",
+    "croner": "^9.0.0",
+    "openai": "^6.38.0",
+    "turndown": "^7.2.2"
   }
 }
