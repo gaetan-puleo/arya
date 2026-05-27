@@ -98,7 +98,7 @@ export interface CommandWire {
 	description: string;
 }
 
-interface SchedulerEvent {
+export interface SchedulerEvent {
 	kind: "started" | "output" | "completed" | "failed";
 	taskId: string;
 	sessionId: string;

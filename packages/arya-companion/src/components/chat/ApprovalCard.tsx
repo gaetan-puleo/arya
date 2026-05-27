@@ -30,7 +30,7 @@ export default function ApprovalCard({
 	const statusColor =
 		status === "approved"
 			? theme.colors.success
-			: status === "denied" || status === "timeout"
+			: status === "denied"
 				? theme.colors.danger
 				: null;
 	const canExpand = !!summary;
@@ -68,11 +68,7 @@ export default function ApprovalCard({
 								className="text-xs font-semibold"
 								style={{ color: statusColor }}
 							>
-								{status === "approved"
-									? "Approved"
-									: status === "timeout"
-										? "Timed out"
-										: "Denied"}
+								{status === "approved" ? "Approved" : "Denied"}
 							</Text>
 						</View>
 					) : null}

@@ -1,6 +1,6 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
+import { type Href, useRouter } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 import { useTheme } from "@/theme/ThemeContext";
 
@@ -25,11 +25,13 @@ export default function SessionsHeader({
 					onPress={() => {
 						Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 						// Intentionally don't close the drawer here — the
-						// chat screen stays mounted under /two, so the
+						// chat screen stays mounted under /settings, so the
 						// drawer's open state is preserved. When the user
 						// taps "back" on the settings screen, they return
 						// to the still-open sessions sidebar.
-						router.push("/two");
+						// Cast: typed-routes regenerates on `expo start`; until
+						// then `/settings` isn't in the static `Href` union.
+						router.push("/settings" as Href);
 					}}
 					hitSlop={6}
 					accessibilityLabel="Settings"

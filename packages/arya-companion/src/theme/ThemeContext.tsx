@@ -1,22 +1,11 @@
-import { createContext, useContext } from 'react';
 import type { Theme } from './themes';
 import { darkTheme } from './themes';
 
-interface ThemeContextValue {
-  theme: Theme;
-}
-
-const ThemeContext = createContext<ThemeContextValue>({
-  theme: darkTheme,
-});
-
-const value: ThemeContextValue = { theme: darkTheme };
-
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
-}
-
-/** Returns the active theme object. */
+/**
+ * The theme is currently static (dark only). `useTheme` exists so call sites
+ * can still read the active theme without binding to a specific constant —
+ * leaving the door open to dynamic theming later without rippling changes.
+ */
 export function useTheme(): Theme {
-  return useContext(ThemeContext).theme;
+  return darkTheme;
 }

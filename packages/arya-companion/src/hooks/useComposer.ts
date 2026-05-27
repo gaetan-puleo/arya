@@ -55,16 +55,11 @@ export function useComposer(): ComposerState {
 			)
 		: [];
 
-	const filteredAgents = showAgentMenu
-		? agents
-				.filter((a) => (a.type ?? "primary") === "subagent")
-				.filter(
-					(a) =>
-						!query ||
-						a.id.toLowerCase().includes(query) ||
-						a.description.toLowerCase().includes(query),
-				)
-		: [];
+	// The `@` agent menu is plumbed end-to-end but currently has no rows
+	// to surface — every wire agent is hardcoded `type: "primary"` and
+	// the previous filter (`=== "subagent"`) produced an empty list.
+	// Re-enable once the server emits sub-agent entries on the `agents` wire.
+	const filteredAgents: AgentInfo[] = [];
 
 	const send = useCallback(() => {
 		const txt = input.trim();

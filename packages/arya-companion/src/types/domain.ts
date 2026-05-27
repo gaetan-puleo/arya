@@ -11,7 +11,7 @@ export interface AgentInfo {
 	 *  renames so the rest of the app sees a single field name. */
 	id: string;
 	description: string;
-	type?: "primary" | "subagent";
+	type?: "primary";
 	color?: string;
 }
 
@@ -58,7 +58,7 @@ export interface MessageDisplayRow {
 
 export interface ApprovalSnapshot {
 	approvalId: string;
-	status: "pending" | "approved" | "denied" | "timeout";
+	status: "pending" | "approved" | "denied";
 	toolName: string;
 	toolArgs: unknown;
 	toolArgsPretty: string;
@@ -68,7 +68,7 @@ export interface ApprovalSnapshot {
 	resolvedAt?: number;
 }
 
-export type SubagentStatus = "running" | "done" | "error" | "aborted";
+export type SubagentStatus = "running" | "done" | "error";
 
 export interface SubAgentRunSnapshot {
 	runId: string;

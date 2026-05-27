@@ -8,23 +8,41 @@ import { join } from 'node:path';
 import {
   type AgentRuntime,
   bootstrap as harnessBootstrap,
+  createAgentsCommand,
   createAgentRuntime,
-  createLogger,
+  createCommandRegistry,
+  createHelpCommand,
   createSchedulerPlugin,
+  createSessionsCommand,
   createXdgPaths,
-  maskEnvValue,
 } from 'mu-harness';
-import { createLocalProviderPlugin, type LocalBackendKind } from 'mu-local-provider';
+import { createLocalProviderPlugin, type LocalProviderConfig } from 'mu-local-provider';
 import { createMuTools } from 'mu-tools';
 import webfetchPlugin from 'mu-webfetch';
 
 import { createWebSocketServer } from './ws';
 
-const log = createLogger('arya', { levelEnvVar: 'ARYA_LOG_LEVEL' });
+// Minimal level-gated logger. Replaces the removed `createLogger` from
+// mu-harness; preserves the ARYA_LOG_LEVEL knob so operators can silence info.
+type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
+const LEVEL_ORDER: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3, silent: 4 };
+function makeLog(scope: string, levelEnvVar: string) {
+  const raw = (process.env[levelEnvVar] ?? 'info').toLowerCase();
+  const level: LogLevel = (raw in LEVEL_ORDER ? raw : 'info') as LogLevel;
+  const threshold = LEVEL_ORDER[level];
+  const at = (lvl: LogLevel) => LEVEL_ORDER[lvl] >= threshold;
+  return {
+    debug: (msg: string) => at('debug') && console.log(`[${scope}] ${msg}`),
+    info: (msg: string) => at('info') && console.log(`[${scope}] ${msg}`),
+    warn: (msg: string) => at('warn') && console.warn(`[${scope}] ${msg}`),
+    error: (msg: string) => at('error') && console.error(`[${scope}] ${msg}`),
+  };
+}
+const log = makeLog('arya', 'ARYA_LOG_LEVEL');
 
 export interface BootstrapConfig {
   /** Local provider backend kind (currently only 'llama-swap' is supported). */
-  kind?: LocalBackendKind;
+  kind?: LocalProviderConfig['kind'];
   baseUrl: string;
   model: string;
   apiKey?: string;
@@ -37,8 +55,6 @@ export interface BootstrapConfig {
   authToken?: string;
   /** Override agents directory (defaults to `<cwd>/definitions/agents` if present). */
   agentsDir?: string;
-  /** Override skills directory (defaults to `<cwd>/definitions/skills` if present). */
-  skillsDir?: string;
   /** Override tasks directory (defaults to `<cwd>/definitions/tasks` if present). */
   tasksDir?: string;
 }
@@ -104,7 +120,6 @@ function loadConfig(cwd: string, configPath?: string): BootstrapConfig {
     wsHost,
     authToken,
     agentsDir: result.agentsDir ?? join(cwd, 'definitions', 'agents'),
-    skillsDir: result.skillsDir ?? join(cwd, 'definitions', 'skills'),
     tasksDir: result.tasksDir ?? join(cwd, 'definitions', 'tasks'),
   };
 }
@@ -131,14 +146,13 @@ export async function bootstrap(
   });
 
   // mu-tools (filesystem + shell) made available to the runtime, scoped to cwd.
-  const baseTools = createMuTools({ getCwd: () => cwd, restrictToCwd: false });
+  const baseTools = createMuTools({ getCwd: () => cwd });
 
   // Bootstrap with project-local overrides on top of the XDG layout.
   const result = await harnessBootstrap({
     hostName: 'arya',
     paths,
     extraAgentsDirs: config.agentsDir ? [config.agentsDir] : [],
-    extraSkillsDirs: config.skillsDir ? [config.skillsDir] : [],
     providerPlugin,
     extraPlugins: [webfetchPlugin],
     baseTools,
@@ -147,22 +161,13 @@ export async function bootstrap(
     sessionStore: 'jsonl',
   });
 
-  // Logging.
+  // Logging. Note: harness no longer loads `.env` or surfaces a skills list,
+  // so those lines were dropped along with their underlying APIs.
   log.info(`Bootstrap — cwd: ${cwd}`);
   log.info(`Config — baseUrl: ${config.baseUrl}, model: ${config.model}`);
-  if (!result.envResult.found) {
-    log.info(`.env: not found at ${paths.envFile}`);
-  } else {
-    log.info(`.env: loaded ${result.envResult.loaded.length} var(s) from ${paths.envFile}`);
-    for (const key of result.envResult.loaded) log.info(`  ${key} = ${maskEnvValue(process.env[key])}`);
-    if (result.envResult.skipped.length > 0) {
-      log.info(`.env: skipped ${result.envResult.skipped.length} var(s) (already set)`);
-    }
-  }
   log.info(`Loaded ${result.plugins.length - 1} runtime plugin(s) + provider`);
   log.info(`Loaded ${result.subAgents.length + (result.primaryAgent ? 1 : 0)} agent(s)`);
   log.info(`Primary agent: ${result.primaryAgent?.name ?? '<none>'}`);
-  log.info(`Loaded ${result.skills.length} skill(s)`);
 
   // Scheduler plugin must be added BEFORE `createAgentRuntime`, which snapshots
   // tools/provider from the plugin list at construction time. The scheduler's
@@ -190,6 +195,14 @@ export async function bootstrap(
     bus: result.bus,
   });
 
+  // Command registry — the harness `bootstrap` no longer surfaces one, so
+  // arya assembles the default `/agents`, `/sessions`, `/help` commands here
+  // for the WS `command`/`commands` protocol.
+  const commandRegistry = createCommandRegistry();
+  commandRegistry.register(createAgentsCommand({ getSubAgents: () => result.subAgents }));
+  commandRegistry.register(createSessionsCommand({ store: result.store }));
+  commandRegistry.register(createHelpCommand({ list: () => commandRegistry.list() }));
+
   // ── WS transport (arya-specific) ────────────────────────────────────
   const ws = createWebSocketServer({
     port: config.wsPort,
@@ -197,7 +210,7 @@ export async function bootstrap(
     authToken: config.authToken,
     agent,
     approvalQueue: result.approvalQueue,
-    commandRegistry: result.commandRegistry,
+    commandRegistry,
     getSubAgents: () => result.subAgents,
   });
 

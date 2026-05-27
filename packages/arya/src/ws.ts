@@ -20,12 +20,27 @@ import {
   type AgentRuntime,
   type ApprovalQueue,
   type CommandRegistry,
-  createLogger,
   type PersistedSessionStore,
   type SubAgent,
 } from 'mu-harness';
 
-const log = createLogger('arya:ws', { levelEnvVar: 'ARYA_LOG_LEVEL' });
+// Minimal level-gated logger. Inlined after `createLogger` was removed from
+// mu-harness; preserves the ARYA_LOG_LEVEL knob for silencing info.
+type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
+const LEVEL_ORDER: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3, silent: 4 };
+function makeLog(scope: string, levelEnvVar: string) {
+  const raw = (process.env[levelEnvVar] ?? 'info').toLowerCase();
+  const level: LogLevel = (raw in LEVEL_ORDER ? raw : 'info') as LogLevel;
+  const threshold = LEVEL_ORDER[level];
+  const at = (lvl: LogLevel) => LEVEL_ORDER[lvl] >= threshold;
+  return {
+    debug: (msg: string) => at('debug') && console.log(`[${scope}] ${msg}`),
+    info: (msg: string) => at('info') && console.log(`[${scope}] ${msg}`),
+    warn: (msg: string) => at('warn') && console.warn(`[${scope}] ${msg}`),
+    error: (msg: string) => at('error') && console.error(`[${scope}] ${msg}`),
+  };
+}
+const log = makeLog('arya:ws', 'ARYA_LOG_LEVEL');
 
 export interface WebSocketServerOptions {
   port: number;
@@ -59,7 +74,8 @@ function asPersistedStore(agent: AgentRuntime): PersistedSessionStore {
 export function createWebSocketServer(opts: WebSocketServerOptions): WebSocketServerHandle {
   const clients = new Set<WebSocket>();
   const store = asPersistedStore(opts.agent);
-  const { bus, approvalQueue, commandRegistry } = { bus: opts.agent.bus, approvalQueue: opts.approvalQueue, commandRegistry: opts.commandRegistry };
+  const bus = opts.agent.bus;
+  const { approvalQueue, commandRegistry } = opts;
 
   let wss: WebSocketServer | null = null;
   let activeSessionId: string | null = null;

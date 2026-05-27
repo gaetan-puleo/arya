@@ -1,4 +1,3 @@
-import { ThemeProvider as ThemeProviderUI } from "@/theme/ThemeContext";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { useFonts } from "expo-font";
@@ -46,15 +45,7 @@ export default function RootLayout() {
 		return null;
 	}
 
-	return <RootLayoutNav />;
-}
-
-function RootLayoutNav() {
-	return (
-		<ThemeProviderUI>
-			<StackNavigator />
-		</ThemeProviderUI>
-	);
+	return <StackNavigator />;
 }
 
 function StackNavigator() {
@@ -77,7 +68,7 @@ function StackNavigator() {
 					name="index"
 					options={{ contentStyle: { paddingTop: insets.top } }}
 				/>
-				<Stack.Screen name="two" />
+				<Stack.Screen name="settings" />
 				<Stack.Screen name="sub-agent/[runId]" />
 			</Stack>
 		</ThemeProvider>
