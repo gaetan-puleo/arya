@@ -1,16 +1,25 @@
 /**
- * Arya WebSocket client.
+ * Arya WebSocket client — orchestrator.
  *
- * Owns the WS lifecycle, the inbound JSON → store dispatch, and the
- * typed outbound senders. The store knows nothing about the WS; the
- * components know nothing about the wire. Hooks call into this module
- * for everything.
+ * Owns the WS lifecycle (start/stop, attaching socket handlers,
+ * wiring the inbound parser to `dispatch`). Outbound senders that
+ * need a typed payload + optimistic local effect (`sendChat`,
+ * `sendCommand`, `setActiveAgent`) live here too — they hold the
+ * "intent → store + wire" coupling and feel out of place anywhere
+ * else.
+ *
+ * The heavy lifting is delegated:
+ *   - outbound.ts   — transport handle, `send` / `sendRaw`, raw senders
+ *   - wireDispatch  — the big inbound switch
+ *   - optimistic.ts — id generation, row insertion/rollback
+ *   - approvals.ts  — approval-snapshot lifecycle, token replay
+ *   - activeAgent.ts — optimistic active-agent state + rollback
  *
  *   transport (services/wsTransport.ts)
  *      │  raw socket events
  *      ▼
- *   aryaClient
- *      │  store.<action>()
+ *   aryaClient (this file)
+ *      │  dispatch(msg) → store.<action>()
  *      ▼
  *   useStore (state/store.ts)
  *      │  zustand subscription
@@ -22,62 +31,41 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { useStore } from "@/state/store";
 import { readWsConfig } from "@/services/wsConfig";
+import { createReconnectingSocket } from "@/services/wsTransport";
+import { dispatch } from "@/services/wireDispatch";
 import {
-	createReconnectingSocket,
-	type ReconnectingSocket,
-} from "@/services/wsTransport";
-import { wireSessionToRows } from "@/services/projectMessage";
-import {
-	reduceSubAgentEvent,
-	resolveApproval,
-	snapshotFromApprovalRequest,
-} from "@/services/snapshotReducers";
-import type {
-	WsInboundMessage,
-	WsOutboundMessage,
-} from "@/types/wire";
+	send,
+	sendRaw,
+	setTransportHandle,
+	transportRef,
+	requestSessionHistory,
+} from "@/services/outbound";
+import { nextOptimisticId, removeTranscriptRow } from "@/services/optimistic";
+import { markActiveAgentPending } from "@/services/activeAgent";
+import type { WsInboundMessage } from "@/types/wire";
+
+// Re-exports — keep the surface used by hooks/components unchanged.
+export { send } from "@/services/outbound";
+export { respondApproval } from "@/services/approvals";
+export {
+	requestCommands,
+	requestAgents,
+	requestSessions,
+	requestSessionHistory,
+} from "@/services/outbound";
 
 const SESSION_ID_KEY = "arya-companion-current-session";
 
-// Approval row id prefix — must match ChatMessageList.APPROVAL_PREFIX.
-const APPROVAL_ROW_PREFIX = "approval-";
-// Sub-agent row id prefix — must match ChatMessageList.SUBAGENT_PREFIX.
-const SUBAGENT_ROW_PREFIX = "sub-agent-";
-
-// ─── Transport state ──────────────────────────────────────────────────
-
-/**
- * Single source of truth for the live transport handle. `transportRef`
- * lets handlers always read the *current* socket instead of closing
- * over the socket they were created with (which may be stale after a
- * fast reconnect).
- */
-const transportRef: { current: ReconnectingSocket | null } = {
-	current: null,
-};
+// ─── Lifecycle ────────────────────────────────────────────────────────
 
 // Concurrency guard. `start()` is async and awaits AsyncStorage; without
 // this guard two parallel calls (e.g. Save tapped twice, foreground
 // race) both reach the WebSocket-construction line and orphan the
 // first socket. `startPromise` collapses concurrent calls to a single
-// in-flight start; `starting` short-circuits the trivial "still in
+// in-flight promise; `starting` short-circuits the trivial "still in
 // progress" case.
 let starting = false;
 let startPromise: Promise<void> | null = null;
-
-// Tracks approval ids whose tokens have been consumed (either resolved
-// or already known to the UI). Duplicate `approval_request` payloads
-// for an id already in this set are dropped — server retries can't
-// reset a resolved approval back to pending.
-const seenApprovalIds = new Set<string>();
-
-// Optimistic active-agent change pending server confirmation. If the
-// server sends a different `active_agent` than we optimistically set,
-// we revert; an `error` after a `set_active_agent` send also reverts.
-let pendingActiveAgent: { previous: string | null; sessionId: string | null } | null =
-	null;
-
-// ─── Lifecycle ────────────────────────────────────────────────────────
 
 /**
  * Start (or restart) the WS transport using the stored config.
@@ -99,7 +87,7 @@ async function doStart(): Promise<void> {
 	// Dispose the previous transport synchronously; do this before any
 	// await so concurrent callers can't observe a stale handle.
 	transportRef.current?.dispose();
-	transportRef.current = null;
+	setTransportHandle(null);
 
 	const savedSid = await AsyncStorage.getItem(SESSION_ID_KEY);
 	if (savedSid) useStore.getState().setCurrentSessionId(savedSid);
@@ -173,49 +161,17 @@ async function doStart(): Promise<void> {
 		useStore.getState().setConnection(socket, false);
 	});
 
-	transportRef.current = handle;
+	setTransportHandle(handle);
 }
 
 /** Stops the WS transport. */
 export function stop(): void {
 	transportRef.current?.dispose();
-	transportRef.current = null;
+	setTransportHandle(null);
 	useStore.getState().setConnection(null, false);
 }
 
-// ─── Outbound (typed senders) ─────────────────────────────────────────
-
-function activeSocket(): WebSocket | null {
-	const s = transportRef.current?.getSocket() ?? null;
-	return s?.readyState === WebSocket.OPEN ? s : null;
-}
-
-function sendRaw(socket: WebSocket, payload: WsOutboundMessage): void {
-	socket.send(JSON.stringify(payload));
-}
-
-function send(payload: WsOutboundMessage): boolean {
-	const s = activeSocket();
-	if (!s) return false;
-	sendRaw(s, payload);
-	return true;
-}
-
-export function requestCommands(): void {
-	send({ type: "commands" });
-}
-
-export function requestAgents(): void {
-	send({ type: "agents" });
-}
-
-export function requestSessions(): void {
-	send({ type: "sessions:list" });
-}
-
-export function requestSessionHistory(sessionId: string): void {
-	send({ type: "sessions:get", sessionId });
-}
+// ─── Outbound senders that pair an optimistic local effect ────────────
 
 export function setActiveAgent(
 	agentId: string,
@@ -227,7 +183,7 @@ export function setActiveAgent(
 	if (send({ type: "set_active_agent", agentId, sessionId: sessionId ?? undefined })) {
 		setActiveAgentId(agentId); // optimistic — server echoes `active_agent`
 		// Record the previous value so we can roll back on rejection.
-		pendingActiveAgent = { previous, sessionId };
+		markActiveAgentPending(previous, sessionId);
 	} else {
 		console.warn(
 			`[ws] set_active_agent dropped (not connected): ${agentId}`,
@@ -255,22 +211,6 @@ export function selectSession(sessionId: string | null): void {
 	} else {
 		AsyncStorage.removeItem(SESSION_ID_KEY).catch(() => {});
 	}
-}
-
-// ─── Optimistic id generation ─────────────────────────────────────────
-
-/**
- * Monotonic counter combined with `Math.random()` for client-side
- * optimistic ids. `Date.now()` alone can collide when two sends land
- * in the same millisecond (rapid taps); FlashList warns about
- * duplicate keys and behaviour around the second row degrades.
- */
-let optimisticCounter = 0;
-
-function nextOptimisticId(kind: "msg" | "cmd"): string {
-	optimisticCounter += 1;
-	const rand = Math.random().toString(36).slice(2, 8);
-	return `local-${kind}-${Date.now()}-${optimisticCounter}-${rand}`;
 }
 
 /**
@@ -320,205 +260,5 @@ export function sendCommand(sessionId: string, text: string): void {
 		console.warn(
 			`[ws] command dropped (not connected): sessionId=${sessionId}`,
 		);
-	}
-}
-
-/**
- * Helper — drop a single optimistic row from a session transcript.
- * Used on rollback when the underlying send fails.
- */
-function removeTranscriptRow(sessionId: string, rowId: string): void {
-	const store = useStore.getState();
-	const rows = store.transcripts.get(sessionId);
-	if (!rows) return;
-	const next = rows.filter((r) => r.id !== rowId);
-	if (next.length !== rows.length) {
-		store.replaceTranscript(sessionId, next);
-	}
-}
-
-export function respondApproval(
-	approvalId: string,
-	action: "approve" | "deny",
-): void {
-	const store = useStore.getState();
-	const snap = store.approvals.get(approvalId);
-	// Single-use token: refuse if already resolved (defends against
-	// re-tap on a duplicate approval row).
-	if (!snap || snap.status !== "pending") {
-		console.warn(
-			`[ws] respondApproval ignored — ${approvalId} is not pending`,
-		);
-		return;
-	}
-	const ok = send({
-		type: "approval_response",
-		requestId: approvalId,
-		action,
-	});
-	if (!ok) {
-		// Fail-fast with a clear log; the snapshot stays `pending` so the
-		// UI still offers the buttons. Surfacing a richer error in the
-		// store would require a new slice — keep the change minimal here.
-		console.error(
-			`[ws] approval_response dropped (not connected): ${approvalId}`,
-		);
-		return;
-	}
-	store.upsertApproval(resolveApproval(snap, action));
-}
-
-// ─── Inbound dispatch ─────────────────────────────────────────────────
-
-function dispatch(msg: WsInboundMessage): void {
-	const store = useStore.getState();
-
-	switch (msg.type) {
-		case "commands":
-			store.setCommands(msg.commands);
-			return;
-
-		case "agents":
-			store.setAgents(
-				msg.agents.map((a) => ({
-					id: a.name,
-					description: a.description,
-					color: a.color,
-					type: "primary",
-				})),
-				msg.activeAgentId,
-			);
-			return;
-
-		case "active_agent": {
-			// Server confirmed (or independently flipped) the active
-			// agent. If we had an optimistic change pending and the
-			// server's new value disagrees, clear our pending record —
-			// the server is the source of truth.
-			pendingActiveAgent = null;
-			store.setActiveAgentId(msg.agentId);
-			return;
-		}
-
-		case "sessions:listed":
-			store.setSessions(msg.sessions);
-			return;
-
-		case "sessions:changed":
-			requestSessions();
-			return;
-
-		case "sessions:history": {
-			const sid = msg.sessionId;
-			const wire = msg.session;
-			const rows = wire
-				? wireSessionToRows(wire.messages, store.activeAgentId)
-				: [];
-			store.replaceTranscript(sid, rows);
-			return;
-		}
-
-		case "stream": {
-			const sid = msg.sessionId;
-			if (!sid) return;
-			store.setStreamingPlaceholder(sid, msg.text);
-			return;
-		}
-
-		case "reasoning":
-			// Not surfaced in the UI today; logged for visibility.
-			return;
-
-		case "turn_start":
-			return;
-
-		case "turn_end": {
-			const sid = msg.sessionId;
-			if (!sid) return;
-			store.clearStreamingPlaceholder(sid);
-			return;
-		}
-
-		case "message": {
-			const sid = msg.sessionId;
-			if (!sid) return;
-			const rows = wireSessionToRows([msg.message], store.activeAgentId);
-			for (const row of rows) store.appendTranscriptRow(sid, row);
-			// Assistant message landed → drop the streaming placeholder.
-			if (rows.length > 0) store.clearStreamingPlaceholder(sid);
-			return;
-		}
-
-		case "sub_agent_event": {
-			const event = msg.event;
-			const prev = store.subAgentRuns.get(event.runId);
-			const next = reduceSubAgentEvent(prev, event);
-			store.upsertSubAgentRun(next);
-
-			// Mirror the run as a transcript row so ChatMessageList can
-			// render it inline (recognises the `sub-agent-` prefix and
-			// renders a SubAgentCard). Only do this once per runId —
-			// subsequent events update the snapshot Map, which the card
-			// reads by id.
-			if (!prev) {
-				const sid = event.parentSessionId;
-				if (sid) {
-					store.appendTranscriptRow(sid, {
-						id: `${SUBAGENT_ROW_PREFIX}${event.runId}`,
-						role: "assistant",
-						text: "",
-						authorAgentId: event.agentName,
-					});
-				}
-			}
-			return;
-		}
-
-		case "approval_request": {
-			// Single-use binding: drop duplicates so a server retry
-			// can't reset a resolved approval back to pending.
-			if (seenApprovalIds.has(msg.requestId)) return;
-			seenApprovalIds.add(msg.requestId);
-
-			store.upsertApproval(snapshotFromApprovalRequest(msg));
-			// Append a transcript row so ChatMessageList renders an
-			// ApprovalCard inline (recognises the `approval-` prefix).
-			const sid = msg.sessionId;
-			if (sid) {
-				store.appendTranscriptRow(sid, {
-					id: `${APPROVAL_ROW_PREFIX}${msg.requestId}`,
-					role: "assistant",
-					text: "",
-					authorAgentId: msg.agentName,
-				});
-			}
-			return;
-		}
-
-		case "scheduler_event":
-			// Server's next `sessions:listed` keeps the drawer fresh.
-			return;
-
-		case "error": {
-			const sid = msg.sessionId;
-			if (sid) store.clearStreamingPlaceholder(sid);
-			// Roll back any pending optimistic active-agent change — a
-			// server `error` that arrives after `set_active_agent` is
-			// our best signal that the change was rejected. (The server
-			// doesn't expose a dedicated rejection type today.)
-			if (pendingActiveAgent) {
-				store.setActiveAgentId(pendingActiveAgent.previous);
-				pendingActiveAgent = null;
-			}
-			console.error(
-				`[ws] server error${sid ? ` (${sid})` : ""}: ${msg.message ?? "(no message)"}`,
-			);
-			return;
-		}
-
-		default: {
-			const _exhaustive: never = msg;
-			void _exhaustive;
-		}
 	}
 }
