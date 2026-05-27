@@ -29,12 +29,20 @@ const log = createLogger('arya:ws', { levelEnvVar: 'ARYA_LOG_LEVEL' });
 
 export interface WebSocketServerOptions {
   port: number;
+  /** Bind address. Defaults to `127.0.0.1` (loopback-only). Pass `'0.0.0.0'` to expose on LAN. */
+  host?: string;
   authToken?: string;
   agent: AgentRuntime;
   approvalQueue: ApprovalQueue;
   commandRegistry: CommandRegistry;
   getSubAgents: () => SubAgent[];
+  /** Max inbound WS frame size in bytes. Defaults to 1 MiB. */
+  maxPayloadBytes?: number;
 }
+
+const DEFAULT_MAX_PAYLOAD_BYTES = 1024 * 1024;
+/** Close code 1008 = Policy Violation (RFC 6455). */
+const WS_CLOSE_POLICY = 1008;
 
 export interface WebSocketServerHandle {
   start(): Promise<void>;
@@ -60,6 +68,16 @@ export function createWebSocketServer(opts: WebSocketServerOptions): WebSocketSe
   let storePersistUnsub: Unsubscribe | undefined;
   let storeWatchUnsub: Unsubscribe | undefined;
   let approvalUnsub: (() => void) | undefined;
+  /**
+   * Pin each approval request to the session id that was active when it was
+   * issued. Used to (a) reject replays targeting a different session and (b)
+   * verify the responding socket owns that session.
+   */
+  const approvalSessions = new Map<string, string>();
+  /** Per-socket default session id, set on connect; updated by chat/sessions:get. */
+  const socketSessions = new WeakMap<WebSocket, string>();
+  /** Active idle-watch interval; cleared on stop / session swap / runtime stop. */
+  let idleWatchTimer: ReturnType<typeof setInterval> | null = null;
 
   // ── Outbound helpers ──────────────────────────────────────────────────
   function push(event: Record<string, unknown>): void {
@@ -95,6 +113,10 @@ export function createWebSocketServer(opts: WebSocketServerOptions): WebSocketSe
     storePersistUnsub?.();
     busUnsub = undefined;
     storePersistUnsub = undefined;
+    if (idleWatchTimer) {
+      clearInterval(idleWatchTimer);
+      idleWatchTimer = null;
+    }
     if (activeRuntime) {
       void activeRuntime.stop();
       activeRuntime = null;
@@ -148,6 +170,7 @@ export function createWebSocketServer(opts: WebSocketServerOptions): WebSocketSe
       case 'chat': {
         const text = String(msg.text ?? '');
         const runtime = activate(sessionId);
+        socketSessions.set(ws, sessionId);
         await runtime.start();
         bus.publish({ type: 'user_message', message: { role: 'user', content: text } });
         watchForIdle(runtime, sessionId);
@@ -177,6 +200,23 @@ export function createWebSocketServer(opts: WebSocketServerOptions): WebSocketSe
         const requestId = String(msg.requestId ?? msg.token ?? '');
         const action = String(msg.action ?? 'deny');
         const decision = action === 'approve' || action === 'approve_always' ? 'allow' : 'deny';
+        // Ownership check: an approval must be resolved by a socket that owns the
+        // session under which it was issued. Without this any connected client
+        // could approve any pending tool call by guessing/observing requestIds.
+        const issuedFor = approvalSessions.get(requestId);
+        if (!issuedFor) {
+          send(ws, { type: 'error', message: `Unknown or already-resolved approval: ${requestId}` });
+          return;
+        }
+        const callerSession = socketSessions.get(ws);
+        if (callerSession !== issuedFor) {
+          log.warn(
+            `approval_response rejected: socket session=${callerSession ?? '<none>'} does not own approval session=${issuedFor}`,
+          );
+          send(ws, { type: 'error', message: 'Not authorized to respond to this approval' });
+          return;
+        }
+        approvalSessions.delete(requestId);
         approvalQueue.resolve(requestId, decision);
         return;
       }
@@ -189,14 +229,20 @@ export function createWebSocketServer(opts: WebSocketServerOptions): WebSocketSe
         store.create({ title: typeof msg.title === 'string' ? msg.title : undefined });
         return;
 
-      case 'sessions:delete':
+      case 'sessions:delete': {
         if (typeof msg.sessionId !== 'string') {
           send(ws, { type: 'error', message: 'sessions:delete missing sessionId' });
           return;
         }
-        if (activeSessionId === msg.sessionId) teardownActive();
-        store.delete(msg.sessionId);
+        const deletedId = msg.sessionId;
+        const wasActive = activeSessionId === deletedId;
+        if (wasActive) teardownActive();
+        store.delete(deletedId);
+        // Notify ALL clients so any UI tracking this session can clear.
+        // `wasActive` lets the client know its current session was wiped.
+        push({ type: 'session_deleted', sessionId: deletedId, wasActive });
         return;
+      }
 
       case 'sessions:rename':
         if (typeof msg.sessionId !== 'string') {
@@ -222,12 +268,25 @@ export function createWebSocketServer(opts: WebSocketServerOptions): WebSocketSe
   }
 
   function watchForIdle(runtime: Runtime, sessionId: string): void {
+    // Cancel any prior watch so we never leak overlapping intervals.
+    if (idleWatchTimer) {
+      clearInterval(idleWatchTimer);
+      idleWatchTimer = null;
+    }
     const interval = setInterval(() => {
-      if (runtime.state() === 'idle') {
+      // Session was swapped or torn down — the runtime we were watching is gone.
+      if (activeRuntime !== runtime || idleWatchTimer !== interval) {
         clearInterval(interval);
+        return;
+      }
+      const state = runtime.state();
+      if (state === 'idle' || state === 'stopped') {
+        clearInterval(interval);
+        idleWatchTimer = null;
         push({ type: 'turn_end', sessionId });
       }
     }, 100);
+    idleWatchTimer = interval;
   }
 
   function commandsList(): Array<{ command: string; description: string }> {
@@ -247,16 +306,20 @@ export function createWebSocketServer(opts: WebSocketServerOptions): WebSocketSe
     }
     const defaultSessionId = url.searchParams.get('sessionId') || 'default';
     clients.add(ws);
+    socketSessions.set(ws, defaultSessionId);
 
     send(ws, { type: 'commands', commands: commandsList() });
     send(ws, { type: 'agents', agents: agentsList() });
     send(ws, { type: 'sessions:listed', sessions: store.summaries() });
     // Re-broadcast any approvals still pending so a freshly connected client sees them.
+    // Use the session id pinned at issue time (not the now-active one) so a replay
+    // after a session switch doesn't mis-attribute the approval.
     for (const req of approvalQueue.pending()) {
+      const issuedFor = approvalSessions.get(req.id) ?? activeSessionId;
       send(ws, {
         type: 'approval_request',
         requestId: req.id,
-        sessionId: activeSessionId,
+        sessionId: issuedFor,
         toolName: req.toolName,
         args: req.args,
         matchedRule: req.matchedRule,
@@ -270,23 +333,47 @@ export function createWebSocketServer(opts: WebSocketServerOptions): WebSocketSe
         send(ws, { type: 'error', message });
       });
     });
-    ws.on('close', () => clients.delete(ws));
-    ws.on('error', () => clients.delete(ws));
+    ws.on('close', () => {
+      clients.delete(ws);
+      socketSessions.delete(ws);
+    });
+    ws.on('error', () => {
+      clients.delete(ws);
+      socketSessions.delete(ws);
+    });
   }
 
   return {
     async start() {
-      wss = new WebSocketServer({ port: opts.port });
+      // Default to loopback-only. Public bind requires an explicit host.
+      // Cap inbound frames to refuse oversized messages (default 100 MiB in `ws`).
+      const host = opts.host ?? '127.0.0.1';
+      const maxPayload = opts.maxPayloadBytes ?? DEFAULT_MAX_PAYLOAD_BYTES;
+      wss = new WebSocketServer({ port: opts.port, host, maxPayload });
       wss.on('connection', (ws: WebSocket, req: IncomingMessage) => onConnection(ws, req));
+      // The `ws` library emits this when a frame exceeds `maxPayload`. Close the
+      // socket with policy-violation so clients can distinguish from generic errors.
+      wss.on('wsClientError', (err, socket) => {
+        try {
+          socket.destroy();
+        } catch {
+          /* socket already gone */
+        }
+        log.error(`wsClientError: ${err instanceof Error ? err.message : String(err)}`);
+      });
       storeWatchUnsub = store.watch((sessionId, kind) => {
         push({ type: 'sessions:changed', sessionId, kind });
         push({ type: 'sessions:listed', sessions: store.summaries() });
       });
       approvalUnsub = approvalQueue.subscribe((req) => {
+        // Pin the approval to the session active at issue time so replays after
+        // a session switch can be rejected (and ownership-checked on response).
+        const issuedFor = activeSessionId ?? '';
+        approvalSessions.set(req.id, issuedFor);
         push({
           type: 'approval_request',
           requestId: req.id,
-          sessionId: activeSessionId,
+          sessionId: issuedFor,
           toolName: req.toolName,
           args: req.args,
           matchedRule: req.matchedRule,
@@ -299,12 +386,21 @@ export function createWebSocketServer(opts: WebSocketServerOptions): WebSocketSe
       approvalUnsub?.();
       approvalUnsub = undefined;
       teardownActive();
+      approvalSessions.clear();
       for (const ws of clients) {
-        if (ws.readyState === WebSocket.OPEN) ws.close();
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.close(WS_CLOSE_POLICY, 'Server shutting down');
+        }
       }
       clients.clear();
-      wss?.close();
-      wss = null;
+      // Await wss.close so the OS releases the port before resolving.
+      if (wss) {
+        const server = wss;
+        await new Promise<void>((resolve) => {
+          server.close(() => resolve());
+        });
+        wss = null;
+      }
     },
     push,
   };

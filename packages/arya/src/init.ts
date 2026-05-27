@@ -13,12 +13,17 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createXdgPaths } from 'mu-harness';
 
+// NOTE: `wsHost` defaults to "127.0.0.1" (loopback-only) so a fresh install with
+// an empty `authToken` is not reachable from the LAN. If you want to expose arya
+// on the network, set "wsHost": "0.0.0.0" AND set a non-empty `authToken` —
+// arya refuses to start with empty auth on a non-loopback bind.
 const CONFIG_TEMPLATE = `${JSON.stringify(
   {
     kind: 'llama-swap',
     baseUrl: 'http://localhost:8080',
     model: 'qwen2.5-coder:7b',
     wsPort: 3001,
+    wsHost: '127.0.0.1',
     authToken: '',
   },
   null,

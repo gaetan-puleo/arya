@@ -79,12 +79,24 @@ console.log(`[arya] Config: ${configPath}`);
 const { bootstrap } = await import('./bootstrap');
 try {
   const handle = await bootstrap(root, configPath);
-  const shutdown = async (): Promise<void> => {
-    await handle.shutdown();
-    process.exit(0);
+  let shuttingDown = false;
+  const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
+    if (shuttingDown) {
+      // Second signal during shutdown: force-exit rather than re-entering.
+      console.error(`[arya] Received ${signal} during shutdown — forcing exit.`);
+      process.exit(1);
+    }
+    shuttingDown = true;
+    try {
+      await handle.shutdown();
+      process.exit(0);
+    } catch (err) {
+      console.error('[arya] Shutdown failed:', err);
+      process.exit(1);
+    }
   };
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', () => void shutdown('SIGINT'));
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
 } catch (err) {
   console.error('[arya] Fatal error:', err);
   process.exit(1);

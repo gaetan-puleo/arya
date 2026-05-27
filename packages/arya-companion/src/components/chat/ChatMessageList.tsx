@@ -1,6 +1,6 @@
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -95,11 +95,17 @@ export default function ChatMessageList({
 	const isPinnedToBottom = useRef(true);
 	const isUserScrolling = useRef(false);
 
-	// Stable signature for streaming-delta autoscroll. `text` is
-	// guaranteed string by the type system — no need to guard.
-	const contentSignature = messages.reduce(
-		(acc, m) => acc + m.text.length,
-		messages.length,
+	// Stable signature for streaming-delta autoscroll. Memoised so
+	// the reduce only re-runs when `messages` actually changes —
+	// `useTranscript` returns a new array on every streaming delta,
+	// and unrelated re-renders should not re-walk the transcript.
+	const contentSignature = useMemo(
+		() =>
+			messages.reduce(
+				(acc, m) => acc + m.text.length,
+				messages.length,
+			),
+		[messages],
 	);
 
 	useEffect(() => {

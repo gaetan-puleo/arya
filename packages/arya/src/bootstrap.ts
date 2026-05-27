@@ -29,6 +29,11 @@ export interface BootstrapConfig {
   model: string;
   apiKey?: string;
   wsPort: number;
+  /**
+   * Bind address for the WebSocket server. Defaults to `127.0.0.1` (loopback-only).
+   * Set to `'0.0.0.0'` to accept LAN connections — requires a non-empty `authToken`.
+   */
+  wsHost?: string;
   authToken?: string;
   /** Override agents directory (defaults to `<cwd>/definitions/agents` if present). */
   agentsDir?: string;
@@ -36,6 +41,21 @@ export interface BootstrapConfig {
   skillsDir?: string;
   /** Override tasks directory (defaults to `<cwd>/definitions/tasks` if present). */
   tasksDir?: string;
+}
+
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
+
+function isLoopback(host: string): boolean {
+  return LOOPBACK_HOSTS.has(host);
+}
+
+function validatePort(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 65535) {
+    throw new Error(
+      `[arya] Invalid wsPort: ${JSON.stringify(value)}. Must be an integer in [1, 65535].`,
+    );
+  }
+  return value;
 }
 
 function loadConfig(cwd: string, configPath?: string): BootstrapConfig {
@@ -58,13 +78,31 @@ function loadConfig(cwd: string, configPath?: string): BootstrapConfig {
         `       Edit ${configPath ?? '~/.config/arya/config.json'}.`,
     );
   }
+  const wsPort = validatePort(result.wsPort);
+  const wsHost = typeof result.wsHost === 'string' && result.wsHost ? result.wsHost : '127.0.0.1';
+  const authToken = typeof result.authToken === 'string' ? result.authToken : undefined;
+
+  // Refuse to start with empty auth on a public bind. Loopback-only gets a warning.
+  if (!authToken) {
+    if (!isLoopback(wsHost)) {
+      throw new Error(
+        `[arya] Refusing to start: authToken is empty/missing and wsHost is "${wsHost}" (non-loopback).\n` +
+          `       Set a non-empty "authToken" in your config, or set "wsHost": "127.0.0.1".`,
+      );
+    }
+    log.info(
+      `[arya] WARNING: authToken is empty — relying on loopback-only bind (${wsHost}). Set authToken to harden.`,
+    );
+  }
+
   return {
     kind: result.kind,
     baseUrl: result.baseUrl as string,
     model: result.model as string,
     apiKey: result.apiKey,
-    wsPort: result.wsPort as number,
-    authToken: result.authToken,
+    wsPort,
+    wsHost,
+    authToken,
     agentsDir: result.agentsDir ?? join(cwd, 'definitions', 'agents'),
     skillsDir: result.skillsDir ?? join(cwd, 'definitions', 'skills'),
     tasksDir: result.tasksDir ?? join(cwd, 'definitions', 'tasks'),
@@ -126,11 +164,18 @@ export async function bootstrap(
   log.info(`Primary agent: ${result.primaryAgent?.name ?? '<none>'}`);
   log.info(`Loaded ${result.skills.length} skill(s)`);
 
-  // Add the scheduler plugin (it needs the bus, which is only available now).
+  // Scheduler plugin must be added BEFORE `createAgentRuntime`, which snapshots
+  // tools/provider from the plugin list at construction time. The scheduler's
+  // event sink is wired through a deferred handle so it can forward to `ws.push`
+  // once the WS server is constructed below.
+  type SchedulerEventSink = (event: Record<string, unknown>) => void;
+  let pushSchedulerEvent: SchedulerEventSink = () => {
+    /* dropped until ws is wired */
+  };
   const scheduler = createSchedulerPlugin({
     tasksDir: config.tasksDir && existsSync(config.tasksDir) ? config.tasksDir : undefined,
     bus: result.bus,
-    onEvent: (event) => ws.push({ type: 'scheduler_event', event }),
+    onEvent: (event) => pushSchedulerEvent({ type: 'scheduler_event', event }),
   });
   result.plugins.push(scheduler);
 
@@ -148,6 +193,7 @@ export async function bootstrap(
   // ── WS transport (arya-specific) ────────────────────────────────────
   const ws = createWebSocketServer({
     port: config.wsPort,
+    host: config.wsHost,
     authToken: config.authToken,
     agent,
     approvalQueue: result.approvalQueue,
@@ -155,8 +201,11 @@ export async function bootstrap(
     getSubAgents: () => result.subAgents,
   });
 
+  // Now that ws exists, route scheduler events through it.
+  pushSchedulerEvent = (event) => ws.push(event);
+
   await ws.start();
-  log.info(`Listening on port ${config.wsPort} — accepting connections`);
+  log.info(`Listening on ${config.wsHost}:${config.wsPort} — accepting connections`);
 
   return {
     agent,
