@@ -15,14 +15,16 @@
  */
 import type { IncomingMessage } from 'node:http';
 import { type RawData, WebSocket, WebSocketServer } from 'ws';
-import type { Message, Runtime, ToolCall, Unsubscribe } from 'mu-core';
+import type { Runtime, Unsubscribe } from 'mu-core';
 import {
   type AgentRuntime,
   type ApprovalQueue,
   type CommandRegistry,
+  createChannelManager,
   type PersistedSessionStore,
   type SubAgent,
 } from 'mu-harness';
+import { createWsChannel, type WsChannelHandle } from './ws-channel';
 
 // Minimal level-gated logger. Inlined after `createLogger` was removed from
 // mu-harness; preserves the ARYA_LOG_LEVEL knob for silencing info.
@@ -80,10 +82,16 @@ export function createWebSocketServer(opts: WebSocketServerOptions): WebSocketSe
   let wss: WebSocketServer | null = null;
   let activeSessionId: string | null = null;
   let activeRuntime: Runtime | null = null;
-  let busUnsub: Unsubscribe | undefined;
   let storePersistUnsub: Unsubscribe | undefined;
   let storeWatchUnsub: Unsubscribe | undefined;
   let approvalUnsub: (() => void) | undefined;
+
+  // Channel manager owns the bus→client bridge. WsChannel attaches to the bus
+  // on session activation and detaches on teardown. ws.ts retains the raw
+  // socket lifecycle, auth, RPCs, approvals and scheduler-event push — those
+  // are server-layer concerns that don't fit the ChannelOutEvent vocabulary.
+  const channelManager = createChannelManager();
+  let wsChannel: WsChannelHandle | null = null;
   /**
    * Pin each approval request to the session id that was active when it was
    * issued. Used to (a) reject replays targeting a different session and (b)
@@ -120,14 +128,16 @@ export function createWebSocketServer(opts: WebSocketServerOptions): WebSocketSe
     }
     activeSessionId = sessionId;
     storePersistUnsub = store.persistOnBus(bus, sessionId);
-    busUnsub = bus.subscribe((event) => bridgeBusEvent(event, sessionId));
+    // Re-arm the channel bus subscription for the new session. Frames it
+    // publishes are tagged with the current `activeSessionId` via the
+    // accessor closure passed at channel construction time.
+    wsChannel?.attach();
     return activeRuntime;
   }
 
   function teardownActive(): void {
-    busUnsub?.();
+    wsChannel?.detach();
     storePersistUnsub?.();
-    busUnsub = undefined;
     storePersistUnsub = undefined;
     if (idleWatchTimer) {
       clearInterval(idleWatchTimer);
@@ -138,36 +148,6 @@ export function createWebSocketServer(opts: WebSocketServerOptions): WebSocketSe
       activeRuntime = null;
     }
     activeSessionId = null;
-  }
-
-  // ── Bus → client bridge ───────────────────────────────────────────────
-  function bridgeBusEvent(event: Parameters<Parameters<typeof bus.subscribe>[0]>[0], sessionId: string): void {
-    switch (event.type) {
-      case 'assistant_delta':
-        push({ type: 'stream', sessionId, text: event.content });
-        return;
-      case 'reasoning_delta':
-        push({ type: 'reasoning', sessionId, text: event.content });
-        return;
-      case 'assistant_message':
-        push({ type: 'message', sessionId, message: event.message });
-        return;
-      case 'reasoning_message':
-        push({ type: 'message', sessionId, message: event.message });
-        return;
-      case 'tool_call':
-        push({ type: 'activity', sessionId, event: toolActivity('tool_start', event.call) });
-        return;
-      case 'tool_result':
-        push({ type: 'activity', sessionId, event: { kind: 'tool_end', summary: summariseTool(event.message) } });
-        return;
-      case 'error':
-        push({ type: 'error', sessionId, message: errorMessage(event.error) });
-        return;
-      case 'user_message':
-        push({ type: 'message', sessionId, message: event.message });
-        return;
-    }
   }
 
   // ── Inbound dispatch ──────────────────────────────────────────────────
@@ -367,6 +347,18 @@ export function createWebSocketServer(opts: WebSocketServerOptions): WebSocketSe
       const maxPayload = opts.maxPayloadBytes ?? DEFAULT_MAX_PAYLOAD_BYTES;
       wss = new WebSocketServer({ port: opts.port, host, maxPayload });
       wss.on('connection', (ws: WebSocket, req: IncomingMessage) => onConnection(ws, req));
+      // Build the channel but keep it detached until a session is activated.
+      // The channel will only start broadcasting once `activate()` pins a
+      // session, so frames are never sent without a sessionId tag.
+      wsChannel = createWsChannel({
+        bus,
+        broadcast: push,
+        getActiveSessionId: () => activeSessionId,
+      });
+      await channelManager.add(wsChannel);
+      // start() attaches to the bus; detach immediately so the channel only
+      // surfaces frames while a session is active (matches prior behavior).
+      wsChannel.detach();
       // The `ws` library emits this when a frame exceeds `maxPayload`. Close the
       // socket with policy-violation so clients can distinguish from generic errors.
       wss.on('wsClientError', (err, socket) => {
@@ -402,6 +394,8 @@ export function createWebSocketServer(opts: WebSocketServerOptions): WebSocketSe
       approvalUnsub?.();
       approvalUnsub = undefined;
       teardownActive();
+      await channelManager.stopAll();
+      wsChannel = null;
       approvalSessions.clear();
       for (const ws of clients) {
         if (ws.readyState === WebSocket.OPEN) {
@@ -420,20 +414,4 @@ export function createWebSocketServer(opts: WebSocketServerOptions): WebSocketSe
     },
     push,
   };
-}
-
-function toolActivity(kind: 'tool_start', call: ToolCall): Record<string, unknown> {
-  return { kind, summary: `${call.tool}(${truncate(call.args, 120)})`, tool: call.tool, args: call.args };
-}
-
-function summariseTool(message: Message): string {
-  return truncate(message.content, 200);
-}
-
-function truncate(value: string, max: number): string {
-  return value.length <= max ? value : `${value.slice(0, max - 1)}…`;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
