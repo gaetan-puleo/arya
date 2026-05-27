@@ -50,8 +50,10 @@ export function busEventToWireFrame(
       return { type: 'stream', sessionId, text: event.content };
     case 'reasoning_delta':
       return { type: 'reasoning', sessionId, text: event.content };
-    case 'assistant_message':
     case 'reasoning_message':
+      // Final reasoning text — same wire shape as the delta stream.
+      return { type: 'reasoning', sessionId, text: event.content };
+    case 'assistant_message':
     case 'user_message':
       return { type: 'message', sessionId, message: event.message };
     case 'tool_call':
@@ -141,8 +143,9 @@ function channelOutEventToWireFrame(
       return { type: 'stream', sessionId, text: event.content };
     case 'reasoning_delta':
       return { type: 'reasoning', sessionId, text: event.content };
-    case 'assistant_message':
     case 'reasoning_message':
+      return { type: 'reasoning', sessionId, text: event.content };
+    case 'assistant_message':
       return { type: 'message', sessionId, message: event.message };
     case 'tool_call':
       return {
