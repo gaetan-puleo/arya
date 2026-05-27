@@ -60,8 +60,8 @@ export function busEventToWireFrame(
         sessionId,
         event: {
           kind: 'tool_start',
-          summary: `${event.call.tool}(${truncate(event.call.args, 120)})`,
-          tool: event.call.tool,
+          summary: `${event.call.name}(${truncate(event.call.args, 120)})`,
+          tool: event.call.name,
           args: event.call.args,
         },
       };
@@ -150,8 +150,8 @@ function channelOutEventToWireFrame(
         sessionId,
         event: {
           kind: 'tool_start',
-          summary: `${event.call.tool}(${truncate(event.call.args, 120)})`,
-          tool: event.call.tool,
+          summary: `${event.call.name}(${truncate(event.call.args, 120)})`,
+          tool: event.call.name,
           args: event.call.args,
         },
       };
