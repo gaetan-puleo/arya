@@ -7,7 +7,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { View } from "react-native";
-import type { LayoutChangeEvent } from "react-native";
+import type { GestureResponderEvent, LayoutChangeEvent } from "react-native";
 
 import { useAgents } from "@/hooks/useAgents";
 import { useApprovals } from "@/hooks/useApprovals";
@@ -74,7 +74,7 @@ export default function ChatScreen() {
 		setActionTarget(session);
 	}, []);
 	const handleRowPressIn = useCallback(
-		(e: { nativeEvent: { pageX: number; pageY: number } }) => {
+		(e: GestureResponderEvent) => {
 			lastTouchRef.current = {
 				x: e.nativeEvent.pageX,
 				y: e.nativeEvent.pageY,

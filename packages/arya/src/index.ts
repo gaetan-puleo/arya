@@ -1,21 +1,11 @@
 #!/usr/bin/env node
-/**
- * arya CLI entry. Subcommands:
- *
- *   arya           — start the runtime (default)
- *   arya init      — write the XDG config template (~/.config/arya/…)
- *   arya install   — install a plugin (npm spec or local .ts file)
- *
- * Config discovery for the default path:
- *   1. $XDG_CONFIG_HOME/arya/config.json
- *   2. <workspace>/config.json (dev override)
- */
 
+import { basename, dirname, resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createXdgPaths, installLocalPluginFile, installNpmPlugin } from 'mu-harness';
+import { createPluginStore } from 'mu-harness';
+import { aryaDirs } from './xdg';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '../../..');
@@ -31,18 +21,17 @@ if (subcommand === 'init') {
 if (subcommand === 'install' || subcommand === 'i') {
   const spec = process.argv[3];
   if (!spec) {
-    console.error('usage: arya install <npm:spec | path.ts>');
+    console.error('usage: arya install <path-to-plugin.ts>');
     process.exit(1);
   }
-  const paths = createXdgPaths('arya');
+  if (spec.startsWith('npm:') || spec.startsWith('@')) {
+    console.error('[arya] npm plugin installation is not supported in this build; pass a local .ts file path.');
+    process.exit(1);
+  }
   try {
-    if (spec.startsWith('npm:') || spec.startsWith('@')) {
-      await installNpmPlugin(spec);
-      console.log(`[arya] cached ${spec}`);
-    } else {
-      const dest = installLocalPluginFile(spec, paths.pluginsDir);
-      console.log(`[arya] installed ${dest}`);
-    }
+    const store = createPluginStore({ dir: aryaDirs('arya').pluginsDir });
+    const dest = await store.write(basename(spec), readFileSync(spec, 'utf-8'));
+    console.log(`[arya] installed ${dest}`);
     process.exit(0);
   } catch (err) {
     console.error('[arya] install failed:', err instanceof Error ? err.message : String(err));
@@ -50,9 +39,7 @@ if (subcommand === 'install' || subcommand === 'i') {
   }
 }
 
-// Default: start the runtime.
-const paths = createXdgPaths('arya');
-const candidates = [paths.configFile, resolve(root, 'config.json')];
+const candidates = [aryaDirs('arya').configFile, resolve(root, 'config.json')];
 
 let configPath: string | undefined;
 for (const c of candidates) {
@@ -61,7 +48,6 @@ for (const c of candidates) {
     configPath = c;
     break;
   } catch {
-    /* try next */
   }
 }
 
@@ -82,7 +68,6 @@ try {
   let shuttingDown = false;
   const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
     if (shuttingDown) {
-      // Second signal during shutdown: force-exit rather than re-entering.
       console.error(`[arya] Received ${signal} during shutdown — forcing exit.`);
       process.exit(1);
     }

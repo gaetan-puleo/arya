@@ -68,34 +68,55 @@ function isUIEmpty(m: WireMessage): boolean {
 /**
  * Field-copy projection. Assumes input has been narrowed by
  * `isValidWireMessage` and `isVisibleWireMessage`.
+ *
+ * Author attribution rules:
+ *   - User rows: no author (the user is not an agent).
+ *   - Assistant rows: prefer `meta.source` (when the server stamps which
+ *     agent produced the message); only fall back to `streamingAgentId`
+ *     when the row is a live stream — historical rows from past sessions
+ *     stay unattributed rather than incorrectly inherit the currently-
+ *     active agent.
  */
 export function wireToChatRow(
 	m: WireMessage,
-	fallbackAgentId: string | null,
+	streamingAgentId: string | null,
+	isStreaming = false,
 ): ChatMessageItem {
+	const authorFromMeta = m.meta?.source;
+	const authorAgentId = authorFromMeta
+		? authorFromMeta
+		: isStreaming
+			? (streamingAgentId ?? undefined)
+			: undefined;
 	return {
 		id: m.id,
 		// system → assistant coercion is local to the transcript view.
 		role: m.role === "system" ? "assistant" : (m.role as "user" | "assistant"),
 		text: m.content,
-		authorAgentId: fallbackAgentId ?? undefined,
+		authorAgentId,
 	};
 }
 
 /**
  * The one function every caller uses to convert server-provided
  * messages into the transcript rows the UI renders.
+ *
+ * Historical messages do NOT carry the currently-active agent as their
+ * author — that produced the misattribution bug where every prior assistant
+ * row in an old session re-rendered with the user's CURRENT agent badge.
  */
 export function wireSessionToRows(
 	messages: readonly unknown[],
-	fallbackAgentId: string | null,
+	_streamingAgentId: string | null,
 ): ChatMessageItem[] {
 	const out: ChatMessageItem[] = [];
 	for (const raw of messages) {
 		if (!isValidWireMessage(raw)) continue;
 		if (!isVisibleWireMessage(raw)) continue;
 		if (isUIEmpty(raw)) continue;
-		out.push(wireToChatRow(raw, fallbackAgentId));
+		// Pass `null` and `isStreaming=false` so historical rows fall through
+		// to "no attribution" unless the server stamped `meta.source`.
+		out.push(wireToChatRow(raw, null, false));
 	}
 	return out;
 }

@@ -42,7 +42,7 @@ import {
 } from "@/services/outbound";
 import { nextOptimisticId, removeTranscriptRow } from "@/services/optimistic";
 import { markActiveAgentPending } from "@/services/activeAgent";
-import type { WsInboundMessage } from "@/types/wire";
+import { isWsInboundMessage } from "@/types/wire";
 
 // Re-exports — keep the surface used by hooks/components unchanged.
 export { send } from "@/services/outbound";
@@ -55,6 +55,15 @@ export {
 } from "@/services/outbound";
 
 const SESSION_ID_KEY = "arya-companion-current-session";
+
+/**
+ * Extract the non-standard `message` field React Native adds to WS error events.
+ * Standard `Event` has no message; the cast is local to this helper.
+ */
+function wsErrorMessage(err: Event): string | undefined {
+	const e = err as Event & { message?: unknown };
+	return typeof e.message === "string" ? e.message : undefined;
+}
 
 // ─── Lifecycle ────────────────────────────────────────────────────────
 
@@ -139,20 +148,24 @@ async function doStart(): Promise<void> {
 		});
 
 		socket.addEventListener("error", (err: Event) => {
-			const m = (err as Event & { message?: string }).message;
+			// React Native's WebSocket `error` event carries a non-standard
+			// `message` field that `lib.dom.Event` doesn't model. Narrow once
+			// in a named helper instead of an inline `as` cast at every use site.
+			const m = wsErrorMessage(err);
 			console.error(
 				`[ws] socket error on ${cfg.url}${m ? `: ${m}` : ""} — check that the agent is running and the URL is reachable`,
 			);
 		});
 
 		socket.addEventListener("message", (e: MessageEvent) => {
-			let msg: WsInboundMessage;
+			let parsed: unknown;
 			try {
-				msg = JSON.parse(e.data) as WsInboundMessage;
+				parsed = JSON.parse(e.data);
 			} catch {
 				return;
 			}
-			dispatch(msg);
+			if (!isWsInboundMessage(parsed)) return;
+			dispatch(parsed);
 		});
 
 		// Initial "socket exists, not yet open" state. Subsequent `open`

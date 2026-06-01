@@ -57,7 +57,9 @@ export function resolveApproval(
 function snapshotFromStarted(
 	event: SubAgentEventWire,
 ): SubAgentRunSnapshot {
-	const detail = (event.detail as { task?: string } | undefined) ?? {};
+	// `event.detail` is `{ task?: string } | undefined` only when type === 'started';
+	// the narrow path below handles other variants. Safe to assume the started shape.
+	const detail = event.type === "started" ? event.detail ?? {} : {};
 	return {
 		runId: event.runId,
 		agentId: event.agentName,
@@ -104,10 +106,7 @@ export function reduceSubAgentEvent(
 
 		case "tool_call": {
 			// detail: { name, arguments } — field is `arguments` (not `args`).
-			const detail =
-				(event.detail as
-					| { name?: string; arguments?: string }
-					| undefined) ?? {};
+			const detail = event.detail ?? {};
 			return {
 				...base,
 				toolCount: base.toolCount + 1,
@@ -123,10 +122,7 @@ export function reduceSubAgentEvent(
 		}
 
 		case "tool_result": {
-			const detail =
-				(event.detail as
-					| { name?: string; content?: string; error?: boolean }
-					| undefined) ?? {};
+			const detail = event.detail ?? {};
 			return {
 				...base,
 				timeline: appendTimeline(base, {
@@ -142,8 +138,7 @@ export function reduceSubAgentEvent(
 		}
 
 		case "completed": {
-			const detail =
-				(event.detail as { content?: string } | undefined) ?? {};
+			const detail = event.detail ?? {};
 			return {
 				...base,
 				status: "done",
@@ -165,7 +160,7 @@ export function reduceSubAgentEvent(
 		}
 
 		default: {
-			const _exhaustive: never = event.type;
+			const _exhaustive: never = event;
 			void _exhaustive;
 			return base;
 		}

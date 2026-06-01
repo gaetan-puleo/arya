@@ -19,6 +19,11 @@ import SubAgentCard from "@/components/chat/SubAgentCard";
 import TypingDots from "@/components/chat/TypingDots";
 import { AryaAvatar } from "@/components/primitives/AryaAvatar";
 
+// Row-id prefixes that signal an in-transcript card. Producers live in
+// services/approvals.ts and services/wireDispatch.ts; ChatMessageList
+// consumes the same prefixes to know "this transcript row is actually
+// an inline card, not a chat bubble". Kept named so renames stay
+// consistent across producer + consumer.
 const APPROVAL_PREFIX = "approval-";
 const SUBAGENT_PREFIX = "sub-agent-";
 

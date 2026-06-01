@@ -1,8 +1,13 @@
 {
   "version": "5",
   "specifiers": {
+    "jsr:@std/assert@^1.0.19": "1.0.19",
+    "jsr:@std/expect@1": "1.0.19",
+    "jsr:@std/internal@^1.0.12": "1.0.13",
+    "jsr:@std/internal@^1.0.13": "1.0.13",
+    "jsr:@std/path@^1.1.4": "1.1.4",
+    "jsr:@std/testing@1": "1.0.18",
     "jsr:@std/yaml@1": "1.1.0",
-    "npm:@babel/plugin-transform-react-jsx@^7.28.6": "7.29.7_@babel+core@7.29.7",
     "npm:@expo/vector-icons@^15.0.3": "15.1.1_expo-font@14.0.11__expo@54.0.34___@expo+metro-runtime@6.1.2___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@babel+core@7.29.7___@types+react@19.1.17___expo-linking@8.0.12___expo-router@6.0.23___react-dom@19.2.6____react@19.1.0___react-native-reanimated@4.1.7____react@19.1.0____react-native@0.81.5_____@types+react@19.1.17_____react@19.1.0_____@babel+core@7.29.7____react-native-worklets@0.5.1_____@babel+core@7.29.7_____react@19.1.0_____react-native@0.81.5______@types+react@19.1.17______react@19.1.0______@babel+core@7.29.7_____@types+react@19.1.17____@babel+core@7.29.7____@types+react@19.1.17___react-native-safe-area-context@5.6.2____react@19.1.0____react-native@0.81.5_____@types+react@19.1.17_____react@19.1.0_____@babel+core@7.29.7____@babel+core@7.29.7____@types+react@19.1.17___react-native-screens@4.16.0____react@19.1.0____react-native@0.81.5_____@types+react@19.1.17_____react@19.1.0_____@babel+core@7.29.7____@babel+core@7.29.7____@types+react@19.1.17___react-native-worklets@0.5.1____@babel+core@7.29.7____react@19.1.0____react-native@0.81.5_____@types+react@19.1.17_____react@19.1.0_____@babel+core@7.29.7____@types+react@19.1.17___typescript@5.9.3__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__@babel+core@7.29.7__@expo+metro-runtime@6.1.2___expo@54.0.34___react@19.1.0___react-dom@19.2.6____react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@babel+core@7.29.7___@types+react@19.1.17__@types+react@19.1.17__expo-linking@8.0.12___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@babel+core@7.29.7___@expo+metro-runtime@6.1.2___@types+react@19.1.17___expo@54.0.34__expo-router@6.0.23___@expo+metro-runtime@6.1.2___expo@54.0.34___expo-constants@18.0.13___expo-linking@8.0.12___react@19.1.0___react-dom@19.2.6____react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___react-native-reanimated@4.1.7____react@19.1.0____react-native@0.81.5_____@types+react@19.1.17_____react@19.1.0_____@babel+core@7.29.7____react-native-worklets@0.5.1_____@babel+core@7.29.7_____react@19.1.0_____react-native@0.81.5______@types+react@19.1.17______react@19.1.0______@babel+core@7.29.7_____@types+react@19.1.17____@babel+core@7.29.7____@types+react@19.1.17___react-native-safe-area-context@5.6.2____react@19.1.0____react-native@0.81.5_____@types+react@19.1.17_____react@19.1.0_____@babel+core@7.29.7____@babel+core@7.29.7____@types+react@19.1.17___react-native-screens@4.16.0____react@19.1.0____react-native@0.81.5_____@types+react@19.1.17_____react@19.1.0_____@babel+core@7.29.7____@babel+core@7.29.7____@types+react@19.1.17___@babel+core@7.29.7___@types+react@19.1.17___react-native-worklets@0.5.1____@babel+core@7.29.7____react@19.1.0____react-native@0.81.5_____@types+react@19.1.17_____react@19.1.0_____@babel+core@7.29.7____@types+react@19.1.17__react-dom@19.2.6___react@19.1.0__react-native-reanimated@4.1.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___react-native-worklets@0.5.1____@babel+core@7.29.7____react@19.1.0____react-native@0.81.5_____@types+react@19.1.17_____react@19.1.0_____@babel+core@7.29.7____@types+react@19.1.17___@babel+core@7.29.7___@types+react@19.1.17__react-native-safe-area-context@5.6.2___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@babel+core@7.29.7___@types+react@19.1.17__react-native-screens@4.16.0___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@babel+core@7.29.7___@types+react@19.1.17__react-native-worklets@0.5.1___@babel+core@7.29.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@types+react@19.1.17__typescript@5.9.3_react@19.1.0_react-native@0.81.5__@types+react@19.1.17__react@19.1.0__@babel+core@7.29.7_@babel+core@7.29.7_@expo+metro-runtime@6.1.2__expo@54.0.34__react@19.1.0__react-dom@19.2.6___react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__@babel+core@7.29.7__@types+react@19.1.17_@types+react@19.1.17_expo@54.0.34__@expo+metro-runtime@6.1.2__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__@babel+core@7.29.7__@types+react@19.1.17__expo-linking@8.0.12__expo-router@6.0.23__react-dom@19.2.6___react@19.1.0__react-native-reanimated@4.1.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___react-native-worklets@0.5.1____@babel+core@7.29.7____react@19.1.0____react-native@0.81.5_____@types+react@19.1.17_____react@19.1.0_____@babel+core@7.29.7____@types+react@19.1.17___@babel+core@7.29.7___@types+react@19.1.17__react-native-safe-area-context@5.6.2___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@babel+core@7.29.7___@types+react@19.1.17__react-native-screens@4.16.0___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@babel+core@7.29.7___@types+react@19.1.17__react-native-worklets@0.5.1___@babel+core@7.29.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@types+react@19.1.17__typescript@5.9.3_expo-linking@8.0.12__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__@babel+core@7.29.7__@expo+metro-runtime@6.1.2__@types+react@19.1.17__expo@54.0.34_expo-router@6.0.23__@expo+metro-runtime@6.1.2__expo@54.0.34__expo-constants@18.0.13__expo-linking@8.0.12__react@19.1.0__react-dom@19.2.6___react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__react-native-reanimated@4.1.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___react-native-worklets@0.5.1____@babel+core@7.29.7____react@19.1.0____react-native@0.81.5_____@types+react@19.1.17_____react@19.1.0_____@babel+core@7.29.7____@types+react@19.1.17___@babel+core@7.29.7___@types+react@19.1.17__react-native-safe-area-context@5.6.2___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@babel+core@7.29.7___@types+react@19.1.17__react-native-screens@4.16.0___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@babel+core@7.29.7___@types+react@19.1.17__@babel+core@7.29.7__@types+react@19.1.17__react-native-worklets@0.5.1___@babel+core@7.29.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@types+react@19.1.17_react-dom@19.2.6__react@19.1.0_react-native-reanimated@4.1.7__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__react-native-worklets@0.5.1___@babel+core@7.29.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@types+react@19.1.17__@babel+core@7.29.7__@types+react@19.1.17_react-native-safe-area-context@5.6.2__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__@babel+core@7.29.7__@types+react@19.1.17_react-native-screens@4.16.0__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__@babel+core@7.29.7__@types+react@19.1.17_react-native-worklets@0.5.1__@babel+core@7.29.7__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__@types+react@19.1.17_typescript@5.9.3",
     "npm:@react-native-async-storage/async-storage@2.2.0": "2.2.0_react-native@0.81.5__@types+react@19.1.17__react@19.1.0__@babel+core@7.29.7_@babel+core@7.29.7_@types+react@19.1.17_react@19.1.0",
     "npm:@react-navigation/native@^7.1.8": "7.2.5_react@19.1.0_react-native@0.81.5__@types+react@19.1.17__react@19.1.0__@babel+core@7.29.7_@babel+core@7.29.7_@types+react@19.1.17",
@@ -25,7 +30,6 @@
     "npm:expo@~54.0.34": "54.0.34_@expo+metro-runtime@6.1.2_react@19.1.0_react-native@0.81.5__@types+react@19.1.17__react@19.1.0__@babel+core@7.29.7_@babel+core@7.29.7_@types+react@19.1.17_expo-linking@8.0.12_expo-router@6.0.23_react-dom@19.2.6__react@19.1.0_react-native-reanimated@4.1.7__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__react-native-worklets@0.5.1___@babel+core@7.29.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@types+react@19.1.17__@babel+core@7.29.7__@types+react@19.1.17_react-native-safe-area-context@5.6.2__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__@babel+core@7.29.7__@types+react@19.1.17_react-native-screens@4.16.0__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__@babel+core@7.29.7__@types+react@19.1.17_react-native-worklets@0.5.1__@babel+core@7.29.7__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__@types+react@19.1.17_typescript@5.9.3",
     "npm:nativewind@^4.2.3": "4.2.4_tailwindcss@3.4.19__yaml@2.9.0_@types+react@19.1.17_react@19.1.0_react-native@0.81.5__@types+react@19.1.17__react@19.1.0__@babel+core@7.29.7_react-native-reanimated@4.1.7__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__react-native-worklets@0.5.1___@babel+core@7.29.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@types+react@19.1.17__@babel+core@7.29.7__@types+react@19.1.17_yaml@2.9.0",
     "npm:openai@^6.38.0": "6.39.0_ws@8.21.0",
-    "npm:react-native-css-interop@~0.2.3": "0.2.4_react@19.1.0_react-native@0.81.5__@types+react@19.1.17__react@19.1.0__@babel+core@7.29.7_react-native-reanimated@4.1.7__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__react-native-worklets@0.5.1___@babel+core@7.29.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@types+react@19.1.17__@babel+core@7.29.7__@types+react@19.1.17_tailwindcss@3.4.19__yaml@2.9.0_@types+react@19.1.17_yaml@2.9.0",
     "npm:react-native-markdown-display@^7.0.2": "7.0.2_react@19.1.0_react-native@0.81.5__@types+react@19.1.17__react@19.1.0__@babel+core@7.29.7",
     "npm:react-native-reanimated@~4.1.1": "4.1.7_react@19.1.0_react-native@0.81.5__@types+react@19.1.17__react@19.1.0__@babel+core@7.29.7_react-native-worklets@0.5.1__@babel+core@7.29.7__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__@types+react@19.1.17_@babel+core@7.29.7_@types+react@19.1.17",
     "npm:react-native-safe-area-context@5.6": "5.6.2_react@19.1.0_react-native@0.81.5__@types+react@19.1.17__react@19.1.0__@babel+core@7.29.7_@babel+core@7.29.7_@types+react@19.1.17",
@@ -41,6 +45,36 @@
     "npm:zustand@^5.0.13": "5.0.13_@types+react@19.1.17_react@19.1.0"
   },
   "jsr": {
+    "@std/assert@1.0.19": {
+      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
+      "dependencies": [
+        "jsr:@std/internal@^1.0.12"
+      ]
+    },
+    "@std/expect@1.0.19": {
+      "integrity": "25271785688c7ff902fa54875d6aa4001f552c5578f7f0fefb5b5aac1fc2ed8a",
+      "dependencies": [
+        "jsr:@std/assert",
+        "jsr:@std/internal@^1.0.13",
+        "jsr:@std/path"
+      ]
+    },
+    "@std/internal@1.0.13": {
+      "integrity": "2f9546691d4ac2d32859c82dff284aaeac980ddeca38430d07941e7e288725c0"
+    },
+    "@std/path@1.1.4": {
+      "integrity": "1d2d43f39efb1b42f0b1882a25486647cb851481862dc7313390b2bb044314b5",
+      "dependencies": [
+        "jsr:@std/internal@^1.0.12"
+      ]
+    },
+    "@std/testing@1.0.18": {
+      "integrity": "d3152f57b11666bf6358d0e127c7e3488e91178b0c2d8fbf0793e1c53cd13cb1",
+      "dependencies": [
+        "jsr:@std/assert",
+        "jsr:@std/internal@^1.0.13"
+      ]
+    },
     "@std/yaml@1.1.0": {
       "integrity": "fc1c5c63e05c4c5eb6118355f557958035d41940d6c29d35b306ef7155d6edb0"
     }
@@ -6751,6 +6785,8 @@
   },
   "workspace": {
     "dependencies": [
+      "jsr:@std/expect@1",
+      "jsr:@std/testing@1",
       "jsr:@std/yaml@1",
       "npm:croner@9",
       "npm:openai@^6.38.0",
@@ -6762,8 +6798,6 @@
         "packageJson": {
           "dependencies": [
             "npm:croner@9",
-            "npm:openai@^6.38.0",
-            "npm:turndown@^7.2.2",
             "npm:ws@^8.18.0"
           ]
         }
@@ -6771,7 +6805,6 @@
       "packages/arya-companion": {
         "packageJson": {
           "dependencies": [
-            "npm:@babel/plugin-transform-react-jsx@^7.28.6",
             "npm:@expo/vector-icons@^15.0.3",
             "npm:@react-native-async-storage/async-storage@2.2.0",
             "npm:@react-navigation/native@^7.1.8",
@@ -6792,7 +6825,6 @@
             "npm:expo-system-ui@^55.0.17",
             "npm:expo@~54.0.34",
             "npm:nativewind@^4.2.3",
-            "npm:react-native-css-interop@~0.2.3",
             "npm:react-native-markdown-display@^7.0.2",
             "npm:react-native-reanimated@~4.1.1",
             "npm:react-native-safe-area-context@5.6",

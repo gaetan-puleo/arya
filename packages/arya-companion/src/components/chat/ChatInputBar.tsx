@@ -12,6 +12,10 @@ import {
 	TextInput,
 	View,
 } from "react-native";
+import type {
+	NativeSyntheticEvent,
+	TextInputContentSizeChangeEventData,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { AgentInfo, CommandInfo } from "@/types/domain";
@@ -57,7 +61,7 @@ export default function ChatInputBar({
 		textHeight >= EXPAND_BUTTON_THRESHOLD && !inputExpanded;
 
 	const handleContentSizeChange = useCallback(
-		(e: { nativeEvent: { contentSize: { height: number } } }) => {
+		(e: NativeSyntheticEvent<TextInputContentSizeChangeEventData>) => {
 			const next = Math.min(
 				Math.max(
 					Math.ceil(e.nativeEvent.contentSize.height),
@@ -289,7 +293,8 @@ function SendButton({
 	onSend: () => void;
 	fullScreen?: boolean;
 	keyboardOpen?: boolean;
-	insets?: ReturnType<typeof useSafeAreaInsets>;
+	/** Subset of safe-area inset edges we actually read. Wider impl detail kept out of the prop API. */
+	insets?: { bottom: number };
 }) {
 	return (
 		<Pressable

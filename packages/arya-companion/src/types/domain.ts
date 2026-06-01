@@ -56,14 +56,32 @@ export interface MessageDisplayRow {
 	toolError?: boolean;
 }
 
+/**
+ * Connection lifecycle. Surfaces the three states the UI needs to
+ * disambiguate: not started yet, the socket is being established, and a
+ * live socket is ready to send.
+ *
+ *   `disconnected` — no socket, or socket is closing/closed.
+ *   `connecting`   — socket exists but `open` has not fired.
+ *   `connected`    — socket is open; outbound sends will succeed.
+ *
+ * Replaces the prior boolean-only model where "socket exists" and
+ * "socket is connected" were folded into one flag, making it impossible
+ * to render a "connecting…" indicator distinct from "offline".
+ */
+export type ConnectionState = "disconnected" | "connecting" | "connected";
+
 export interface ApprovalSnapshot {
 	approvalId: string;
 	status: "pending" | "approved" | "denied";
 	toolName: string;
-	toolArgs: unknown;
+	/** Raw stringified LLM args (matches `WireApprovalRequest.args`). */
+	toolArgs: string;
 	toolArgsPretty: string;
-	agentId: string;
-	channelId: string;
+	/** Optional — server doesn't always include an agent name. */
+	agentId?: string;
+	/** May be null when the approval was raised outside any session. */
+	channelId: string | null;
 	createdAt: number;
 	resolvedAt?: number;
 }

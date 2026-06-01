@@ -35,9 +35,7 @@ const seenApprovalIds = new Set<string>();
  * silently dropped. The wire shape is `ApprovalRequestWire` flattened
  * with `type: "approval_request"`; we accept either.
  */
-export function handleApprovalRequest(
-	msg: ApprovalRequestWire & { sessionId: string },
-): void {
+export function handleApprovalRequest(msg: ApprovalRequestWire): void {
 	if (seenApprovalIds.has(msg.requestId)) return;
 	seenApprovalIds.add(msg.requestId);
 
@@ -45,6 +43,9 @@ export function handleApprovalRequest(
 	store.upsertApproval(snapshotFromApprovalRequest(msg));
 	// Append a transcript row so ChatMessageList renders an
 	// ApprovalCard inline (recognises the `approval-` prefix).
+	// `sessionId` may be null when the approval was raised outside any
+	// session — in that case there's no transcript to surface it in, so
+	// the snapshot is the only client-side trace.
 	const sid = msg.sessionId;
 	if (sid) {
 		store.appendTranscriptRow(sid, {

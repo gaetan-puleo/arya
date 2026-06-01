@@ -7,6 +7,7 @@
  */
 
 import { View } from "react-native";
+import type { GestureResponderEvent } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { SessionSummary } from "@/types/domain";
@@ -20,9 +21,7 @@ interface SessionsDrawerProps {
 	onSelect: (sessionId: string) => void;
 	onCreate: () => void;
 	onLongPress: (session: SessionSummary) => void;
-	onRowPressIn: (e: {
-		nativeEvent: { pageX: number; pageY: number };
-	}) => void;
+	onRowPressIn: (e: GestureResponderEvent) => void;
 	onDeleteAllPress: () => void;
 }
 

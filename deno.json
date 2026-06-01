@@ -7,6 +7,8 @@
     "test": "deno test -A --sloppy-imports packages/arya/src/"
   },
   "imports": {
+    "@std/expect": "jsr:@std/expect@^1.0.0",
+    "@std/testing": "jsr:@std/testing@^1.0.0",
     "ws": "npm:ws@^8.18.0",
     "croner": "npm:croner@^9.0.0",
     "openai": "npm:openai@^6.38.0",
@@ -17,6 +19,8 @@
     "mu-core/": "../mu/packages/core/src/",
     "mu-harness": "../mu/packages/harness/src/index.ts",
     "mu-harness/": "../mu/packages/harness/src/",
+    "mu-tui": "../mu/packages/tui/src/index.ts",
+    "mu-tui/": "../mu/packages/tui/src/",
     "mu-local-provider": "../mu/packages/local-provider/src/index.ts",
     "mu-local-provider/": "../mu/packages/local-provider/src/",
     "mu-tools": "../mu/packages/tools/src/index.ts",

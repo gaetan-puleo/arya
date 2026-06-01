@@ -16,6 +16,7 @@ import type {
 	ApprovalSnapshot,
 	ChatMessageItem,
 	CommandInfo,
+	ConnectionState,
 	SessionSummary,
 	SubAgentRunSnapshot,
 } from "@/types/domain";
@@ -24,6 +25,7 @@ export interface StoreState {
 	// connection
 	socket: WebSocket | null;
 	connected: boolean;
+	connectionState: ConnectionState;
 
 	// registry
 	commands: CommandInfo[];
@@ -65,6 +67,13 @@ export interface StoreActions {
 
 	upsertApproval: (snap: ApprovalSnapshot) => void;
 	resetApprovals: () => void;
+	/**
+	 * Drop every approval whose `channelId` matches `sessionId`. Called when
+	 * a session is deleted or swapped so stale prompts don't leak into the
+	 * new context. Approvals with `channelId: null` (raised outside any
+	 * session) are unaffected.
+	 */
+	clearApprovalsForSession: (sessionId: string) => void;
 }
 
 export type Store = StoreState & StoreActions;
@@ -73,7 +82,17 @@ export const useStore = create<Store>((set) => ({
 	// ── connection ─────────────────────────────────────────────────
 	socket: null,
 	connected: false,
-	setConnection: (socket, connected) => set({ socket, connected }),
+	connectionState: "disconnected",
+	setConnection: (socket, connected) =>
+		set({
+			socket,
+			connected,
+			connectionState: !socket
+				? "disconnected"
+				: connected
+					? "connected"
+					: "connecting",
+		}),
 
 	// ── registry ───────────────────────────────────────────────────
 	commands: [],
@@ -151,4 +170,16 @@ export const useStore = create<Store>((set) => ({
 			return { approvals: next };
 		}),
 	resetApprovals: () => set({ approvals: new Map() }),
+	clearApprovalsForSession: (sessionId) =>
+		set((s) => {
+			let removed = 0;
+			const next = new Map(s.approvals);
+			for (const [id, snap] of s.approvals) {
+				if (snap.channelId === sessionId) {
+					next.delete(id);
+					removed++;
+				}
+			}
+			return removed > 0 ? { approvals: next } : {};
+		}),
 }));

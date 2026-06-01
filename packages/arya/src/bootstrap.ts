@@ -1,29 +1,19 @@
-/**
- * arya bootstrap — composes the shared `mu-harness` bootstrap with the
- * arya-specific bits (config file, local provider, WS transport).
- */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import {
-  type AgentRuntime,
-  bootstrap as harnessBootstrap,
-  createAgentsCommand,
-  createAgentRuntime,
-  createCommandRegistry,
-  createHelpCommand,
-  createSchedulerPlugin,
-  createSessionsCommand,
-  createXdgPaths,
-} from 'mu-harness';
-import { createLocalProviderPlugin, type LocalProviderConfig } from 'mu-local-provider';
+import { createHarness, loadAgents } from 'mu-harness';
+import { createLocalProvider, type LocalProviderConfig } from 'mu-local-provider';
 import { createMuTools } from 'mu-tools';
 import webfetchPlugin from 'mu-webfetch';
 
+import { resolveXdg } from './xdg';
+import { createAryaRuntime } from './runtime';
+import { createApprovalManager } from './approvals';
+import { createScheduler, type Scheduler } from './scheduler';
+import { observeSubAgent } from './sub-agent-channel';
 import { createWebSocketServer } from './ws';
+import type { WireAgent, WsOutbound } from './protocol';
 
-// Minimal level-gated logger. Replaces the removed `createLogger` from
-// mu-harness; preserves the ARYA_LOG_LEVEL knob so operators can silence info.
 type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
 const LEVEL_ORDER: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3, silent: 4 };
 function makeLog(scope: string, levelEnvVar: string) {
@@ -41,64 +31,49 @@ function makeLog(scope: string, levelEnvVar: string) {
 const log = makeLog('arya', 'ARYA_LOG_LEVEL');
 
 export interface BootstrapConfig {
-  /** Local provider backend kind (currently only 'llama-swap' is supported). */
   kind?: LocalProviderConfig['kind'];
   baseUrl: string;
   model: string;
   apiKey?: string;
   wsPort: number;
-  /**
-   * Bind address for the WebSocket server. Defaults to `127.0.0.1` (loopback-only).
-   * Set to `'0.0.0.0'` to accept LAN connections — requires a non-empty `authToken`.
-   */
   wsHost?: string;
   authToken?: string;
-  /** Override agents directory (defaults to `<cwd>/definitions/agents` if present). */
+  primaryAgent?: string;
   agentsDir?: string;
-  /** Override tasks directory (defaults to `<cwd>/definitions/tasks` if present). */
   tasksDir?: string;
 }
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
-
-function isLoopback(host: string): boolean {
-  return LOOPBACK_HOSTS.has(host);
-}
+const isLoopback = (host: string): boolean => LOOPBACK_HOSTS.has(host);
 
 function validatePort(value: unknown): number {
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 65535) {
-    throw new Error(
-      `[arya] Invalid wsPort: ${JSON.stringify(value)}. Must be an integer in [1, 65535].`,
-    );
+    throw new Error(`[arya] Invalid wsPort: ${JSON.stringify(value)}. Must be an integer in [1, 65535].`);
   }
   return value;
 }
 
-function loadConfig(cwd: string, configPath?: string): BootstrapConfig {
-  const result: Partial<BootstrapConfig> = {};
-  if (configPath) {
-    try {
-      Object.assign(result, JSON.parse(readFileSync(configPath, 'utf-8')));
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      throw new Error(`[arya] Failed to load config from ${configPath}: ${msg}`);
-    }
-  }
+function validateConfig(obj: Record<string, unknown>, configPath: string | undefined, cwd: string): BootstrapConfig {
   const missing: string[] = [];
-  if (!result.baseUrl) missing.push('baseUrl');
-  if (!result.model) missing.push('model');
-  if (result.wsPort == null) missing.push('wsPort');
+  if (typeof obj.baseUrl !== 'string' || !obj.baseUrl) missing.push('baseUrl');
+  if (typeof obj.model !== 'string' || !obj.model) missing.push('model');
+  if (obj.wsPort == null) missing.push('wsPort');
   if (missing.length > 0) {
     throw new Error(
       `[arya] Missing required config field(s): ${missing.join(', ')}.\n` +
         `       Edit ${configPath ?? '~/.config/arya/config.json'}.`,
     );
   }
-  const wsPort = validatePort(result.wsPort);
-  const wsHost = typeof result.wsHost === 'string' && result.wsHost ? result.wsHost : '127.0.0.1';
-  const authToken = typeof result.authToken === 'string' ? result.authToken : undefined;
 
-  // Refuse to start with empty auth on a public bind. Loopback-only gets a warning.
+  const wsPort = validatePort(obj.wsPort);
+  const wsHost = typeof obj.wsHost === 'string' && obj.wsHost ? obj.wsHost : '127.0.0.1';
+  const authToken = typeof obj.authToken === 'string' ? obj.authToken : undefined;
+  const apiKey = typeof obj.apiKey === 'string' ? obj.apiKey : undefined;
+  const kind = typeof obj.kind === 'string' ? (obj.kind as LocalProviderConfig['kind']) : undefined;
+  const primaryAgent = typeof obj.primaryAgent === 'string' ? obj.primaryAgent : undefined;
+  const agentsDir = typeof obj.agentsDir === 'string' ? obj.agentsDir : join(cwd, 'definitions', 'agents');
+  const tasksDir = typeof obj.tasksDir === 'string' ? obj.tasksDir : join(cwd, 'definitions', 'tasks');
+
   if (!authToken) {
     if (!isLoopback(wsHost)) {
       throw new Error(
@@ -112,119 +87,121 @@ function loadConfig(cwd: string, configPath?: string): BootstrapConfig {
   }
 
   return {
-    kind: result.kind,
-    baseUrl: result.baseUrl as string,
-    model: result.model as string,
-    apiKey: result.apiKey,
+    kind,
+    baseUrl: obj.baseUrl as string,
+    model: obj.model as string,
+    apiKey,
     wsPort,
     wsHost,
     authToken,
-    agentsDir: result.agentsDir ?? join(cwd, 'definitions', 'agents'),
-    tasksDir: result.tasksDir ?? join(cwd, 'definitions', 'tasks'),
+    primaryAgent,
+    agentsDir,
+    tasksDir,
   };
+}
+
+export function loadConfig(cwd: string, configPath?: string): BootstrapConfig {
+  if (!configPath) return validateConfig({}, undefined, cwd);
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`[arya] Failed to load config from ${configPath}: ${msg}`);
+  }
+  return validateConfig(parsed, configPath, cwd);
 }
 
 export interface BootstrapHandle {
   shutdown: () => Promise<void>;
-  /** Exposed for tests / introspection. */
-  agent: AgentRuntime;
 }
 
-export async function bootstrap(
-  cwd: string = process.cwd(),
-  configPath?: string,
-): Promise<BootstrapHandle> {
+export async function bootstrap(cwd: string = process.cwd(), configPath?: string): Promise<BootstrapHandle> {
   const config = loadConfig(cwd, configPath);
-  const paths = createXdgPaths('arya');
+  const xdg = resolveXdg();
+  const primaryName = config.primaryAgent ?? 'arya';
+  const tools = createMuTools({ getCwd: () => cwd });
+  const plugins = [webfetchPlugin];
+  const approvals = createApprovalManager();
 
-  // Provider plugin (arya-specific).
-  const providerPlugin = createLocalProviderPlugin({
-    kind: config.kind,
-    baseUrl: config.baseUrl,
-    model: config.model,
-    apiKey: config.apiKey,
-  });
+  const configAgents = await loadAgents(join(xdg.configHome, 'arya', 'agents'));
+  const projectAgents = config.agentsDir && existsSync(config.agentsDir) ? await loadAgents(config.agentsDir) : [];
+  const allAgents = [...projectAgents, ...configAgents];
 
-  // mu-tools (filesystem + shell) made available to the runtime, scoped to cwd.
-  const baseTools = createMuTools({ getCwd: () => cwd });
+  const primary = allAgents.find((a) => a.name === primaryName) ?? allAgents[0];
 
-  // Bootstrap with project-local overrides on top of the XDG layout.
-  const result = await harnessBootstrap({
+  let pushFrame: (frame: WsOutbound) => void = () => {};
+
+  const harness = await createHarness({
     hostName: 'arya',
-    paths,
-    extraAgentsDirs: config.agentsDir ? [config.agentsDir] : [],
-    providerPlugin,
-    extraPlugins: [webfetchPlugin],
-    baseTools,
-    permissionSource: 'primary-agent',
-    defaultPermissionDecision: 'ask',
-    sessionStore: 'jsonl',
+    xdg,
+    cwd,
+    providers: {
+      local: createLocalProvider({
+        kind: config.kind,
+        baseUrl: config.baseUrl,
+        model: config.model,
+        apiKey: config.apiKey,
+      }),
+    },
+    model: `local/${config.model}`,
+    tools,
+    plugins,
+    hooks: approvals.hooks,
+    agents: projectAgents,
+    system: primary?.prompt,
+    title: true,
   });
 
-  // Logging. Note: harness no longer loads `.env` or surfaces a skills list,
-  // so those lines were dropped along with their underlying APIs.
+  const runtime = createAryaRuntime({ harness, tools, plugins, primaryName });
+
+  runtime.subAgents.subscribe((run) =>
+    observeSubAgent(
+      run.session,
+      { runId: run.runId, agentName: run.agent, parentSessionId: run.parentId ?? '' },
+      (frame) => pushFrame(frame),
+    )
+  );
+
+  const commands = harness.commands;
+  const getAgents = (): WireAgent[] => runtime.agents().map((a) => ({ name: a.name, description: a.description }));
+
   log.info(`Bootstrap — cwd: ${cwd}`);
   log.info(`Config — baseUrl: ${config.baseUrl}, model: ${config.model}`);
-  log.info(`Loaded ${result.plugins.length - 1} runtime plugin(s) + provider`);
-  log.info(`Loaded ${result.subAgents.length + (result.primaryAgent ? 1 : 0)} agent(s)`);
-  log.info(`Primary agent: ${result.primaryAgent?.name ?? '<none>'}`);
+  log.info(`Loaded ${harness.agents.list().length} agent(s); primary: ${primaryName}`);
 
-  // Scheduler plugin must be added BEFORE `createAgentRuntime`, which snapshots
-  // tools/provider from the plugin list at construction time. The scheduler's
-  // event sink is wired through a deferred handle so it can forward to `ws.push`
-  // once the WS server is constructed below.
-  type SchedulerEventSink = (event: Record<string, unknown>) => void;
-  let pushSchedulerEvent: SchedulerEventSink = () => {
-    /* dropped until ws is wired */
-  };
-  const scheduler = createSchedulerPlugin({
-    tasksDir: config.tasksDir && existsSync(config.tasksDir) ? config.tasksDir : undefined,
-    bus: result.bus,
-    onEvent: (event) => pushSchedulerEvent({ type: 'scheduler_event', event }),
-  });
-  result.plugins.push(scheduler);
-
-  // ── Agent runtime (managed by harness, multi-session) ───────────────
-  const agent = createAgentRuntime({
-    tools: result.tools,
-    plugins: result.plugins,
-    hooks: result.hooks,
-    systemPrompt: result.systemPrompt,
-    model: config.model,
-    store: result.store,
-    bus: result.bus,
-  });
-
-  // Command registry — the harness `bootstrap` no longer surfaces one, so
-  // arya assembles the default `/agents`, `/sessions`, `/help` commands here
-  // for the WS `command`/`commands` protocol.
-  const commandRegistry = createCommandRegistry();
-  commandRegistry.register(createAgentsCommand({ getSubAgents: () => result.subAgents }));
-  commandRegistry.register(createSessionsCommand({ store: result.store }));
-  commandRegistry.register(createHelpCommand({ list: () => commandRegistry.list() }));
-
-  // ── WS transport (arya-specific) ────────────────────────────────────
   const ws = createWebSocketServer({
     port: config.wsPort,
     host: config.wsHost,
     authToken: config.authToken,
-    agent,
-    approvalQueue: result.approvalQueue,
-    commandRegistry,
-    getSubAgents: () => result.subAgents,
+    runtime,
+    approvals,
+    commands,
+    getAgents,
+    activeAgentId: primaryName,
   });
 
-  // Now that ws exists, route scheduler events through it.
-  pushSchedulerEvent = (event) => ws.push(event);
-
   await ws.start();
+  pushFrame = ws.push;
   log.info(`Listening on ${config.wsHost}:${config.wsPort} — accepting connections`);
 
+  let scheduler: Scheduler | undefined;
+  if (config.tasksDir && existsSync(config.tasksDir)) {
+    scheduler = createScheduler({
+      tasksDir: config.tasksDir,
+      runtime,
+      onEvent: (event) => ws.push({ type: 'scheduler_event', event }),
+      log: (msg) => log.info(`scheduler: ${msg}`),
+    });
+    log.info(`Scheduler — ${scheduler.tasks().length} task(s) loaded`);
+  }
+
   return {
-    agent,
     shutdown: async () => {
       log.info('Shutting down...');
+      scheduler?.stop();
       await ws.stop();
+      runtime.close();
       log.info('Stopped');
     },
   };

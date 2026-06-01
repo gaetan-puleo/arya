@@ -1,4 +1,5 @@
 import { Pressable, Text } from "react-native";
+import type { GestureResponderEvent } from "react-native";
 import type { SessionSummary } from "@/types/domain";
 import { formatRelativeTime } from "@/services/formatters";
 
@@ -16,7 +17,7 @@ interface SessionRowProps {
 	 * touch begins. The drawer stashes the last value and reads it
 	 * on long-press to anchor the popover.
 	 */
-	onPressIn: (e: { nativeEvent: { pageX: number; pageY: number } }) => void;
+	onPressIn: (e: GestureResponderEvent) => void;
 	onLongPress: () => void;
 }
 

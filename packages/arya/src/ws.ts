@@ -1,33 +1,19 @@
-/**
- * arya WebSocket server.
- *
- * Pure transport: speaks JSON over WS, forwards to the harness AgentRuntime
- * (one runtime at a time, rebound when the client switches sessions),
- * bridges CoreEvents to outbound messages, and surfaces pending approvals.
- *
- * Inbound:
- *   chat | command | commands | agents | approval_response |
- *   sessions:{list,create,delete,rename,get}
- *
- * Outbound:
- *   stream | reasoning | message | activity | error | turn_end |
- *   approval_request | commands | agents | sessions:{listed,changed,history}
- */
 import type { IncomingMessage } from 'node:http';
 import { type RawData, WebSocket, WebSocketServer } from 'ws';
-import type { Runtime, Unsubscribe } from 'mu-core';
+import type { Command, CommandRegistry } from 'mu-harness';
+import type { ApprovalManager } from './approvals';
+import { type CompanionChannel, createCompanionChannel } from './companion-channel';
 import {
-  type AgentRuntime,
-  type ApprovalQueue,
-  type CommandRegistry,
-  createChannelManager,
-  type PersistedSessionStore,
-  type SubAgent,
-} from 'mu-harness';
-import { createWsChannel, type WsChannelHandle } from './ws-channel';
+  approvalRequestToWire,
+  parseInbound,
+  type WireAgent,
+  type WireCommand,
+  type WireSessionChangeKind,
+  type WsInbound,
+  type WsOutbound,
+} from './protocol';
+import type { AryaRuntime } from './runtime';
 
-// Minimal level-gated logger. Inlined after `createLogger` was removed from
-// mu-harness; preserves the ARYA_LOG_LEVEL knob for silencing info.
 type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
 const LEVEL_ORDER: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3, silent: 4 };
 function makeLog(scope: string, levelEnvVar: string) {
@@ -46,251 +32,193 @@ const log = makeLog('arya:ws', 'ARYA_LOG_LEVEL');
 
 export interface WebSocketServerOptions {
   port: number;
-  /** Bind address. Defaults to `127.0.0.1` (loopback-only). Pass `'0.0.0.0'` to expose on LAN. */
   host?: string;
   authToken?: string;
-  agent: AgentRuntime;
-  approvalQueue: ApprovalQueue;
-  commandRegistry: CommandRegistry;
-  getSubAgents: () => SubAgent[];
-  /** Max inbound WS frame size in bytes. Defaults to 1 MiB. */
+  runtime: AryaRuntime;
+  approvals: ApprovalManager;
+  commands: CommandRegistry;
+  getAgents: () => WireAgent[];
+  activeAgentId?: string;
   maxPayloadBytes?: number;
 }
 
 const DEFAULT_MAX_PAYLOAD_BYTES = 1024 * 1024;
-/** Close code 1008 = Policy Violation (RFC 6455). */
 const WS_CLOSE_POLICY = 1008;
 
 export interface WebSocketServerHandle {
   start(): Promise<void>;
   stop(): Promise<void>;
-  /** Broadcast an arbitrary event to all clients. */
-  push(event: Record<string, unknown>): void;
+  push(event: WsOutbound): void;
 }
 
-function asPersistedStore(agent: AgentRuntime): PersistedSessionStore {
-  // Bootstrap wires a PersistedSessionStore; this cast is safe by construction.
-  return agent.store as PersistedSessionStore;
+interface ClientSession {
+  ws: WebSocket;
+  sessionId: string;
+}
+
+function toWireCommands(commands: Command[]): WireCommand[] {
+  return commands.map((c) => ({ command: `/${c.name}`, description: c.description }));
 }
 
 export function createWebSocketServer(opts: WebSocketServerOptions): WebSocketServerHandle {
-  const clients = new Set<WebSocket>();
-  const store = asPersistedStore(opts.agent);
-  const bus = opts.agent.bus;
-  const { approvalQueue, commandRegistry } = opts;
+  const { runtime, approvals, commands } = opts;
+  const clients = new Map<WebSocket, ClientSession>();
+  const channels = new Map<string, CompanionChannel>();
+  const approvalSessions = new Map<string, string>();
+  let currentApprovalSessionId: string | null = null;
 
   let wss: WebSocketServer | null = null;
-  let activeSessionId: string | null = null;
-  let activeRuntime: Runtime | null = null;
-  let storePersistUnsub: Unsubscribe | undefined;
-  let storeWatchUnsub: Unsubscribe | undefined;
   let approvalUnsub: (() => void) | undefined;
 
-  // Channel manager owns the bus→client bridge. WsChannel attaches to the bus
-  // on session activation and detaches on teardown. ws.ts retains the raw
-  // socket lifecycle, auth, RPCs, approvals and scheduler-event push — those
-  // are server-layer concerns that don't fit the ChannelOutEvent vocabulary.
-  const channelManager = createChannelManager();
-  let wsChannel: WsChannelHandle | null = null;
-  /**
-   * Pin each approval request to the session id that was active when it was
-   * issued. Used to (a) reject replays targeting a different session and (b)
-   * verify the responding socket owns that session.
-   */
-  const approvalSessions = new Map<string, string>();
-  /** Per-socket default session id, set on connect; updated by chat/sessions:get. */
-  const socketSessions = new WeakMap<WebSocket, string>();
-  /** Active idle-watch interval; cleared on stop / session swap / runtime stop. */
-  let idleWatchTimer: ReturnType<typeof setInterval> | null = null;
-
-  // ── Outbound helpers ──────────────────────────────────────────────────
-  function push(event: Record<string, unknown>): void {
+  function push(event: WsOutbound): void {
     const data = JSON.stringify(event);
-    for (const ws of clients) {
+    for (const { ws } of clients.values()) {
       if (ws.readyState === WebSocket.OPEN) ws.send(data);
     }
   }
-  function send(ws: WebSocket, event: Record<string, unknown>): void {
+  function send(ws: WebSocket, event: WsOutbound): void {
     if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(event));
   }
 
-  // ── Session activation ────────────────────────────────────────────────
-  function activate(sessionId: string): Runtime {
-    if (activeSessionId === sessionId && activeRuntime) return activeRuntime;
-    teardownActive();
-    const existing = store.get(sessionId);
-    if (existing) {
-      activeRuntime = opts.agent.createRuntime(sessionId);
-    } else {
-      const created = store.create({ title: sessionId });
-      activeRuntime = opts.agent.createRuntime(created.id);
-      sessionId = created.id;
-    }
-    activeSessionId = sessionId;
-    storePersistUnsub = store.persistOnBus(bus, sessionId);
-    // Re-arm the channel bus subscription for the new session. Frames it
-    // publishes are tagged with the current `activeSessionId` via the
-    // accessor closure passed at channel construction time.
-    wsChannel?.attach();
-    return activeRuntime;
+  function agentsFrame(): WsOutbound {
+    return { type: 'agents', agents: opts.getAgents(), activeAgentId: opts.activeAgentId ?? null };
   }
 
-  function teardownActive(): void {
-    wsChannel?.detach();
-    storePersistUnsub?.();
-    storePersistUnsub = undefined;
-    if (idleWatchTimer) {
-      clearInterval(idleWatchTimer);
-      idleWatchTimer = null;
-    }
-    if (activeRuntime) {
-      void activeRuntime.stop();
-      activeRuntime = null;
-    }
-    activeSessionId = null;
+  async function activate(sessionId: string): Promise<CompanionChannel> {
+    const existing = channels.get(sessionId);
+    if (existing) return existing;
+    const session = await runtime.session(sessionId);
+    const channel = createCompanionChannel({
+      sessionId,
+      getSession: () => session,
+      broadcast: push,
+      onTurnStart: (sid) => {
+        currentApprovalSessionId = sid;
+      },
+    });
+    channels.set(sessionId, channel);
+    return channel;
   }
 
-  // ── Inbound dispatch ──────────────────────────────────────────────────
-  async function handleMessage(ws: WebSocket, defaultSessionId: string, raw: string): Promise<void> {
-    let msg: Record<string, unknown>;
-    try {
-      msg = JSON.parse(raw);
-    } catch {
-      send(ws, { type: 'error', message: 'Invalid JSON' });
+  async function refreshSessions(sessionId: string, kind: WireSessionChangeKind): Promise<void> {
+    push({ type: 'sessions:changed', sessionId, kind });
+    push({ type: 'sessions:listed', sessions: await runtime.list() });
+  }
+
+  async function dispatch(client: ClientSession, msg: WsInbound): Promise<void> {
+    switch (msg.type) {
+      case 'chat': {
+        const sessionId = msg.sessionId ?? client.sessionId;
+        client.sessionId = sessionId;
+        currentApprovalSessionId = sessionId;
+        const channel = await activate(sessionId);
+        void channel.send(msg.text).catch((err: unknown) => {
+          push({ type: 'error', sessionId, message: err instanceof Error ? err.message : String(err) });
+        });
+        return;
+      }
+      case 'command': {
+        const sessionId = msg.sessionId ?? client.sessionId;
+        const result = await commands.run(msg.text, { sessionId });
+        if (result.ok) {
+          if (result.output != null) {
+            push({
+              type: 'message',
+              sessionId,
+              message: {
+                id: crypto.randomUUID(),
+                ts: Date.now(),
+                role: 'system',
+                content: String(result.output),
+                meta: { visibility: 'ui' },
+              },
+            });
+          }
+        } else {
+          send(client.ws, { type: 'error', sessionId, message: result.error ?? 'command failed' });
+        }
+        return;
+      }
+      case 'commands':
+        send(client.ws, { type: 'commands', commands: toWireCommands(commands.list()) });
+        return;
+      case 'agents':
+        send(client.ws, agentsFrame());
+        return;
+      case 'approval_response':
+        handleApprovalResponse(client, msg.requestId, msg.action);
+        return;
+      case 'set_active_agent':
+        push({
+          type: 'active_agent',
+          agentId: msg.agentId,
+          sessionId: msg.sessionId,
+          reason: 'echo-only (server uses a single configured primary agent)',
+        });
+        return;
+      case 'sessions:list':
+        send(client.ws, { type: 'sessions:listed', sessions: await runtime.list() });
+        return;
+      case 'sessions:create': {
+        const sessionId = msg.sessionId ?? crypto.randomUUID();
+        await runtime.create(sessionId, msg.title);
+        await refreshSessions(sessionId, 'created');
+        return;
+      }
+      case 'sessions:delete': {
+        channels.get(msg.sessionId)?.detach();
+        channels.delete(msg.sessionId);
+        await runtime.delete(msg.sessionId);
+        await refreshSessions(msg.sessionId, 'deleted');
+        return;
+      }
+      case 'sessions:rename':
+        runtime.rename(msg.sessionId, msg.title);
+        await refreshSessions(msg.sessionId, 'renamed');
+        return;
+      case 'sessions:get': {
+        const session = await runtime.history(msg.sessionId);
+        send(client.ws, { type: 'sessions:history', sessionId: msg.sessionId, session });
+        return;
+      }
+    }
+  }
+
+  function handleApprovalResponse(
+    client: ClientSession,
+    requestId: string,
+    action: 'approve' | 'approve_always' | 'deny',
+  ): void {
+    const issuedFor = approvalSessions.get(requestId);
+    if (issuedFor === undefined) {
+      send(client.ws, { type: 'error', message: `Unknown or already-resolved approval: ${requestId}` });
       return;
     }
-    const type = String(msg.type ?? '');
-    const sessionId = typeof msg.sessionId === 'string' && msg.sessionId ? msg.sessionId : defaultSessionId;
-
-    switch (type) {
-      case 'chat': {
-        const text = String(msg.text ?? '');
-        const runtime = activate(sessionId);
-        socketSessions.set(ws, sessionId);
-        await runtime.start();
-        bus.publish({ type: 'user_message', message: { role: 'user', content: text } });
-        watchForIdle(runtime, sessionId);
-        return;
-      }
-
-      case 'command': {
-        const text = String(msg.text ?? '').trim();
-        const result = await commandRegistry.run(text, { sessionId });
-        if (result.ok && result.output != null) {
-          push({ type: 'message', sessionId, message: { role: 'system', content: String(result.output) } });
-        } else if (!result.ok) {
-          send(ws, { type: 'error', sessionId, message: result.error ?? 'command failed' });
-        }
-        return;
-      }
-
-      case 'commands':
-        send(ws, { type: 'commands', commands: commandsList() });
-        return;
-
-      case 'agents':
-        send(ws, { type: 'agents', agents: agentsList() });
-        return;
-
-      case 'approval_response': {
-        const requestId = String(msg.requestId ?? msg.token ?? '');
-        const action = String(msg.action ?? 'deny');
-        const decision = action === 'approve' || action === 'approve_always' ? 'allow' : 'deny';
-        // Ownership check: an approval must be resolved by a socket that owns the
-        // session under which it was issued. Without this any connected client
-        // could approve any pending tool call by guessing/observing requestIds.
-        const issuedFor = approvalSessions.get(requestId);
-        if (!issuedFor) {
-          send(ws, { type: 'error', message: `Unknown or already-resolved approval: ${requestId}` });
-          return;
-        }
-        const callerSession = socketSessions.get(ws);
-        if (callerSession !== issuedFor) {
-          log.warn(
-            `approval_response rejected: socket session=${callerSession ?? '<none>'} does not own approval session=${issuedFor}`,
-          );
-          send(ws, { type: 'error', message: 'Not authorized to respond to this approval' });
-          return;
-        }
-        approvalSessions.delete(requestId);
-        approvalQueue.resolve(requestId, decision);
-        return;
-      }
-
-      case 'sessions:list':
-        send(ws, { type: 'sessions:listed', sessions: store.summaries() });
-        return;
-
-      case 'sessions:create':
-        store.create({ title: typeof msg.title === 'string' ? msg.title : undefined });
-        return;
-
-      case 'sessions:delete': {
-        if (typeof msg.sessionId !== 'string') {
-          send(ws, { type: 'error', message: 'sessions:delete missing sessionId' });
-          return;
-        }
-        const deletedId = msg.sessionId;
-        const wasActive = activeSessionId === deletedId;
-        if (wasActive) teardownActive();
-        store.delete(deletedId);
-        // Notify ALL clients so any UI tracking this session can clear.
-        // `wasActive` lets the client know its current session was wiped.
-        push({ type: 'session_deleted', sessionId: deletedId, wasActive });
-        return;
-      }
-
-      case 'sessions:rename':
-        if (typeof msg.sessionId !== 'string') {
-          send(ws, { type: 'error', message: 'sessions:rename missing sessionId' });
-          return;
-        }
-        store.rename(msg.sessionId, String(msg.title ?? ''));
-        return;
-
-      case 'sessions:get': {
-        const id = typeof msg.sessionId === 'string' ? msg.sessionId : '';
-        if (!id) {
-          send(ws, { type: 'error', message: 'sessions:get missing sessionId' });
-          return;
-        }
-        send(ws, { type: 'sessions:history', sessionId: id, session: store.get(id) ?? null });
-        return;
-      }
-
-      default:
-        send(ws, { type: 'error', message: `Unknown message type: ${type}` });
+    if (issuedFor && client.sessionId !== issuedFor) {
+      log.warn(
+        `approval_response rejected: socket session=${client.sessionId} does not own approval session=${issuedFor}`,
+      );
+      send(client.ws, { type: 'error', message: 'Not authorized to respond to this approval' });
+      return;
     }
+    approvalSessions.delete(requestId);
+    approvals.resolve(requestId, action);
   }
 
-  function watchForIdle(runtime: Runtime, sessionId: string): void {
-    // Cancel any prior watch so we never leak overlapping intervals.
-    if (idleWatchTimer) {
-      clearInterval(idleWatchTimer);
-      idleWatchTimer = null;
+  async function handleMessage(client: ClientSession, raw: string): Promise<void> {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      send(client.ws, { type: 'error', message: 'Invalid JSON' });
+      return;
     }
-    const interval = setInterval(() => {
-      // Session was swapped or torn down — the runtime we were watching is gone.
-      if (activeRuntime !== runtime || idleWatchTimer !== interval) {
-        clearInterval(interval);
-        return;
-      }
-      const state = runtime.state();
-      if (state === 'idle' || state === 'stopped') {
-        clearInterval(interval);
-        idleWatchTimer = null;
-        push({ type: 'turn_end', sessionId });
-      }
-    }, 100);
-    idleWatchTimer = interval;
-  }
-
-  function commandsList(): Array<{ command: string; description: string }> {
-    return commandRegistry.list().map((c) => ({ command: c.name, description: c.description }));
-  }
-
-  function agentsList(): Array<{ name: string; description: string; color?: string }> {
-    return opts.getSubAgents().map((a) => ({ name: a.name, description: a.description, color: a.color }));
+    const result = parseInbound(parsed);
+    if ('error' in result) {
+      send(client.ws, { type: 'error', message: result.error });
+      return;
+    }
+    await dispatch(client, result);
   }
 
   function onConnection(ws: WebSocket, req: IncomingMessage): void {
@@ -300,115 +228,60 @@ export function createWebSocketServer(opts: WebSocketServerOptions): WebSocketSe
       ws.close(4001, 'Unauthorized');
       return;
     }
-    const defaultSessionId = url.searchParams.get('sessionId') || 'default';
-    clients.add(ws);
-    socketSessions.set(ws, defaultSessionId);
+    const sessionId = url.searchParams.get('sessionId') || 'default';
+    const client: ClientSession = { ws, sessionId };
+    clients.set(ws, client);
 
-    send(ws, { type: 'commands', commands: commandsList() });
-    send(ws, { type: 'agents', agents: agentsList() });
-    send(ws, { type: 'sessions:listed', sessions: store.summaries() });
-    // Re-broadcast any approvals still pending so a freshly connected client sees them.
-    // Use the session id pinned at issue time (not the now-active one) so a replay
-    // after a session switch doesn't mis-attribute the approval.
-    for (const req of approvalQueue.pending()) {
-      const issuedFor = approvalSessions.get(req.id) ?? activeSessionId;
-      send(ws, {
-        type: 'approval_request',
-        requestId: req.id,
-        sessionId: issuedFor,
-        toolName: req.toolName,
-        args: req.args,
-        matchedRule: req.matchedRule,
-      });
+    send(ws, { type: 'commands', commands: toWireCommands(commands.list()) });
+    send(ws, agentsFrame());
+    void runtime.list().then((sessions) => send(ws, { type: 'sessions:listed', sessions }));
+    for (const req of approvals.pending()) {
+      send(ws, approvalRequestToWire(req, approvalSessions.get(req.id) ?? currentApprovalSessionId));
     }
 
     ws.on('message', (data: RawData) => {
-      handleMessage(ws, defaultSessionId, data.toString()).catch((err) => {
+      handleMessage(client, data.toString()).catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err);
         log.error(`handler crashed: ${message}`);
         send(ws, { type: 'error', message });
       });
     });
-    ws.on('close', () => {
-      clients.delete(ws);
-      socketSessions.delete(ws);
-    });
-    ws.on('error', () => {
-      clients.delete(ws);
-      socketSessions.delete(ws);
-    });
+    ws.on('close', () => clients.delete(ws));
+    ws.on('error', () => clients.delete(ws));
   }
 
   return {
     async start() {
-      // Default to loopback-only. Public bind requires an explicit host.
-      // Cap inbound frames to refuse oversized messages (default 100 MiB in `ws`).
       const host = opts.host ?? '127.0.0.1';
       const maxPayload = opts.maxPayloadBytes ?? DEFAULT_MAX_PAYLOAD_BYTES;
       wss = new WebSocketServer({ port: opts.port, host, maxPayload });
       wss.on('connection', (ws: WebSocket, req: IncomingMessage) => onConnection(ws, req));
-      // Build the channel but keep it detached until a session is activated.
-      // The channel will only start broadcasting once `activate()` pins a
-      // session, so frames are never sent without a sessionId tag.
-      wsChannel = createWsChannel({
-        bus,
-        broadcast: push,
-        getActiveSessionId: () => activeSessionId,
-      });
-      await channelManager.add(wsChannel);
-      // start() attaches to the bus; detach immediately so the channel only
-      // surfaces frames while a session is active (matches prior behavior).
-      wsChannel.detach();
-      // The `ws` library emits this when a frame exceeds `maxPayload`. Close the
-      // socket with policy-violation so clients can distinguish from generic errors.
-      wss.on('wsClientError', (err, socket) => {
+      wss.on('wsClientError', (err: Error, socket: { destroy: () => void }) => {
         try {
           socket.destroy();
         } catch {
-          /* socket already gone */
         }
-        log.error(`wsClientError: ${err instanceof Error ? err.message : String(err)}`);
+        log.error(`wsClientError: ${err.message ?? String(err)}`);
       });
-      storeWatchUnsub = store.watch((sessionId, kind) => {
-        push({ type: 'sessions:changed', sessionId, kind });
-        push({ type: 'sessions:listed', sessions: store.summaries() });
-      });
-      approvalUnsub = approvalQueue.subscribe((req) => {
-        // Pin the approval to the session active at issue time so replays after
-        // a session switch can be rejected (and ownership-checked on response).
-        const issuedFor = activeSessionId ?? '';
+      approvalUnsub = approvals.subscribe((req) => {
+        const issuedFor = currentApprovalSessionId ?? '';
         approvalSessions.set(req.id, issuedFor);
-        push({
-          type: 'approval_request',
-          requestId: req.id,
-          sessionId: issuedFor,
-          toolName: req.toolName,
-          args: req.args,
-          matchedRule: req.matchedRule,
-        });
+        push(approvalRequestToWire(req, issuedFor));
       });
     },
     async stop() {
-      storeWatchUnsub?.();
-      storeWatchUnsub = undefined;
       approvalUnsub?.();
       approvalUnsub = undefined;
-      teardownActive();
-      await channelManager.stopAll();
-      wsChannel = null;
+      for (const channel of channels.values()) channel.detach();
+      channels.clear();
       approvalSessions.clear();
-      for (const ws of clients) {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.close(WS_CLOSE_POLICY, 'Server shutting down');
-        }
+      for (const { ws } of clients.values()) {
+        if (ws.readyState === WebSocket.OPEN) ws.close(WS_CLOSE_POLICY, 'Server shutting down');
       }
       clients.clear();
-      // Await wss.close so the OS releases the port before resolving.
       if (wss) {
         const server = wss;
-        await new Promise<void>((resolve) => {
-          server.close(() => resolve());
-        });
+        await new Promise<void>((resolve) => server.close(() => resolve()));
         wss = null;
       }
     },
