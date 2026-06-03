@@ -86,7 +86,7 @@ describe('parseInbound', () => {
 
 describe('approvalRequestToWire', () => {
   it('builds an approval frame with the pinned sessionId', () => {
-    const wire = approvalRequestToWire({ id: 'r1', toolName: 'bash', args: '{"command":"ls"}' }, 's-pinned');
+    const wire = approvalRequestToWire({ id: 'r1', name: 'bash', input: { command: 'ls' } }, 's-pinned');
     expect(wire.type).toBe('approval_request');
     expect(wire.requestId).toBe('r1');
     expect(wire.sessionId).toBe('s-pinned');
@@ -96,7 +96,7 @@ describe('approvalRequestToWire', () => {
   });
 
   it('accepts a null pinned sessionId', () => {
-    const wire = approvalRequestToWire({ id: 'r1', toolName: 'bash', args: '{}' }, null);
+    const wire = approvalRequestToWire({ id: 'r1', name: 'bash', input: {} }, null);
     expect(wire.sessionId).toBeNull();
   });
 });

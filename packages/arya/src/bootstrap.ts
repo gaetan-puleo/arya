@@ -1,14 +1,13 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { createHarness, loadAgents } from 'mu-harness';
+import { createApprovalManager, createHarness, loadAgents } from 'mu-harness';
 import { createLocalProvider, type LocalProviderConfig } from 'mu-local-provider';
 import { createMuTools } from 'mu-tools';
 import webfetchPlugin from 'mu-webfetch';
 
 import { resolveXdg } from './xdg';
 import { createAryaRuntime } from './runtime';
-import { createApprovalManager } from './approvals';
 import { createScheduler, type Scheduler } from './scheduler';
 import { observeSubAgent } from './sub-agent-channel';
 import { createWebSocketServer } from './ws';
@@ -122,7 +121,7 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
   const primaryName = config.primaryAgent ?? 'arya';
   const tools = createMuTools({ getCwd: () => cwd });
   const plugins = [webfetchPlugin];
-  const approvals = createApprovalManager();
+  const approvals = createApprovalManager({ askTools: ['write', 'edit', 'bash', 'subagent'] });
 
   const configAgents = await loadAgents(join(xdg.configHome, 'arya', 'agents'));
   const projectAgents = config.agentsDir && existsSync(config.agentsDir) ? await loadAgents(config.agentsDir) : [];

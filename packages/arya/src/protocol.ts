@@ -1,6 +1,6 @@
 import type { PersistedSessionWire, SessionSummaryWire } from './runtime';
 import type { WireMessage } from './wire';
-import type { PendingApproval } from './approvals';
+import type { PendingApproval } from 'mu-harness';
 
 export type ApprovalAction = 'approve' | 'approve_always' | 'deny';
 
@@ -162,8 +162,8 @@ export function approvalRequestToWire(req: PendingApproval, sessionId: string | 
     type: 'approval_request',
     requestId: req.id,
     sessionId,
-    toolName: req.toolName,
-    args: req.args,
+    toolName: req.name,
+    args: JSON.stringify(req.input ?? {}),
     matchedRule: undefined,
   };
 }

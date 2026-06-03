@@ -1,7 +1,6 @@
 import type { IncomingMessage } from 'node:http';
 import { type RawData, WebSocket, WebSocketServer } from 'ws';
-import type { Command, CommandRegistry } from 'mu-harness';
-import type { ApprovalManager } from './approvals';
+import type { ApprovalManager, Command, CommandRegistry } from 'mu-harness';
 import { type CompanionChannel, createCompanionChannel } from './companion-channel';
 import {
   approvalRequestToWire,
