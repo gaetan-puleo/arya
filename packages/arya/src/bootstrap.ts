@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { createApprovalManager, createHarness, loadAgents } from 'mu-harness';
+import { createApprovalManager, createHarness, createSessionsCommand, loadAgents } from 'mu-harness';
 import { createLocalProvider, type LocalProviderConfig } from 'mu-local-provider';
 import { createMuTools } from 'mu-tools';
 import webfetchPlugin from 'mu-webfetch';
@@ -121,7 +121,7 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
   const primaryName = config.primaryAgent ?? 'arya';
   const tools = createMuTools({ getCwd: () => cwd });
   const plugins = [webfetchPlugin];
-  const approvals = createApprovalManager({ askTools: ['write', 'edit', 'bash', 'subagent'] });
+  const approvals = createApprovalManager();
 
   const configAgents = await loadAgents(join(xdg.configHome, 'arya', 'agents'));
   const projectAgents = config.agentsDir && existsSync(config.agentsDir) ? await loadAgents(config.agentsDir) : [];
@@ -146,7 +146,10 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
     model: `local/${config.model}`,
     tools,
     plugins,
-    hooks: approvals.hooks,
+    approvals: {
+      manager: approvals,
+      activeAgent: () => primary,
+    },
     agents: projectAgents,
     system: primary?.prompt,
     title: true,
@@ -163,6 +166,7 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
   );
 
   const commands = harness.commands;
+  commands.register(createSessionsCommand(harness.sessions), { override: true });
   const getAgents = (): WireAgent[] => runtime.agents().map((a) => ({ name: a.name, description: a.description }));
 
   log.info(`Bootstrap — cwd: ${cwd}`);

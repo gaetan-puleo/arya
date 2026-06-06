@@ -9,6 +9,7 @@ function scriptedSession(messages: Message[]): { session: AgentSession; emit: (e
   const listeners = new Set<(e: AgentSessionEvent) => void>();
   const session: AgentSession = {
     id: 'sub-1',
+    tools: [],
     get messages() {
       return messages;
     },

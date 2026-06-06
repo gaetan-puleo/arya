@@ -8,6 +8,7 @@ import {
   type Plugin,
   runSubAgent,
   type SubAgentRegistry,
+  toolNames,
 } from 'mu-harness';
 import { messagesToWire, type WireMessage } from './wire';
 
@@ -116,7 +117,7 @@ export function createAryaRuntime({ harness, tools, plugins, primaryName }: Arya
           tools,
           plugins,
           system: agent.prompt,
-          hooks: allowList(agent.tools),
+          hooks: allowList(toolNames(agent)),
           id: newId(),
         });
       const result = await runSubAgent(def, prompt, { spawn });
