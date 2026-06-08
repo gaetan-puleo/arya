@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 
-import { basename, dirname, resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 
 import { createPluginStore } from 'mu-harness';
 import { aryaDirs } from './xdg';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const root = resolve(__dirname, '../../..');
+// The directory arya is launched from — its project config/agents/tasks. Uses
+// process.cwd() (not the module path) so a compiled standalone binary resolves
+// project-relative paths from where the user runs it.
+const root = process.cwd();
 
 const subcommand = process.argv[2];
 
