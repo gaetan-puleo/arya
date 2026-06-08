@@ -1,11 +1,14 @@
 # arya-agent
 
-A llama-swap-backed coding agent served over WebSocket, built on **mu**.
+A llama-swap-backed coding agent served over WebSocket, built on **mu**
+(consumed from the published `mu-*` npm packages, so no sibling checkout is
+needed). Ships as a self-contained standalone binary, a local terminal TUI, or
+a WebSocket server for the companion app.
 
-- **`packages/arya`** — server. Composes the new `mu-harness` primitives
+- **`packages/arya`** — server. Composes the `mu-harness` primitives
   (agent sessions, session store/catalog, sub-agents, hooks, channels) with
-  `mu-local-provider`, arya's built-in tool set, a croner scheduler, and a
-  WebSocket transport.
+  `mu-local-provider`, `mu-ai-tools`, a croner scheduler, and a WebSocket
+  transport.
 - **`packages/arya-companion`** — Expo/React Native mobile client that
   connects to the server, streams replies, and surfaces approvals,
   sub-agents and slash commands.
@@ -25,8 +28,31 @@ deno task init
 # writes ~/.config/arya/{config.json, agents/arya.md, plugins/}
 
 # 3. Run
-deno task dev          # or: deno task start
+deno task dev          # WebSocket server (watch mode); or: deno task start
+deno task tui          # local terminal chat — in-process, no server
 ```
+
+## Install (standalone binary)
+
+`arya` ships as a self-contained executable (Deno + arya + mu embedded) — no
+Deno install required at runtime:
+
+```bash
+# from a published release
+curl -fsSL https://raw.githubusercontent.com/gaetan-puleo/arya/main/install.sh | sh
+# → installs `arya` to ~/.local/bin (override with ARYA_INSTALL_DIR / ARYA_VERSION)
+```
+
+Build the binaries locally (cross-compiles 5 targets into `dist/arya-*`):
+
+```bash
+deno task compile              # all targets
+deno task compile linux-x64    # one target
+```
+
+Pushing a `v*` tag runs `.github/workflows/release.yml`, which cross-compiles
+the binaries and attaches them to the GitHub release. The binary resolves
+project-relative config/agents/tasks from the directory it is launched in.
 
 Server config lives at `~/.config/arya/config.json` (template below). It
 binds loopback-only by default; a LAN bind (`"wsHost": "0.0.0.0"`) requires a
@@ -82,7 +108,9 @@ passed straight into `createHarness` (`tools` + `plugins`). Safety is enforced
 by an approval hook — `write`, `edit`, `bash` and `subagent` prompt for
 approval (surfaced to the companion) before running; read-only tools run
 freely. `arya install <path-to-plugin.ts>` stores a plugin file under
-`$XDG_CONFIG_HOME/arya/plugins/`.
+`$XDG_CONFIG_HOME/arya/plugins/`; installed plugins are loaded automatically at
+startup (built-ins stay hard-wired). Skills created by the agent are written to
+the global config dir (`~/.config/arya/skills/`).
 
 ## Scheduled tasks
 
