@@ -15,6 +15,7 @@
     "npm:@types/react-syntax-highlighter@^15.5.13": "15.5.13",
     "npm:@types/react@19.1": "19.1.17",
     "npm:babel-preset-expo@~54.0.10": "54.0.10_@babel+runtime@7.29.7_expo@54.0.34__@expo+metro-runtime@6.1.2__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__@babel+core@7.29.7__@types+react@19.1.17__expo-linking@8.0.12__expo-router@6.0.23__react-dom@19.2.6___react@19.1.0__react-native-reanimated@4.1.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___react-native-worklets@0.5.1____@babel+core@7.29.7____react@19.1.0____react-native@0.81.5_____@types+react@19.1.17_____react@19.1.0_____@babel+core@7.29.7____@types+react@19.1.17___@babel+core@7.29.7___@types+react@19.1.17__react-native-safe-area-context@5.6.2___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@babel+core@7.29.7___@types+react@19.1.17__react-native-screens@4.16.0___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@babel+core@7.29.7___@types+react@19.1.17__react-native-worklets@0.5.1___@babel+core@7.29.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@types+react@19.1.17__typescript@5.9.3_react-refresh@0.14.2_@babel+core@7.29.7_@expo+metro-runtime@6.1.2__expo@54.0.34__react@19.1.0__react-dom@19.2.6___react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__@types+react@19.1.17__expo-router@6.0.23__typescript@5.9.3_@types+react@19.1.17_expo-router@6.0.23__@expo+metro-runtime@6.1.2__expo@54.0.34__expo-constants@18.0.13__expo-linking@8.0.12__react@19.1.0__react-dom@19.2.6___react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__react-native-reanimated@4.1.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___react-native-worklets@0.5.1____@babel+core@7.29.7____react@19.1.0____react-native@0.81.5_____@types+react@19.1.17_____react@19.1.0_____@babel+core@7.29.7____@types+react@19.1.17___@babel+core@7.29.7___@types+react@19.1.17__react-native-safe-area-context@5.6.2___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@babel+core@7.29.7___@types+react@19.1.17__react-native-screens@4.16.0___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@babel+core@7.29.7___@types+react@19.1.17__@babel+core@7.29.7__@types+react@19.1.17__react-native-worklets@0.5.1___@babel+core@7.29.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@types+react@19.1.17_react@19.1.0_react-native@0.81.5__@types+react@19.1.17__react@19.1.0__@babel+core@7.29.7_typescript@5.9.3",
+    "npm:cli-highlight@^2.1.11": "2.1.11",
     "npm:croner@9": "9.1.0",
     "npm:eslint-config-expo@10.0": "10.0.0_eslint@9.39.4_typescript@5.9.3",
     "npm:eslint@9": "9.39.4",
@@ -28,6 +29,11 @@
     "npm:expo-status-bar@~3.0.9": "3.0.9_react@19.1.0_react-native@0.81.5__@types+react@19.1.17__react@19.1.0__@babel+core@7.29.7",
     "npm:expo-system-ui@^55.0.17": "55.0.18_expo@54.0.34__@expo+metro-runtime@6.1.2__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__@babel+core@7.29.7__@types+react@19.1.17__expo-linking@8.0.12__expo-router@6.0.23__react-dom@19.2.6___react@19.1.0__react-native-reanimated@4.1.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___react-native-worklets@0.5.1____@babel+core@7.29.7____react@19.1.0____react-native@0.81.5_____@types+react@19.1.17_____react@19.1.0_____@babel+core@7.29.7____@types+react@19.1.17___@babel+core@7.29.7___@types+react@19.1.17__react-native-safe-area-context@5.6.2___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@babel+core@7.29.7___@types+react@19.1.17__react-native-screens@4.16.0___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@babel+core@7.29.7___@types+react@19.1.17__react-native-worklets@0.5.1___@babel+core@7.29.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@types+react@19.1.17__typescript@5.9.3_react-native@0.81.5__@types+react@19.1.17__react@19.1.0__@babel+core@7.29.7_@types+react@19.1.17_expo-router@6.0.23__@expo+metro-runtime@6.1.2__expo@54.0.34__expo-constants@18.0.13__expo-linking@8.0.12__react@19.1.0__react-dom@19.2.6___react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__react-native-reanimated@4.1.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___react-native-worklets@0.5.1____@babel+core@7.29.7____react@19.1.0____react-native@0.81.5_____@types+react@19.1.17_____react@19.1.0_____@babel+core@7.29.7____@types+react@19.1.17___@babel+core@7.29.7___@types+react@19.1.17__react-native-safe-area-context@5.6.2___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@babel+core@7.29.7___@types+react@19.1.17__react-native-screens@4.16.0___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@babel+core@7.29.7___@types+react@19.1.17__@babel+core@7.29.7__@types+react@19.1.17__react-native-worklets@0.5.1___@babel+core@7.29.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@types+react@19.1.17_typescript@5.9.3",
     "npm:expo@~54.0.34": "54.0.34_@expo+metro-runtime@6.1.2_react@19.1.0_react-native@0.81.5__@types+react@19.1.17__react@19.1.0__@babel+core@7.29.7_@babel+core@7.29.7_@types+react@19.1.17_expo-linking@8.0.12_expo-router@6.0.23_react-dom@19.2.6__react@19.1.0_react-native-reanimated@4.1.7__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__react-native-worklets@0.5.1___@babel+core@7.29.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@types+react@19.1.17__@babel+core@7.29.7__@types+react@19.1.17_react-native-safe-area-context@5.6.2__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__@babel+core@7.29.7__@types+react@19.1.17_react-native-screens@4.16.0__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__@babel+core@7.29.7__@types+react@19.1.17_react-native-worklets@0.5.1__@babel+core@7.29.7__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__@types+react@19.1.17_typescript@5.9.3",
+    "npm:mu-ai-tools@~0.16.16": "0.16.16",
+    "npm:mu-core@~0.16.16": "0.16.16",
+    "npm:mu-harness@~0.16.16": "0.16.16",
+    "npm:mu-local-provider@~0.16.16": "0.16.16_ws@8.21.0",
+    "npm:mu-webfetch@~0.16.16": "0.16.16",
     "npm:nativewind@^4.2.3": "4.2.4_tailwindcss@3.4.19__yaml@2.9.0_@types+react@19.1.17_react@19.1.0_react-native@0.81.5__@types+react@19.1.17__react@19.1.0__@babel+core@7.29.7_react-native-reanimated@4.1.7__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__react-native-worklets@0.5.1___@babel+core@7.29.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@types+react@19.1.17__@babel+core@7.29.7__@types+react@19.1.17_yaml@2.9.0",
     "npm:openai@^6.38.0": "6.39.0_ws@8.21.0",
     "npm:react-native-markdown-display@^7.0.2": "7.0.2_react@19.1.0_react-native@0.81.5__@types+react@19.1.17__react@19.1.0__@babel+core@7.29.7",
@@ -1825,7 +1831,7 @@
         "hermes-parser@0.29.1",
         "invariant",
         "nullthrows",
-        "yargs"
+        "yargs@17.7.2"
       ]
     },
     "@react-native/community-cli-plugin@0.81.5": {
@@ -1981,6 +1987,9 @@
       "dependencies": [
         "@sinonjs/commons"
       ]
+    },
+    "@swc/wasm-typescript@1.15.40": {
+      "integrity": "sha512-45gkPqkAGOe6MqEfh//HhgnLlL6WpXl6+iAAcHKg0Tu7gWkfpRfhmEqXyGZs8BUITesnY8CX2jtvXKgML3Hbhg=="
     },
     "@tybys/wasm-util@0.10.2": {
       "integrity": "sha512-RoBvJ2X0wuKlWFIjrwffGw1IqZHKQqzIchKaadZZfnNpsAYp2mM0h36JtPCjNDAHGgYez/15uMBpfGwchhiMgg==",
@@ -2875,11 +2884,31 @@
         "restore-cursor"
       ]
     },
+    "cli-highlight@2.1.11": {
+      "integrity": "sha512-9KDcoEVwyUXrjcJNvHD0NFc/hiwe/WPVYIleQh2O1N2Zro5gWJZ/K+3DGn8w8P/F6FxOgzyC5bxDyHIgCSPhGg==",
+      "dependencies": [
+        "chalk@4.1.2",
+        "highlight.js",
+        "mz",
+        "parse5@5.1.1",
+        "parse5-htmlparser2-tree-adapter",
+        "yargs@16.2.0"
+      ],
+      "bin": true
+    },
     "cli-spinners@2.9.2": {
       "integrity": "sha512-ywqV+5MmyL4E7ybXgKys4DugZbX0FC6LnwrhjuykIjnK9k8OQacQ7axGKnjDXWNhns0xot3bZI5h55H8yo9cJg=="
     },
     "client-only@0.0.1": {
       "integrity": "sha512-IV3Ou0jSMzZrd3pZ48nLkT9DA7Ag1pnPzaiQhpW7c3RbcqqzvzzVu+L8gfqMp/8IM2MQtSiqaCxrrcfu8I8rMA=="
+    },
+    "cliui@7.0.4": {
+      "integrity": "sha512-OcRE68cOsVMXp1Yvonl/fzkQOyjLSu/8bhPDfQt0e0/Eb283TKP20Fs2MqoPsr9SwA595rRCA+QMzYc9nBP+JQ==",
+      "dependencies": [
+        "string-width",
+        "strip-ansi@6.0.1",
+        "wrap-ansi"
+      ]
     },
     "cliui@8.0.1": {
       "integrity": "sha512-BSeNnyus75C4//NQ9gQt1/csTXyo/8Sb+afLAkzAptFuMsod9HFokGNudZpi/oQV73hnVK+sR+5PVRMd+Dr7YQ==",
@@ -4974,7 +5003,7 @@
         "source-map@0.5.7",
         "throat",
         "ws@7.5.11",
-        "yargs"
+        "yargs@17.7.2"
       ],
       "bin": true
     },
@@ -5040,6 +5069,43 @@
     },
     "ms@2.1.3": {
       "integrity": "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA=="
+    },
+    "mu-ai-tools@0.16.16": {
+      "integrity": "sha512-lyBqm0+sdKa829H8WDVxGjUt5BPIoqfmTfE5Iy590/8cXq1VRIE5ZKgRiKUCg/Ac/2szzMkEptabaEBRVpujgg==",
+      "dependencies": [
+        "mu-core"
+      ]
+    },
+    "mu-core@0.16.16": {
+      "integrity": "sha512-vQTM5Ifkfv5hvTdclJxssczTEOLec9cAihAQHGKNL5VgRnNiikgdrTW8ueNAJlwbcYVIrI50xK8IYTTaKQiEcw=="
+    },
+    "mu-harness@0.16.16": {
+      "integrity": "sha512-vTaK0JcpXDmVUo+6aPNDisJwH8ZM0jmYBCvoLB1N8lxh3hXkRvhMXF/Bfdkh9nwERoHGmz2a55FflITYB+xQ9w==",
+      "dependencies": [
+        "@swc/wasm-typescript",
+        "cli-highlight",
+        "croner",
+        "mu-core",
+        "mu-tui"
+      ]
+    },
+    "mu-local-provider@0.16.16_ws@8.21.0": {
+      "integrity": "sha512-bBCnBh970GVfZ0dHU+l2rmMJR2LqNZZz/xItlUj1l1ZLdvMu7Xa/lEwD5F+jea+LMCbTHxMJvvVe1is+GbcLyw==",
+      "dependencies": [
+        "mu-core",
+        "openai"
+      ]
+    },
+    "mu-tui@0.16.16": {
+      "integrity": "sha512-5zvBrz/nVyn7CqCEzE0IU7HI/tx87FrHaA4j+vdkuIworU/GcEUksOXF+aXQ5vb2YTi9ChSUcpOlqWgN+GIjPw=="
+    },
+    "mu-webfetch@0.16.16": {
+      "integrity": "sha512-DNrKA3yD/aADMfYP6e8xPBZTOuSZ0L6qRvy0xgQu8gY7yKx2qiKQf7yT3scDfxgf5/FPDTDyzl7SaJl4nP9YMQ==",
+      "dependencies": [
+        "mu-core",
+        "mu-harness",
+        "turndown"
+      ]
     },
     "mz@2.7.0": {
       "integrity": "sha512-z81GNO7nnYMEhrGh9LeymoE4+Yr0Wn5McHIZMK5cfQCl+NDX08sCZgUc9/6MHni9IWuFLm1Z3HTCXu2z9fN62Q==",
@@ -5313,6 +5379,18 @@
       "dependencies": [
         "pngjs"
       ]
+    },
+    "parse5-htmlparser2-tree-adapter@6.0.1": {
+      "integrity": "sha512-qPuWvbLgvDGilKc5BoicRovlT4MtYT6JfJyBOMDsKoiT+GiuP5qyrPCnR9HcPECIJJmZh5jRndyNThnhhb/vlA==",
+      "dependencies": [
+        "parse5@6.0.1"
+      ]
+    },
+    "parse5@5.1.1": {
+      "integrity": "sha512-ugq4DFI0Ptb+WWjAdOK16+u/nHfiIrcE+sh8kZMaM0WllQKLI9rOUq6c2b7cwPkXdzfQESqvoqK6ug7U/Yyzug=="
+    },
+    "parse5@6.0.1": {
+      "integrity": "sha512-Ofn/CTFzRGTTxwpNEs9PP93gXShHcTq255nzRYSKe8AkVpZY7e1fpmTfOyoIvjP5HG7Z2ZM7VS9PPhQGW2pOpw=="
     },
     "parseurl@1.3.3": {
       "integrity": "sha512-CiyeOxFT/JZyN5m0z9PfXw4SCBJ6Sygz1Dpl0wqjlhDEGGBP1GnsUVEL0p63hoG1fcj3fHynXi9NYO4nWOL+qQ=="
@@ -5660,7 +5738,7 @@
         "stacktrace-parser",
         "whatwg-fetch",
         "ws@6.2.4",
-        "yargs"
+        "yargs@17.7.2"
       ],
       "optionalPeers": [
         "@types/react"
@@ -6753,19 +6831,34 @@
       "integrity": "sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA==",
       "bin": true
     },
+    "yargs-parser@20.2.9": {
+      "integrity": "sha512-y11nGElTIV+CT3Zv9t7VKl+Q3hTQoT9a1Qzezhhl6Rp21gJ/IVTW7Z3y9EWXhuUBC2Shnf+DX0antecpAwSP8w=="
+    },
     "yargs-parser@21.1.1": {
       "integrity": "sha512-tVpsJW7DdjecAiFpbIB1e3qxIQsE6NoPc5/eTdrbbIC4h0LVsWhnoa3g+m2HclBIujHzsxZ4VJVA+GUuc2/LBw=="
     },
-    "yargs@17.7.2": {
-      "integrity": "sha512-7dSzzRQ++CKnNI/krKnYRV7JKKPUXMEh61soaHKg9mrWEhzFWhFnxPxGl+69cD1Ou63C13NUPCnmIcrvqCuM6w==",
+    "yargs@16.2.0": {
+      "integrity": "sha512-D1mvvtDG0L5ft/jGWkLpG1+m0eQxOfaBvTNELraWj22wSVUMWxZUvYgJYcKh6jGGIkJFhH4IZPQhR4TKpc8mBw==",
       "dependencies": [
-        "cliui",
+        "cliui@7.0.4",
         "escalade",
         "get-caller-file",
         "require-directory",
         "string-width",
         "y18n",
-        "yargs-parser"
+        "yargs-parser@20.2.9"
+      ]
+    },
+    "yargs@17.7.2": {
+      "integrity": "sha512-7dSzzRQ++CKnNI/krKnYRV7JKKPUXMEh61soaHKg9mrWEhzFWhFnxPxGl+69cD1Ou63C13NUPCnmIcrvqCuM6w==",
+      "dependencies": [
+        "cliui@8.0.1",
+        "escalade",
+        "get-caller-file",
+        "require-directory",
+        "string-width",
+        "y18n",
+        "yargs-parser@21.1.1"
       ]
     },
     "yocto-queue@0.1.0": {
@@ -6788,7 +6881,13 @@
       "jsr:@std/expect@1",
       "jsr:@std/testing@1",
       "jsr:@std/yaml@1",
+      "npm:cli-highlight@^2.1.11",
       "npm:croner@9",
+      "npm:mu-ai-tools@~0.16.16",
+      "npm:mu-core@~0.16.16",
+      "npm:mu-harness@~0.16.16",
+      "npm:mu-local-provider@~0.16.16",
+      "npm:mu-webfetch@~0.16.16",
       "npm:openai@^6.38.0",
       "npm:turndown@^7.2.2",
       "npm:ws@^8.18.0"
