@@ -5,7 +5,8 @@
     "dev": "deno run -A --watch --sloppy-imports packages/arya/src/index.ts",
     "init": "deno run -A --sloppy-imports packages/arya/src/init.ts",
     "check": "deno check --sloppy-imports packages/arya/src/",
-    "test": "deno test -A --sloppy-imports packages/arya/src/"
+    "test": "deno test -A --sloppy-imports packages/arya/src/",
+    "compile": "deno run -A --sloppy-imports scripts/compile.ts"
   },
   "imports": {
     "@std/expect": "jsr:@std/expect@^1.0.0",
