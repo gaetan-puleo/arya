@@ -39,19 +39,16 @@ if (subcommand === 'install' || subcommand === 'i') {
   }
 }
 
-const candidates = [aryaDirs('arya').configFile, resolve(root, 'config.json')];
-
-let configPath: string | undefined;
-for (const c of candidates) {
-  try {
-    readFileSync(c, 'utf-8');
-    configPath = c;
-    break;
-  } catch {
+function resolveConfigPath(): string {
+  const candidates = [aryaDirs('arya').configFile, resolve(root, 'config.json')];
+  for (const c of candidates) {
+    try {
+      readFileSync(c, 'utf-8');
+      return c;
+    } catch {
+      // keep looking
+    }
   }
-}
-
-if (!configPath) {
   console.error(
     `[arya] No config found. Looked in:\n${candidates.map((c) => `  - ${c}`).join('\n')}\n` +
       `       Run \`arya init\` to create one at ${candidates[0]}.`,
@@ -59,30 +56,42 @@ if (!configPath) {
   process.exit(1);
 }
 
-console.log(`[arya] Starting in ${root}`);
-console.log(`[arya] Config: ${configPath}`);
+if (subcommand === 'tui') {
+  const configPath = resolveConfigPath();
+  const { runTui } = await import('./tui');
+  try {
+    await runTui(root, configPath);
+  } catch (err) {
+    console.error('[arya] Fatal error:', err);
+    process.exit(1);
+  }
+} else {
+  const configPath = resolveConfigPath();
+  console.log(`[arya] Starting in ${root}`);
+  console.log(`[arya] Config: ${configPath}`);
 
-const { bootstrap } = await import('./bootstrap');
-try {
-  const handle = await bootstrap(root, configPath);
-  let shuttingDown = false;
-  const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
-    if (shuttingDown) {
-      console.error(`[arya] Received ${signal} during shutdown — forcing exit.`);
-      process.exit(1);
-    }
-    shuttingDown = true;
-    try {
-      await handle.shutdown();
-      process.exit(0);
-    } catch (err) {
-      console.error('[arya] Shutdown failed:', err);
-      process.exit(1);
-    }
-  };
-  process.on('SIGINT', () => void shutdown('SIGINT'));
-  process.on('SIGTERM', () => void shutdown('SIGTERM'));
-} catch (err) {
-  console.error('[arya] Fatal error:', err);
-  process.exit(1);
+  const { bootstrap } = await import('./bootstrap');
+  try {
+    const handle = await bootstrap(root, configPath);
+    let shuttingDown = false;
+    const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
+      if (shuttingDown) {
+        console.error(`[arya] Received ${signal} during shutdown — forcing exit.`);
+        process.exit(1);
+      }
+      shuttingDown = true;
+      try {
+        await handle.shutdown();
+        process.exit(0);
+      } catch (err) {
+        console.error('[arya] Shutdown failed:', err);
+        process.exit(1);
+      }
+    };
+    process.on('SIGINT', () => void shutdown('SIGINT'));
+    process.on('SIGTERM', () => void shutdown('SIGTERM'));
+  } catch (err) {
+    console.error('[arya] Fatal error:', err);
+    process.exit(1);
+  }
 }

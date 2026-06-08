@@ -1,12 +1,20 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { createApprovalManager, createHarness, createSessionsCommand, loadAgents } from 'mu-harness';
+import {
+  createApprovalManager,
+  createHarness,
+  createPluginStore,
+  createSessionsCommand,
+  importModule,
+  loadAgents,
+  type Plugin,
+} from 'mu-harness';
 import { createLocalProvider, type LocalProviderConfig } from 'mu-local-provider';
 import { createMuTools } from 'mu-tools';
 import webfetchPlugin from 'mu-webfetch';
 
-import { resolveXdg } from './xdg';
+import { aryaDirs, resolveXdg } from './xdg';
 import { createAryaRuntime } from './runtime';
 import { createScheduler, type Scheduler } from './scheduler';
 import { observeSubAgent } from './sub-agent-channel';
@@ -44,6 +52,41 @@ export interface BootstrapConfig {
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
 const isLoopback = (host: string): boolean => LOOPBACK_HOSTS.has(host);
+
+const isPlugin = (value: unknown): value is Plugin =>
+  typeof value === 'object' && value !== null && typeof (value as { name?: unknown }).name === 'string';
+
+/**
+ * Loads user-installed plugins (added via `arya install`) from the plugin store.
+ * Each `.ts` file's default export must be a {@link Plugin}. Built-in plugins are
+ * wired statically in {@link buildHarness}; this only covers the dynamic ones.
+ * Failures are logged and skipped — one bad plugin must not abort startup.
+ */
+async function loadInstalledPlugins(pluginsDir: string, skip: Set<string>): Promise<Plugin[]> {
+  const store = createPluginStore({ dir: pluginsDir });
+  const out: Plugin[] = [];
+  for (const name of await store.list()) {
+    if (!/\.(?:[cm]?ts|tsx)$/.test(name)) continue;
+    try {
+      const mod = await importModule(join(pluginsDir, name));
+      const plugin = mod.default;
+      if (!isPlugin(plugin)) {
+        log.warn(`plugin "${name}" has no valid default export — skipping`);
+        continue;
+      }
+      if (skip.has(plugin.name)) {
+        log.warn(`plugin "${name}" (${plugin.name}) shadows a built-in — skipping`);
+        continue;
+      }
+      skip.add(plugin.name);
+      out.push(plugin);
+      log.info(`loaded plugin "${plugin.name}" from ${name}`);
+    } catch (err) {
+      log.error(`failed to load plugin "${name}": ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  return out;
+}
 
 function validatePort(value: unknown): number {
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 65535) {
@@ -115,12 +158,21 @@ export interface BootstrapHandle {
   shutdown: () => Promise<void>;
 }
 
-export async function bootstrap(cwd: string = process.cwd(), configPath?: string): Promise<BootstrapHandle> {
-  const config = loadConfig(cwd, configPath);
+/**
+ * Builds the mu-harness instance plus the pieces arya wires around it (approvals,
+ * resolved primary agent, shared tool/plugin lists). Shared by the WebSocket
+ * server ({@link bootstrap}) and the local TUI ({@link runTui}).
+ */
+export async function buildHarness(cwd: string, config: BootstrapConfig) {
   const xdg = resolveXdg();
   const primaryName = config.primaryAgent ?? 'arya';
   const tools = createMuTools({ getCwd: () => cwd });
-  const plugins = [webfetchPlugin];
+  const builtinPlugins: Plugin[] = [webfetchPlugin];
+  const installedPlugins = await loadInstalledPlugins(
+    aryaDirs('arya').pluginsDir,
+    new Set(builtinPlugins.map((p) => p.name)),
+  );
+  const plugins = [...builtinPlugins, ...installedPlugins];
   const approvals = createApprovalManager();
 
   const configAgents = await loadAgents(join(xdg.configHome, 'arya', 'agents'));
@@ -128,8 +180,6 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
   const allAgents = [...projectAgents, ...configAgents];
 
   const primary = allAgents.find((a) => a.name === primaryName) ?? allAgents[0];
-
-  let pushFrame: (frame: WsOutbound) => void = () => {};
 
   const harness = await createHarness({
     hostName: 'arya',
@@ -153,7 +203,19 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
     agents: projectAgents,
     system: primary?.prompt,
     title: true,
+    // Arya runs from the repo as its cwd; keep agent-authored skills out of the
+    // project tree and in the global config dir (~/.config/arya/skills).
+    skillScope: 'config',
   });
+
+  return { harness, approvals, primary, primaryName, tools, plugins };
+}
+
+export async function bootstrap(cwd: string = process.cwd(), configPath?: string): Promise<BootstrapHandle> {
+  const config = loadConfig(cwd, configPath);
+  const { harness, approvals, primaryName, tools, plugins } = await buildHarness(cwd, config);
+
+  let pushFrame: (frame: WsOutbound) => void = () => {};
 
   const runtime = createAryaRuntime({ harness, tools, plugins, primaryName });
 
