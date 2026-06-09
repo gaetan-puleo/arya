@@ -6,12 +6,12 @@ import { listLocalModels } from 'mu-local-provider';
 import { type BootstrapConfig, buildHarness, loadConfig } from './bootstrap';
 
 const ARYA_BANNER = [
-  "    .    .--..   .  .",
-  "   / \\   |   )\\ /  / \\",
+  '    .    .--..   .  .',
+  '   / \\   |   )\\ /  / \\',
   "  /___\\  |--'  :  /___\\",
-  " /     \\ |  \\  | /     \\",
+  ' /     \\ |  \\  | /     \\',
   "'       `'   ` ''       `",
-].join("\n");
+].join('\n');
 
 /**
  * Runs arya as a local in-process terminal chat — no WebSocket server.
@@ -50,6 +50,7 @@ export async function runTui(cwd: string, configPath?: string): Promise<void> {
     initialThinking: false,
     saveThinking: () => {},
     banner: ARYA_BANNER,
+    minimal: true,
     onExit: (code) => {
       harness.close();
       process.exit(code);
