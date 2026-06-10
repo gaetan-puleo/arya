@@ -29,11 +29,11 @@
     "npm:expo-status-bar@~3.0.9": "3.0.9_react@19.1.0_react-native@0.81.5__@types+react@19.1.17__react@19.1.0__@babel+core@7.29.7",
     "npm:expo-system-ui@^55.0.17": "55.0.18_expo@54.0.34__@expo+metro-runtime@6.1.2__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__@babel+core@7.29.7__@types+react@19.1.17__expo-linking@8.0.12__expo-router@6.0.23__react-dom@19.2.6___react@19.1.0__react-native-reanimated@4.1.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___react-native-worklets@0.5.1____@babel+core@7.29.7____react@19.1.0____react-native@0.81.5_____@types+react@19.1.17_____react@19.1.0_____@babel+core@7.29.7____@types+react@19.1.17___@babel+core@7.29.7___@types+react@19.1.17__react-native-safe-area-context@5.6.2___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@babel+core@7.29.7___@types+react@19.1.17__react-native-screens@4.16.0___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@babel+core@7.29.7___@types+react@19.1.17__react-native-worklets@0.5.1___@babel+core@7.29.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@types+react@19.1.17__typescript@5.9.3_react-native@0.81.5__@types+react@19.1.17__react@19.1.0__@babel+core@7.29.7_@types+react@19.1.17_expo-router@6.0.23__@expo+metro-runtime@6.1.2__expo@54.0.34__expo-constants@18.0.13__expo-linking@8.0.12__react@19.1.0__react-dom@19.2.6___react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__react-native-reanimated@4.1.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___react-native-worklets@0.5.1____@babel+core@7.29.7____react@19.1.0____react-native@0.81.5_____@types+react@19.1.17_____react@19.1.0_____@babel+core@7.29.7____@types+react@19.1.17___@babel+core@7.29.7___@types+react@19.1.17__react-native-safe-area-context@5.6.2___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@babel+core@7.29.7___@types+react@19.1.17__react-native-screens@4.16.0___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@babel+core@7.29.7___@types+react@19.1.17__@babel+core@7.29.7__@types+react@19.1.17__react-native-worklets@0.5.1___@babel+core@7.29.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@types+react@19.1.17_typescript@5.9.3",
     "npm:expo@~54.0.34": "54.0.34_@expo+metro-runtime@6.1.2_react@19.1.0_react-native@0.81.5__@types+react@19.1.17__react@19.1.0__@babel+core@7.29.7_@babel+core@7.29.7_@types+react@19.1.17_expo-linking@8.0.12_expo-router@6.0.23_react-dom@19.2.6__react@19.1.0_react-native-reanimated@4.1.7__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__react-native-worklets@0.5.1___@babel+core@7.29.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@types+react@19.1.17__@babel+core@7.29.7__@types+react@19.1.17_react-native-safe-area-context@5.6.2__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__@babel+core@7.29.7__@types+react@19.1.17_react-native-screens@4.16.0__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__@babel+core@7.29.7__@types+react@19.1.17_react-native-worklets@0.5.1__@babel+core@7.29.7__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__@types+react@19.1.17_typescript@5.9.3",
-    "npm:mu-ai-tools@0.17": "0.17.0",
-    "npm:mu-core@0.17": "0.17.0",
-    "npm:mu-harness@0.17": "0.17.0",
-    "npm:mu-local-provider@0.17": "0.17.0_ws@8.21.0",
-    "npm:mu-webfetch@0.17": "0.17.0",
+    "npm:mu-ai-tools@~0.17.1": "0.17.1",
+    "npm:mu-core@~0.17.1": "0.17.1",
+    "npm:mu-harness@~0.17.1": "0.17.1",
+    "npm:mu-local-provider@~0.17.1": "0.17.1_ws@8.21.0",
+    "npm:mu-webfetch@~0.17.1": "0.17.1",
     "npm:nativewind@^4.2.3": "4.2.4_tailwindcss@3.4.19__yaml@2.9.0_@types+react@19.1.17_react@19.1.0_react-native@0.81.5__@types+react@19.1.17__react@19.1.0__@babel+core@7.29.7_react-native-reanimated@4.1.7__react@19.1.0__react-native@0.81.5___@types+react@19.1.17___react@19.1.0___@babel+core@7.29.7__react-native-worklets@0.5.1___@babel+core@7.29.7___react@19.1.0___react-native@0.81.5____@types+react@19.1.17____react@19.1.0____@babel+core@7.29.7___@types+react@19.1.17__@babel+core@7.29.7__@types+react@19.1.17_yaml@2.9.0",
     "npm:openai@^6.38.0": "6.39.0_ws@8.21.0",
     "npm:react-native-markdown-display@^7.0.2": "7.0.2_react@19.1.0_react-native@0.81.5__@types+react@19.1.17__react@19.1.0__@babel+core@7.29.7",
@@ -5070,17 +5070,17 @@
     "ms@2.1.3": {
       "integrity": "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA=="
     },
-    "mu-ai-tools@0.17.0": {
-      "integrity": "sha512-D+wUUOqdFND+ln/+ZHcB38a1vXUWrBpjVFhGEfi8udXb+zucZUbW8jSHnSz1UbWOEoOwsjAKQTwXJmFU1D4ykA==",
+    "mu-ai-tools@0.17.1": {
+      "integrity": "sha512-YmyTQhdDE3BSwA2/5R/qmYvZJhHdvFWC2oPalwYi660yvnhsWGwmzUcEV2L3epWWYXyMciUYWstO7TzFJY3rgQ==",
       "dependencies": [
         "mu-core"
       ]
     },
-    "mu-core@0.17.0": {
-      "integrity": "sha512-YCR4AjI0e71ADGdYzd8GP7Rypt/laD3vj8BobFtAx3symxFIvy9p+dcLgjpGhk4TFHSIX2Ao0mSma06iI4zEWg=="
+    "mu-core@0.17.1": {
+      "integrity": "sha512-NpdqswLYzr2BKEdvZKZfVba+DVDDkqDxht8Z62MYTLff2wSzIOtAkFkjlcqnNxQZ4WN60xrlE0ODyJWyG/rDvg=="
     },
-    "mu-harness@0.17.0": {
-      "integrity": "sha512-pGMjUKANFtcsGeoC1P/dyJzyFcbiYmv6klA41Din7K0xaZpa0bovi7hl7LAo1PT3m8NMDVZJ70NV9iGT9Ix6fA==",
+    "mu-harness@0.17.1": {
+      "integrity": "sha512-wGFW7iKUoEzD8BVmWdcq4IJ5Iwh1hNKV1hyQVoNo7xEwn8DCMTeKQNue/9vf1iTdzFi6KhQBn3e2lcjmTM/BPA==",
       "dependencies": [
         "@swc/wasm-typescript",
         "cli-highlight",
@@ -5089,18 +5089,18 @@
         "mu-tui"
       ]
     },
-    "mu-local-provider@0.17.0_ws@8.21.0": {
-      "integrity": "sha512-DZNxZASb4G0Yu7bCSydFAMK7s9zLcSnHCdHd6MqkDyM1fP4WUPflInUOIRwEbRyTOSCBa3yyzv8Ifh1x1Rgcvg==",
+    "mu-local-provider@0.17.1_ws@8.21.0": {
+      "integrity": "sha512-j9/VdHXYl7j8nbiHkXe1tXLbW5OGc64WXeMtci1s7BF9qfhrc0YHcFuD7XOLH9JFwV8IhoEP+jkZQRDJ4t9wqQ==",
       "dependencies": [
         "mu-core",
         "openai"
       ]
     },
-    "mu-tui@0.17.0": {
-      "integrity": "sha512-kl3NUH9omD9MxSvKuxNMGf0hS16+3lVL5J5KgPLd0J9LauKd5XVAg0mUIuICQ7t3ZQJKKn2MR3XSxThUi/lz3Q=="
+    "mu-tui@0.17.1": {
+      "integrity": "sha512-bzdMyNtyPkZsiMtAAJyvNjHNLzQFbS554M/Pteq8K5J0sYn/HgXeQf7eu4mCJ1PBepa/lZio0oYxOLheHgdFdQ=="
     },
-    "mu-webfetch@0.17.0": {
-      "integrity": "sha512-t0VMAiM0zaNQsArGD6zs0boeBYg2V62VU8WYuSQqUw74l1GaUClpnsK/R0NCDGsP4OWerOiz52dr13yRue6zFg==",
+    "mu-webfetch@0.17.1": {
+      "integrity": "sha512-+csId+LGqzD9LKuig6/MEYJ4aTZ46Y7sWR2/UZ0w5z8XpAvKc3Ac+0iA5CYZomknr09u4rhca3B1alJoxxW3Xw==",
       "dependencies": [
         "mu-core",
         "mu-harness",
@@ -6883,11 +6883,11 @@
       "jsr:@std/yaml@1",
       "npm:cli-highlight@^2.1.11",
       "npm:croner@9",
-      "npm:mu-ai-tools@0.17",
-      "npm:mu-core@0.17",
-      "npm:mu-harness@0.17",
-      "npm:mu-local-provider@0.17",
-      "npm:mu-webfetch@0.17",
+      "npm:mu-ai-tools@~0.17.1",
+      "npm:mu-core@~0.17.1",
+      "npm:mu-harness@~0.17.1",
+      "npm:mu-local-provider@~0.17.1",
+      "npm:mu-webfetch@~0.17.1",
       "npm:openai@^6.38.0",
       "npm:turndown@^7.2.2",
       "npm:ws@^8.18.0"
