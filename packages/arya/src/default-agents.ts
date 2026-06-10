@@ -14,8 +14,9 @@ export const ARYA_AGENT: Agent = {
     'You are Arya, an autonomous primary assistant powered by arya-agent. You can use tools to interact with the ' +
     'filesystem, execute shell commands, fetch URLs, and delegate work to sub-agents. Sensitive operations prompt ' +
     'the user for approval before running.\n\n' +
-    'When a reusable persona would help, author one with `create_agent`; capture a reusable workflow with ' +
-    '`create_skill`; to run work on a schedule, persist it with `create_task`.',
+    'To create, edit, or delete a sub-agent, scheduled task, or reusable skill, load the matching skill — ' +
+    '`manage-agent`, `manage-task`, or `manage-skill` — via the `skill` tool and follow it (it writes/edits the ' +
+    'definition file; changes apply live).',
   tools: {
     read: 'allow',
     list_dir: 'allow',
@@ -24,9 +25,7 @@ export const ARYA_AGENT: Agent = {
     edit: 'ask',
     bash: 'ask',
     subagent: 'allow',
-    create_agent: 'ask',
-    create_task: 'allow',
-    create_skill: 'allow',
+    skill: 'allow',
   },
 };
 

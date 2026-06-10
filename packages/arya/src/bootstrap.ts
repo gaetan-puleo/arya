@@ -18,7 +18,7 @@ import webfetchPlugin from 'mu-webfetch';
 import { aryaDirs, resolveXdg } from './xdg';
 import { createAryaRuntime } from './runtime';
 import { BUILTIN_AGENTS } from './default-agents';
-import { createTaskWriterTool } from './definition-tools';
+import { BUILTIN_SKILLS } from './default-skills';
 import { createScheduler, type Scheduler } from './scheduler';
 import { startDefinitionWatcher } from './watch';
 import { observeSubAgent } from './sub-agent-channel';
@@ -170,15 +170,10 @@ export interface BootstrapHandle {
 export async function buildHarness(cwd: string, config: BootstrapConfig) {
   const xdg = resolveXdg();
   const primaryName = config.primaryAgent ?? 'arya';
-  const tasksDir = config.tasksDir ?? join(cwd, 'definitions', 'tasks');
   const agentsDir = config.agentsDir ?? join(cwd, 'definitions', 'agents');
-  // Late-bound so the create_task tool can reach the scheduler that bootstrap()
-  // builds after the harness (the TUI never sets it → create_task persists only).
-  const schedulerRef: { current?: Scheduler } = {};
-  const tools = [
-    ...createMuTools({ getCwd: () => cwd }),
-    createTaskWriterTool({ tasksDir, getScheduler: () => schedulerRef.current }),
-  ];
+  // Definitions (agents/tasks/skills) are authored as files via the `write` tool
+  // (guided by the create-* skills) and hot-reloaded — no dedicated create_* tools.
+  const tools = createMuTools({ getCwd: () => cwd });
   const builtinPlugins: Plugin[] = [webfetchPlugin];
   const installedPlugins = await loadInstalledPlugins(
     aryaDirs('arya').pluginsDir,
@@ -222,6 +217,9 @@ export async function buildHarness(cwd: string, config: BootstrapConfig) {
     // agents from agentDirs (definitions/agents + global config) and an override
     // of the same name wins. mergedAgents() re-reads these dirs on reload.
     defaultAgents: BUILTIN_AGENTS,
+    // Skills embedded in the binary (the manage-* authoring skills), always
+    // available via the `skill` tool regardless of cwd; disk skills can override.
+    skills: BUILTIN_SKILLS,
     system: primary?.prompt,
     sourceUrl: 'https://github.com/gaetan-puleo/arya',
     title: true,
@@ -238,12 +236,12 @@ export async function buildHarness(cwd: string, config: BootstrapConfig) {
   // boot-time resolution if it ever vanishes.
   const getPrimary = () => harness.agents.get(primaryName) ?? primary;
 
-  return { harness, approvals, primary, getPrimary, primaryName, tools, plugins, schedulerRef };
+  return { harness, approvals, primary, getPrimary, primaryName, tools, plugins };
 }
 
 export async function bootstrap(cwd: string = process.cwd(), configPath?: string): Promise<BootstrapHandle> {
   const config = loadConfig(cwd, configPath);
-  const { harness, approvals, primaryName, tools, plugins, schedulerRef } = await buildHarness(cwd, config);
+  const { harness, approvals, primaryName, tools, plugins } = await buildHarness(cwd, config);
 
   let pushFrame: (frame: WsOutbound) => void = () => {};
 
@@ -281,8 +279,8 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
   pushFrame = ws.push;
   log.info(`Listening on ${config.wsHost}:${config.wsPort} — accepting connections`);
 
-  // Always start the scheduler (loadTasks tolerates a missing/empty dir) so that
-  // create_task can register new tasks live without a restart.
+  // Always start the scheduler (loadTasks tolerates a missing/empty dir) so the
+  // file watcher can reload newly-written task files live, without a restart.
   let scheduler: Scheduler | undefined;
   if (config.tasksDir) {
     scheduler = createScheduler({
@@ -291,7 +289,6 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
       onEvent: (event) => ws.push({ type: 'scheduler_event', event }),
       log: (msg) => log.info(`scheduler: ${msg}`),
     });
-    schedulerRef.current = scheduler;
     log.info(`Scheduler — ${scheduler.tasks().length} task(s) loaded`);
   }
 

@@ -55,6 +55,8 @@ export async function runTui(cwd: string, configPath?: string): Promise<void> {
     agentNames: () => harness.agents.list().map((a) => a.name).filter((n) => n !== primaryName && n !== 'title'),
     subAgents: harness.subAgents,
     dispatchSubAgent: (agent, task, parentId) => harness.dispatchSubAgent(agent, task, parentId),
+    commands: () => harness.commands.list().map((c) => ({ name: c.name, description: c.description })),
+    runCommand: (input) => harness.commands.run(input),
     initialTheme: 'dark',
     saveTheme: () => {},
     initialThinking: false,

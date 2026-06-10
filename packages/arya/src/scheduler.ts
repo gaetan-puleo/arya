@@ -16,7 +16,7 @@ export interface Scheduler {
   tasks(): SchedulerTask[];
   /**
    * Re-read the tasks dir and rebuild the engine from disk (create/edit/delete)
-   * without a restart. Called by the file watcher and after create_task writes.
+   * without a restart. Called by the file watcher when a task file changes.
    */
   reload(): Promise<void>;
   stop(): void;

@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 
 export interface DefinitionWatcher {
   stop(): void;
@@ -21,7 +21,16 @@ export interface WatchOptions {
  */
 export function startDefinitionWatcher(opts: WatchOptions): DefinitionWatcher {
   const { onChange, debounceMs = 200, log } = opts;
-  const paths = [...new Set(opts.paths)].filter((p) => existsSync(p));
+  // Ensure each dir exists so it's watchable — a definition created in a dir that
+  // didn't exist at boot would otherwise only be picked up after a restart.
+  const paths = [...new Set(opts.paths)].filter((p) => {
+    try {
+      mkdirSync(p, { recursive: true });
+      return true;
+    } catch {
+      return existsSync(p);
+    }
+  });
   if (paths.length === 0) return { stop: () => {} };
 
   const watcher = Deno.watchFs(paths, { recursive: true });
