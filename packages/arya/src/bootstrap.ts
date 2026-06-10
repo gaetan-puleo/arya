@@ -202,6 +202,7 @@ export async function buildHarness(cwd: string, config: BootstrapConfig) {
     },
     agents: projectAgents,
     system: primary?.prompt,
+    sourceUrl: 'https://github.com/gaetan-puleo/arya',
     title: true,
     // Arya runs from the repo as its cwd; keep agent-authored skills out of the
     // project tree and in the global config dir (~/.config/arya/skills).
