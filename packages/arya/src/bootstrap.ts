@@ -6,6 +6,7 @@ import {
   createHarness,
   createPluginStore,
   createSessionsCommand,
+  type Harness,
   importModule,
   loadAgents,
   type Plugin,
@@ -16,8 +17,10 @@ import webfetchPlugin from 'mu-webfetch';
 
 import { aryaDirs, resolveXdg } from './xdg';
 import { createAryaRuntime } from './runtime';
+import { BUILTIN_AGENTS } from './default-agents';
 import { createTaskWriterTool } from './definition-tools';
 import { createScheduler, type Scheduler } from './scheduler';
+import { startDefinitionWatcher } from './watch';
 import { observeSubAgent } from './sub-agent-channel';
 import { createWebSocketServer } from './ws';
 import type { WireAgent, WsOutbound } from './protocol';
@@ -186,10 +189,15 @@ export async function buildHarness(cwd: string, config: BootstrapConfig) {
 
   const configAgents = await loadAgents(join(xdg.configHome, 'arya', 'agents'));
   const projectAgents = config.agentsDir && existsSync(config.agentsDir) ? await loadAgents(config.agentsDir) : [];
-  const allAgents = [...projectAgents, ...configAgents];
+  const userAgents = [...projectAgents, ...configAgents];
+  // Built-in agents fill in only when the user hasn't defined one by the same
+  // name, so arya always exists (with its color) even with no agent .md on disk.
+  const builtinAgents = BUILTIN_AGENTS.filter((b) => !userAgents.some((u) => u.name === b.name));
+  const allAgents = [...userAgents, ...builtinAgents];
 
   const primary = allAgents.find((a) => a.name === primaryName) ?? allAgents[0];
 
+  let harnessRef: Harness | undefined;
   const harness = await createHarness({
     hostName: 'arya',
     xdg,
@@ -207,9 +215,13 @@ export async function buildHarness(cwd: string, config: BootstrapConfig) {
     plugins,
     approvals: {
       manager: approvals,
-      activeAgent: () => primary,
+      // Read the live registry so a hot-reloaded primary's grants take effect.
+      activeAgent: () => harnessRef?.agents.get(primaryName) ?? primary,
     },
-    agents: projectAgents,
+    // Built-in arya is the lowest-priority fallback; the harness loads the real
+    // agents from agentDirs (definitions/agents + global config) and an override
+    // of the same name wins. mergedAgents() re-reads these dirs on reload.
+    defaultAgents: BUILTIN_AGENTS,
     system: primary?.prompt,
     sourceUrl: 'https://github.com/gaetan-puleo/arya',
     title: true,
@@ -220,8 +232,13 @@ export async function buildHarness(cwd: string, config: BootstrapConfig) {
     // the built-ins), "config" = the global config dir. Model chooses per call.
     agentDirs: { local: agentsDir, config: join(xdg.configHome, 'arya', 'agents') },
   });
+  harnessRef = harness;
 
-  return { harness, approvals, primary, primaryName, tools, plugins, schedulerRef };
+  // Resolve the primary from the (hot-reloadable) registry, falling back to the
+  // boot-time resolution if it ever vanishes.
+  const getPrimary = () => harness.agents.get(primaryName) ?? primary;
+
+  return { harness, approvals, primary, getPrimary, primaryName, tools, plugins, schedulerRef };
 }
 
 export async function bootstrap(cwd: string = process.cwd(), configPath?: string): Promise<BootstrapHandle> {
@@ -242,7 +259,8 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
 
   const commands = harness.commands;
   commands.register(createSessionsCommand(harness.sessions), { override: true });
-  const getAgents = (): WireAgent[] => runtime.agents().map((a) => ({ name: a.name, description: a.description }));
+  const getAgents = (): WireAgent[] =>
+    runtime.agents().map((a) => ({ name: a.name, description: a.description, color: a.color }));
 
   log.info(`Bootstrap — cwd: ${cwd}`);
   log.info(`Config — baseUrl: ${config.baseUrl}, model: ${config.model}`);
@@ -277,9 +295,24 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
     log.info(`Scheduler — ${scheduler.tasks().length} task(s) loaded`);
   }
 
+  // Hot-reload definitions (agents/skills/tasks) on file changes — no restart.
+  const cfgDir = harness.config.configDir;
+  const watcher = startDefinitionWatcher({
+    paths: [config.agentsDir, join(cfgDir, 'agents'), config.tasksDir, join(cwd, 'skills'), join(cfgDir, 'skills')]
+      .filter((p): p is string => Boolean(p)),
+    onChange: async () => {
+      await harness.reloadDefinitions();
+      await scheduler?.reload();
+      ws.push({ type: 'agents', agents: getAgents(), activeAgentId: primaryName });
+      log.info('reloaded definitions');
+    },
+    log: (msg) => log.info(`watch: ${msg}`),
+  });
+
   return {
     shutdown: async () => {
       log.info('Shutting down...');
+      watcher.stop();
       scheduler?.stop();
       await ws.stop();
       runtime.close();

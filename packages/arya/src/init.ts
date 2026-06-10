@@ -18,31 +18,14 @@ const CONFIG_TEMPLATE = `${
   )
 }\n`;
 
-const AGENT_TEMPLATE = `---
-name: arya
-description: Default Arya primary agent
-tools:
-  - read
-  - list_dir
-  - webfetch
-  - write
-  - edit
-  - bash
-  - subagent
----
-You are Arya, an autonomous primary assistant powered by arya-agent. You can
-use tools to interact with the filesystem, execute shell commands, fetch URLs,
-and delegate work to sub-agents. Sensitive operations prompt the user for
-approval before running.
-`;
-
 export function init(): void {
   const dirs = aryaDirs('arya');
   for (const dir of [dirs.agentsDir, dirs.pluginsDir]) mkdirSync(dir, { recursive: true });
 
+  // Arya ships with a built-in `arya` agent (see default-agents.ts) — init does
+  // not generate one. Drop your own .md in the agents dir only to customize.
   const files: Array<[string, string]> = [
     [dirs.configFile, CONFIG_TEMPLATE],
-    [`${dirs.agentsDir}/arya.md`, AGENT_TEMPLATE],
   ];
   for (const [path, content] of files) {
     if (!existsSync(path)) writeFileSync(path, content);

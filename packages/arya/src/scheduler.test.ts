@@ -30,7 +30,7 @@ describe('scheduler', () => {
     }
   });
 
-  it('add() registers a task live: it appears in tasks() and fires through the runtime', async () => {
+  it('reload() picks up a task added to disk and drops a deleted one', async () => {
     const dir = await Deno.makeTempDir();
     const prompts: string[] = [];
     const scheduler = createScheduler({
@@ -39,10 +39,19 @@ describe('scheduler', () => {
       onEvent: () => {},
     });
     try {
-      await scheduler.add({ id: 'live', cron: '* * * * * *', prompt: 'tick' });
+      expect(scheduler.tasks()).toEqual([]);
+
+      // Create on disk → reload → live (appears + fires).
+      await Deno.writeTextFile(`${dir}/live.yaml`, 'id: live\ncron: "* * * * * *"\nprompt: tick\n');
+      await scheduler.reload();
       expect(scheduler.tasks().map((t) => t.id)).toContain('live');
       await new Promise((resolve) => setTimeout(resolve, 1200));
       expect(prompts).toContain('tick');
+
+      // Delete on disk → reload → gone.
+      await Deno.remove(`${dir}/live.yaml`);
+      await scheduler.reload();
+      expect(scheduler.tasks()).toEqual([]);
     } finally {
       scheduler.stop();
       await Deno.remove(dir, { recursive: true });

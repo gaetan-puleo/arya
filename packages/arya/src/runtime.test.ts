@@ -22,7 +22,12 @@ const provider: Provider = {
     }
     const sawToolResult = req.messages.some((m) => m.content.some((p) => p.type === 'tool_result'));
     if (!sawToolResult) {
-      yield { type: 'tool_call', id: 'tc1', name: 'subagent', input: { tasks: [{ agent: 'helper', task: 'help me' }] } };
+      yield {
+        type: 'tool_call',
+        id: 'tc1',
+        name: 'subagent',
+        input: { tasks: [{ agent: 'helper', task: 'help me' }] },
+      };
       return;
     }
     yield { type: 'text', text: 'final answer' };

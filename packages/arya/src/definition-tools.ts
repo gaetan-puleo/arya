@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { stringify as stringifyYaml } from '@std/yaml';
 import { Cron } from 'croner';
 import type { ContentPart, Tool } from 'mu-core';
-import type { LoadedTask, Scheduler } from './scheduler';
+import type { Scheduler } from './scheduler';
 
 const ID_RE = /^[a-z0-9][a-z0-9_-]*$/i;
 
@@ -72,9 +72,10 @@ export const createTaskWriterTool = (deps: TaskWriterDeps): Tool => ({
     await mkdir(deps.tasksDir, { recursive: true });
     await writeFile(file, stringifyYaml(def), 'utf-8');
 
-    const task: LoadedTask = { id, cron, prompt, agent, timezone, channel };
+    // Persisted to disk; the scheduler reloads from there (the file watcher would
+    // catch it too, but reloading here makes it fire immediately).
     if (scheduler) {
-      await scheduler.add(task);
+      await scheduler.reload();
       return [{ type: 'text', text: `Created task "${id}" at ${file} and scheduled it live (${cron}).` }];
     }
     return [{

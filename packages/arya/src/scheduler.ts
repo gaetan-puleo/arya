@@ -6,7 +6,6 @@ import {
   createScheduler as createSchedulerEngine,
   type SchedulerEvent as EngineSchedulerEvent,
   type Task,
-  type TaskInput,
 } from 'mu-harness';
 import type { AryaRuntime } from './runtime';
 import type { SchedulerEvent, SchedulerTask } from './protocol';
@@ -16,11 +15,10 @@ export type LoadedTask = SchedulerTask & { agent?: string };
 export interface Scheduler {
   tasks(): SchedulerTask[];
   /**
-   * Register a task in the running engine without a restart, reusing the
-   * existing in-memory store + engine reload. The caller persists the YAML;
-   * this only makes it fire live.
+   * Re-read the tasks dir and rebuild the engine from disk (create/edit/delete)
+   * without a restart. Called by the file watcher and after create_task writes.
    */
-  add(task: LoadedTask): Promise<void>;
+  reload(): Promise<void>;
   stop(): void;
 }
 
@@ -74,23 +72,18 @@ const toWireTask = (task: LoadedTask): SchedulerTask => ({
   channel: task.channel,
 });
 
-const toTaskInput = (task: LoadedTask): TaskInput => ({
+const toEngineTask = (task: LoadedTask): Task => ({
+  id: task.id,
   prompt: task.prompt,
   agent: task.agent,
   schedule: { kind: 'cron', expr: task.cron, timezone: task.timezone },
+  enabled: true,
+  createdAt: 0,
 });
-
-const toEngineTask = (task: LoadedTask): Task => ({ id: task.id, enabled: true, createdAt: 0, ...toTaskInput(task) });
 
 export function createScheduler(options: SchedulerOptions): Scheduler {
   const { runtime, onEvent, log } = options;
-  const loaded = options.tasksDir ? loadTasks(options.tasksDir, log) : [];
-  const added: LoadedTask[] = [];
-  const byId = new Map(loaded.map((task) => [task.id, task]));
-
-  // The harness' in-memory store seeds initial tasks under their own ids; add()
-  // goes through its create() (which assigns a fresh id) + engine.reload().
-  const store = createMemoryTaskStore(loaded.map(toEngineTask));
+  let byId = new Map<string, LoadedTask>();
 
   const wireTaskOf = (task: Task): SchedulerTask => {
     const original = byId.get(task.id);
@@ -105,33 +98,34 @@ export function createScheduler(options: SchedulerOptions): Scheduler {
     } else onEvent({ type: 'task_failed', task, at: event.at, error: event.error });
   };
 
-  const engine = createSchedulerEngine({
-    store,
-    run: async (task) => {
-      try {
-        const output = await runtime.runAgentTask(byId.get(task.id)?.agent ?? '', task.prompt);
-        return { ok: true, output };
-      } catch (err) {
-        return { ok: false, error: err instanceof Error ? err.message : String(err) };
-      }
-    },
-    onEvent: emit,
-  });
+  const run = async (task: Task) => {
+    try {
+      const output = await runtime.runAgentTask(byId.get(task.id)?.agent ?? '', task.prompt);
+      return { ok: true, output };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  };
 
-  for (const task of loaded) log?.(`scheduled task "${task.id}" (${task.cron})`);
-  void engine.start();
+  // Rebuild the engine + store from the YAML on disk. Reuses the harness'
+  // in-memory store (which preserves the seeded ids) + scheduler engine.
+  let engine: ReturnType<typeof createSchedulerEngine> | undefined;
+  const build = async (): Promise<void> => {
+    const loaded = options.tasksDir ? loadTasks(options.tasksDir, log) : [];
+    byId = new Map(loaded.map((task) => [task.id, task]));
+    engine = createSchedulerEngine({ store: createMemoryTaskStore(loaded.map(toEngineTask)), run, onEvent: emit });
+    for (const task of loaded) log?.(`scheduled task "${task.id}" (${task.cron})`);
+    await engine.start();
+  };
+
+  void build();
 
   return {
-    tasks: () => [...loaded, ...added].map(toWireTask),
-    add: async (task) => {
-      const created = await store.create(toTaskInput(task));
-      // The store mints its own id; key the wire-task lookup by it so emitted
-      // events still surface the author-chosen id/cron/channel.
-      byId.set(created.id, task);
-      added.push(task);
-      await engine.reload();
-      log?.(`scheduled task "${task.id}" (${task.cron})`);
+    tasks: () => [...byId.values()].map(toWireTask),
+    reload: async () => {
+      engine?.stop();
+      await build();
     },
-    stop: () => engine.stop(),
+    stop: () => engine?.stop(),
   };
 }
