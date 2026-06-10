@@ -223,11 +223,8 @@ export async function buildHarness(cwd: string, config: BootstrapConfig) {
     system: primary?.prompt,
     sourceUrl: 'https://github.com/gaetan-puleo/arya',
     title: true,
-    // Arya runs from the repo as its cwd; keep agent-authored skills out of the
-    // project tree and in the global config dir (~/.config/arya/skills).
-    skillScope: 'config',
-    // create_agent scopes: "local" = the repo's definitions/agents (alongside
-    // the built-ins), "config" = the global config dir. Model chooses per call.
+    // Agent dirs loaded (and watched) at boot: the repo's definitions/agents and
+    // the global config dir; a same-named override there wins over the built-in.
     agentDirs: { local: agentsDir, config: join(xdg.configHome, 'arya', 'agents') },
   });
   harnessRef = harness;
