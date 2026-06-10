@@ -16,6 +16,7 @@ import webfetchPlugin from 'mu-webfetch';
 
 import { aryaDirs, resolveXdg } from './xdg';
 import { createAryaRuntime } from './runtime';
+import { createTaskWriterTool } from './definition-tools';
 import { createScheduler, type Scheduler } from './scheduler';
 import { observeSubAgent } from './sub-agent-channel';
 import { createWebSocketServer } from './ws';
@@ -166,7 +167,15 @@ export interface BootstrapHandle {
 export async function buildHarness(cwd: string, config: BootstrapConfig) {
   const xdg = resolveXdg();
   const primaryName = config.primaryAgent ?? 'arya';
-  const tools = createMuTools({ getCwd: () => cwd });
+  const tasksDir = config.tasksDir ?? join(cwd, 'definitions', 'tasks');
+  const agentsDir = config.agentsDir ?? join(cwd, 'definitions', 'agents');
+  // Late-bound so the create_task tool can reach the scheduler that bootstrap()
+  // builds after the harness (the TUI never sets it → create_task persists only).
+  const schedulerRef: { current?: Scheduler } = {};
+  const tools = [
+    ...createMuTools({ getCwd: () => cwd }),
+    createTaskWriterTool({ tasksDir, getScheduler: () => schedulerRef.current }),
+  ];
   const builtinPlugins: Plugin[] = [webfetchPlugin];
   const installedPlugins = await loadInstalledPlugins(
     aryaDirs('arya').pluginsDir,
@@ -207,14 +216,17 @@ export async function buildHarness(cwd: string, config: BootstrapConfig) {
     // Arya runs from the repo as its cwd; keep agent-authored skills out of the
     // project tree and in the global config dir (~/.config/arya/skills).
     skillScope: 'config',
+    // create_agent scopes: "local" = the repo's definitions/agents (alongside
+    // the built-ins), "config" = the global config dir. Model chooses per call.
+    agentDirs: { local: agentsDir, config: join(xdg.configHome, 'arya', 'agents') },
   });
 
-  return { harness, approvals, primary, primaryName, tools, plugins };
+  return { harness, approvals, primary, primaryName, tools, plugins, schedulerRef };
 }
 
 export async function bootstrap(cwd: string = process.cwd(), configPath?: string): Promise<BootstrapHandle> {
   const config = loadConfig(cwd, configPath);
-  const { harness, approvals, primaryName, tools, plugins } = await buildHarness(cwd, config);
+  const { harness, approvals, primaryName, tools, plugins, schedulerRef } = await buildHarness(cwd, config);
 
   let pushFrame: (frame: WsOutbound) => void = () => {};
 
@@ -251,14 +263,17 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
   pushFrame = ws.push;
   log.info(`Listening on ${config.wsHost}:${config.wsPort} — accepting connections`);
 
+  // Always start the scheduler (loadTasks tolerates a missing/empty dir) so that
+  // create_task can register new tasks live without a restart.
   let scheduler: Scheduler | undefined;
-  if (config.tasksDir && existsSync(config.tasksDir)) {
+  if (config.tasksDir) {
     scheduler = createScheduler({
       tasksDir: config.tasksDir,
       runtime,
       onEvent: (event) => ws.push({ type: 'scheduler_event', event }),
       log: (msg) => log.info(`scheduler: ${msg}`),
     });
+    schedulerRef.current = scheduler;
     log.info(`Scheduler — ${scheduler.tasks().length} task(s) loaded`);
   }
 

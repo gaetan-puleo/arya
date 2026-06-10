@@ -18,11 +18,11 @@
     "turndown": "npm:turndown@^7.2.2",
     "cli-highlight": "npm:cli-highlight@^2.1.11",
     "@std/yaml": "jsr:@std/yaml@^1.0.0",
-    "mu-core": "npm:mu-core@^0.17.2",
-    "mu-harness": "npm:mu-harness@^0.17.2",
-    "mu-local-provider": "npm:mu-local-provider@^0.17.2",
-    "mu-tools": "npm:mu-ai-tools@^0.17.2",
-    "mu-webfetch": "npm:mu-webfetch@^0.17.2"
+    "mu-core": "npm:mu-core@^0.17.3",
+    "mu-harness": "npm:mu-harness@^0.17.3",
+    "mu-local-provider": "npm:mu-local-provider@^0.17.3",
+    "mu-tools": "npm:mu-ai-tools@^0.17.3",
+    "mu-webfetch": "npm:mu-webfetch@^0.17.3"
   },
   "unstable": ["sloppy-imports"],
   "nodeModulesDir": "none",

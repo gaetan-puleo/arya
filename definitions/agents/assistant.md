@@ -18,6 +18,9 @@ tools:
     "**": ask
   subagent: ask
   subagent_parallel: ask
+  create_agent: ask
+  create_task: ask
+  create_skill: ask
 ---
 You are a helpful primary assistant powered by arya-agent. You can use tools to
 interact with the filesystem, execute shell commands, fetch URLs, and delegate

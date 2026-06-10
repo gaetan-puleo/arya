@@ -30,6 +30,25 @@ describe('scheduler', () => {
     }
   });
 
+  it('add() registers a task live: it appears in tasks() and fires through the runtime', async () => {
+    const dir = await Deno.makeTempDir();
+    const prompts: string[] = [];
+    const scheduler = createScheduler({
+      tasksDir: dir,
+      runtime: stubRuntime((_agent, prompt) => prompts.push(prompt)),
+      onEvent: () => {},
+    });
+    try {
+      await scheduler.add({ id: 'live', cron: '* * * * * *', prompt: 'tick' });
+      expect(scheduler.tasks().map((t) => t.id)).toContain('live');
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      expect(prompts).toContain('tick');
+    } finally {
+      scheduler.stop();
+      await Deno.remove(dir, { recursive: true });
+    }
+  });
+
   it('fires a due task through the runtime and emits start/complete wire events', async () => {
     const dir = await Deno.makeTempDir();
     await Deno.writeTextFile(`${dir}/t.yaml`, 'id: tick\ncron: "* * * * * *"\nprompt: ping\nagent: arya\n');
@@ -47,7 +66,13 @@ describe('scheduler', () => {
       expect(types).toContain('task_started');
       expect(types).toContain('task_completed');
       const started = events.find((e) => e.type === 'task_started');
-      expect(started?.task).toEqual({ id: 'tick', cron: '* * * * * *', prompt: 'ping', timezone: undefined, channel: undefined });
+      expect(started?.task).toEqual({
+        id: 'tick',
+        cron: '* * * * * *',
+        prompt: 'ping',
+        timezone: undefined,
+        channel: undefined,
+      });
     } finally {
       scheduler.stop();
       await Deno.remove(dir, { recursive: true });
