@@ -17,12 +17,11 @@
     "turndown": "npm:turndown@^7.2.2",
     "cli-highlight": "npm:cli-highlight@^2.1.11",
     "@std/yaml": "jsr:@std/yaml@^1.0.0",
-    "mu-core": "../mu/packages/core/src/index.ts",
-    "mu-harness": "../mu/packages/harness/src/index.ts",
-    "mu-tui": "../mu/packages/tui/src/index.ts",
-    "mu-local-provider": "../mu/packages/local-provider/src/index.ts",
-    "mu-tools": "../mu/packages/tools/src/index.ts",
-    "mu-webfetch": "../mu/packages/webfetch/src/plugin.ts"
+    "mu-core": "npm:mu-core@^0.20.0",
+    "mu-harness": "npm:mu-harness@^0.20.0",
+    "mu-local-provider": "npm:mu-local-provider@^0.20.0",
+    "mu-tools": "npm:mu-ai-tools@^0.20.0",
+    "mu-webfetch": "npm:mu-webfetch@^0.20.0"
   },
   "unstable": ["sloppy-imports"],
   "nodeModulesDir": "none",

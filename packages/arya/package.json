@@ -12,12 +12,12 @@
   },
   "files": ["src", "bin", "README.md"],
   "dependencies": {
-    "mu-core": "file:../../../mu/packages/core",
-    "mu-harness": "file:../../../mu/packages/harness",
-    "mu-local-provider": "file:../../../mu/packages/local-provider",
-    "mu-tools": "file:../../../mu/packages/tools",
-    "mu-webfetch": "file:../../../mu/packages/webfetch",
-    "mu-tui": "file:../../../mu/packages/tui",
+    "mu-core": "^0.20.0",
+    "mu-harness": "^0.20.0",
+    "mu-local-provider": "^0.20.0",
+    "mu-ai-tools": "^0.20.0",
+    "mu-webfetch": "^0.20.0",
+    "mu-tui": "^0.20.0",
     "ws": "^8.18.0",
     "croner": "^9.0.0"
   }
