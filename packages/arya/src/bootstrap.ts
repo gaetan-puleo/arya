@@ -59,12 +59,6 @@ const isLoopback = (host: string): boolean => LOOPBACK_HOSTS.has(host);
 const isPlugin = (value: unknown): value is Plugin =>
   typeof value === 'object' && value !== null && typeof (value as { name?: unknown }).name === 'string';
 
-/**
- * Loads user-installed plugins (added via `arya install`) from the plugin store.
- * Each `.ts` file's default export must be a {@link Plugin}. Built-in plugins are
- * wired statically in {@link buildHarness}; this only covers the dynamic ones.
- * Failures are logged and skipped — one bad plugin must not abort startup.
- */
 async function loadInstalledPlugins(pluginsDir: string, skip: Set<string>): Promise<Plugin[]> {
   const store = createPluginStore({ dir: pluginsDir });
   const out: Plugin[] = [];
@@ -161,11 +155,6 @@ export interface BootstrapHandle {
   shutdown: () => Promise<void>;
 }
 
-/**
- * Builds the mu-harness instance plus the pieces arya wires around it (approvals,
- * resolved primary agent, shared tool/plugin lists). Shared by the WebSocket
- * server ({@link bootstrap}) and the local TUI ({@link runTui}).
- */
 export async function buildHarness(cwd: string, config: BootstrapConfig) {
   const xdg = resolveXdg();
   const primaryName = config.primaryAgent ?? 'arya';
@@ -239,14 +228,12 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
   const config = loadConfig(cwd, configPath);
   const { harness, approvals, primaryName } = await buildHarness(cwd, config);
 
-  // /sessions command (overrides any built-in of the same name).
   harness.commands.register(createSessionsCommand(harness.sessions), { override: true });
 
   log.info(`Bootstrap — cwd: ${cwd}`);
   log.info(`Config — baseUrl: ${config.baseUrl}, model: ${config.model}`);
   log.info(`Loaded ${harness.agents.list().length} agent(s); primary: ${primaryName}`);
 
-  // The WebSocket channel surface (companion + TUI clients) now lives in mu-harness.
   const adapter = webSocketAdapter({
     port: config.wsPort,
     host: config.wsHost,
@@ -261,7 +248,6 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
   const channels = await runChannels({ harness, approvals, adapters: [adapter] });
   log.info(`Listening on ${config.wsHost}:${config.wsPort} — accepting connections`);
 
-  // Scheduled tasks run non-interactively through the harness sub-agent dispatcher.
   let scheduler: Scheduler | undefined;
   if (config.tasksDir) {
     scheduler = createScheduler({

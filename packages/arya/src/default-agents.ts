@@ -1,11 +1,5 @@
 import type { Agent } from 'mu-harness';
 
-/**
- * The built-in primary agent. Used as the default when the user hasn't defined
- * their own `arya` agent (in `definitions/agents` or the global config dir), so
- * arya always has a working persona — and a color — even with no `.md` on disk.
- * Nothing is generated on disk; the user drops their own agent `.md` only to override.
- */
 export const ARYA_AGENT: Agent = {
   name: 'arya',
   description: 'Default Arya primary agent',
@@ -29,5 +23,4 @@ export const ARYA_AGENT: Agent = {
   },
 };
 
-/** The agents arya ships with, filled in when the user hasn't defined their own. */
 export const BUILTIN_AGENTS: Agent[] = [ARYA_AGENT];

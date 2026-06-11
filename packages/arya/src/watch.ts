@@ -5,20 +5,12 @@ export interface DefinitionWatcher {
 }
 
 export interface WatchOptions {
-  /** Directories to watch (recursively). Non-existent paths are skipped. */
   paths: string[];
-  /** Called (debounced) whenever a watched file is created, edited, or removed. */
   onChange: () => void | Promise<void>;
   debounceMs?: number;
   log?: (message: string) => void;
 }
 
-/**
- * Watches the definition directories and fires {@link WatchOptions.onChange}
- * (debounced) on any create/edit/remove, so hot-reload can refresh the
- * registries/scheduler without a restart. Read-only ("access") events are
- * ignored; a missing path is skipped rather than throwing.
- */
 export function startDefinitionWatcher(opts: WatchOptions): DefinitionWatcher {
   const { onChange, debounceMs = 200, log } = opts;
   // Ensure each dir exists so it's watchable — a definition created in a dir that

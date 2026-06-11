@@ -14,17 +14,12 @@ export type LoadedTask = SchedulerTask & { agent?: string };
 
 export interface Scheduler {
   tasks(): SchedulerTask[];
-  /**
-   * Re-read the tasks dir and rebuild the engine from disk (create/edit/delete)
-   * without a restart. Called by the file watcher when a task file changes.
-   */
   reload(): Promise<void>;
   stop(): void;
 }
 
 export interface SchedulerOptions {
   tasksDir?: string;
-  /** Runs a scheduled task non-interactively; returns the agent's final text. */
   runTask: (agent: string, prompt: string) => Promise<string>;
   onEvent: (event: SchedulerEvent) => void;
   log?: (message: string) => void;

@@ -74,12 +74,6 @@ const MANAGE_SKILL = lines(
   '**Delete** — remove the skill directory.',
 );
 
-/**
- * Skills arya ships with, embedded in the binary (no files on disk). Passed to
- * createHarness as host skills, so they're always available via the `skill` tool
- * regardless of cwd — they teach the agent to author/edit definitions by writing
- * files, which the file watcher then hot-reloads.
- */
 export const BUILTIN_SKILLS: Skill[] = [
   {
     name: 'manage-task',
