@@ -19,13 +19,13 @@ const HELP = `arya — autonomous multi-agent runtime powered by mu
 Usage:
   arya                       Show this help
   arya serve                 Run the autonomous host (WebSocket server for channels)
-  arya --channel tui         Interactive TUI: boots a server in-process, then connects
+  arya --channel tui         Interactive TUI client of a running 'arya serve' (local)
   arya --channel tui --connect ws://host:port
-                             Interactive TUI against an already-running arya server
+                             Interactive TUI client of a remote arya server
   arya install <plugin.ts>   Install a local plugin into the XDG data dir
 
-The harness is used two ways: same process (boots + connects locally) or a
-separate process (--connect to a remote server). Config: ~/.config/arya/config.json
+The TUI is a pure client — start 'arya serve' first (the autonomous host owns the
+server; the TUI never boots one). Config: ~/.config/arya/config.json
 (falls back to <repo>/config.json).`;
 
 function resolveConfigPath(): string {

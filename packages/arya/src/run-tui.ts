@@ -1,6 +1,7 @@
 import process from 'node:process';
+import { createConnection } from 'node:net';
 import { ChatApp, connectHarness, type RemoteHarness } from 'mu-harness';
-import { bootstrap, type BootstrapHandle, loadConfig } from './bootstrap';
+import { loadConfig } from './bootstrap';
 
 const ARYA_BANNER = [
   '    .    .--..   .  .',
@@ -14,8 +15,27 @@ export interface RunTuiOptions {
   connect?: string;
 }
 
+function isPortOpen(host: string, port: number, timeoutMs = 600): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = createConnection({ host, port });
+    const done = (open: boolean) => {
+      socket.destroy();
+      resolve(open);
+    };
+    socket.setTimeout(timeoutMs);
+    socket.once('connect', () => done(true));
+    socket.once('timeout', () => done(false));
+    socket.once('error', () => done(false));
+  });
+}
+
+/**
+ * The `tui` channel: an interactive terminal CLIENT of an autonomous arya server.
+ * It never boots a server — the autonomous host (`arya serve`) owns serving; the
+ * TUI only connects. By default it attaches to the configured host:port; with
+ * `--connect ws://…` it attaches to a remote server (token via ARYA_TOKEN).
+ */
 export async function runChannelTui(cwd: string, configPath: string | undefined, opts: RunTuiOptions): Promise<void> {
-  let server: BootstrapHandle | undefined;
   let url: string;
   let token: string | undefined;
 
@@ -24,10 +44,12 @@ export async function runChannelTui(cwd: string, configPath: string | undefined,
     token = process.env.ARYA_TOKEN || undefined;
   } else {
     const config = loadConfig(cwd, configPath);
-    server = await bootstrap(cwd, configPath);
     const host = config.wsHost && config.wsHost !== '0.0.0.0' ? config.wsHost : '127.0.0.1';
     url = `ws://${host}:${config.wsPort}`;
     token = config.authToken;
+    if (!(await isPortOpen(host, config.wsPort))) {
+      throw new Error(`No arya server is running at ${host}:${config.wsPort}. Start one first: arya serve`);
+    }
   }
 
   let remote: RemoteHarness;
@@ -37,7 +59,6 @@ export async function runChannelTui(cwd: string, configPath: string | undefined,
     tearingDown = true;
     try {
       await remote.close();
-      if (server) await server.shutdown();
     } finally {
       process.exit(code);
     }

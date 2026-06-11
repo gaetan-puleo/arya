@@ -52,16 +52,15 @@ model loaded, then run:
 ```bash
 arya                     # show help
 arya serve               # autonomous host — WebSocket server for channels (companion, TUI)
-arya --channel tui       # interactive TUI: boots a server in-process, then connects to it
-arya --channel tui --connect ws://host:port   # TUI against an already-running arya server
+arya --channel tui       # interactive TUI client — connects to a running `arya serve`
+arya --channel tui --connect ws://host:port   # TUI client of a remote arya server
 ```
 
-arya is used two ways: **same process** (`arya --channel tui` boots the harness
-and connects locally) or a **separate process** (`--connect` to a remote
-`arya serve`). The TUI is always a channel client — the autonomous host never
-renders a TUI directly. The channel layer (WebSocket server + client, the
-companion bridge, and the TUI proxy) lives in `mu-harness`
-(`channels/` — `webSocketAdapter` / `connectHarness`); arya just registers it.
+The TUI is a **pure client** — start `arya serve` first; the autonomous host owns
+the server and the TUI never boots one (run them as two processes, or two TUIs
+share one server). The channel layer (WebSocket server + client, the companion
+bridge, and the TUI proxy) lives in `mu-harness` (`channels/` —
+`webSocketAdapter` / `connectHarness`); arya just registers it.
 
 ## Agents
 
