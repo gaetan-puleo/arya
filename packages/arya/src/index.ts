@@ -11,16 +11,47 @@ import { aryaDirs } from './xdg';
 // project-relative paths from where the user runs it.
 const root = process.cwd();
 
-const subcommand = process.argv[2];
+const argv = process.argv.slice(2);
+const subcommand = argv[0];
 
-if (subcommand === 'init') {
-  const { init } = await import('./init');
-  init();
+const HELP = `arya — autonomous multi-agent runtime powered by mu
+
+Usage:
+  arya                       Show this help
+  arya serve                 Run the autonomous host (WebSocket server for channels)
+  arya --channel tui         Interactive TUI: boots a server in-process, then connects
+  arya --channel tui --connect ws://host:port
+                             Interactive TUI against an already-running arya server
+  arya install <plugin.ts>   Install a local plugin into the XDG data dir
+
+The harness is used two ways: same process (boots + connects locally) or a
+separate process (--connect to a remote server). Config: ~/.config/arya/config.json
+(falls back to <repo>/config.json).`;
+
+function resolveConfigPath(): string {
+  const candidates = [aryaDirs('arya').configFile, resolve(root, 'config.json')];
+  for (const c of candidates) {
+    try {
+      readFileSync(c, 'utf-8');
+      return c;
+    } catch {
+      // keep looking
+    }
+  }
+  console.error(
+    `[arya] No config found. Looked in:\n${candidates.map((c) => `  - ${c}`).join('\n')}\n` +
+      `       Create a config.json at ${candidates[0]} (fields: kind, baseUrl, model, primaryAgent, wsPort, wsHost, authToken).`,
+  );
+  process.exit(1);
+}
+
+if (!subcommand || subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
+  console.log(HELP);
   process.exit(0);
 }
 
 if (subcommand === 'install' || subcommand === 'i') {
-  const spec = process.argv[3];
+  const spec = argv[1];
   if (!spec) {
     console.error('usage: arya install <path-to-plugin.ts>');
     process.exit(1);
@@ -40,33 +71,27 @@ if (subcommand === 'install' || subcommand === 'i') {
   }
 }
 
-function resolveConfigPath(): string {
-  const candidates = [aryaDirs('arya').configFile, resolve(root, 'config.json')];
-  for (const c of candidates) {
-    try {
-      readFileSync(c, 'utf-8');
-      return c;
-    } catch {
-      // keep looking
-    }
+if (subcommand === '--channel') {
+  const channel = argv[1];
+  if (channel !== 'tui') {
+    console.error(`[arya] Unknown channel "${channel ?? ''}". Available channels: tui`);
+    process.exit(1);
   }
-  console.error(
-    `[arya] No config found. Looked in:\n${candidates.map((c) => `  - ${c}`).join('\n')}\n` +
-      `       Run \`arya init\` to create one at ${candidates[0]}.`,
-  );
-  process.exit(1);
-}
-
-if (subcommand === 'tui') {
-  const configPath = resolveConfigPath();
-  const { runTui } = await import('./tui');
+  const connectIdx = argv.indexOf('--connect');
+  const connect = connectIdx >= 0 ? argv[connectIdx + 1] : undefined;
+  if (connectIdx >= 0 && !connect) {
+    console.error('usage: arya --channel tui --connect ws://host:port');
+    process.exit(1);
+  }
+  const configPath = connect ? undefined : resolveConfigPath();
+  const { runChannelTui } = await import('./run-tui');
   try {
-    await runTui(root, configPath);
+    await runChannelTui(root, configPath, { connect });
   } catch (err) {
     console.error('[arya] Fatal error:', err);
     process.exit(1);
   }
-} else {
+} else if (subcommand === 'serve') {
   const configPath = resolveConfigPath();
   console.log(`[arya] Starting in ${root}`);
   console.log(`[arya] Config: ${configPath}`);
@@ -95,4 +120,8 @@ if (subcommand === 'tui') {
     console.error('[arya] Fatal error:', err);
     process.exit(1);
   }
+} else {
+  console.error(`[arya] Unknown command "${subcommand}".\n`);
+  console.log(HELP);
+  process.exit(1);
 }

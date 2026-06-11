@@ -2,8 +2,8 @@
 
 A llama-swap-backed coding agent served over WebSocket, built on **mu**
 (consumed from the published `mu-*` npm packages, so no sibling checkout is
-needed). Ships as a self-contained standalone binary, a local terminal TUI, or
-a WebSocket server for the companion app.
+needed). Ships as a self-contained standalone binary that runs as a local
+terminal TUI or a WebSocket server for the companion app.
 
 - **`packages/arya`** — server. Composes the `mu-harness` primitives
   (agent sessions, session store/catalog, sub-agents, hooks, channels) with
@@ -13,50 +13,26 @@ a WebSocket server for the companion app.
   connects to the server, streams replies, and surfaces approvals,
   sub-agents and slash commands.
 
-The companion is wired in as a harness `Channel`: each session is wrapped in
-a `createChannel(...)` whose `AgentSessionEvent` stream is translated into the
-companion's WebSocket wire frames (`packages/arya/src/companion-channel.ts`).
-
-## Quick start
-
-```bash
-# 1. Make sure a llama-swap server is reachable (e.g. http://localhost:8080)
-#    with at least one model loaded.
-
-# 2. Scaffold XDG config
-deno task init
-# writes ~/.config/arya/{config.json, agents/arya.md, plugins/}
-
-# 3. Run
-deno task dev          # WebSocket server (watch mode); or: deno task start
-deno task tui          # local terminal chat — in-process, no server
-```
-
-## Install (standalone binary)
+## Install
 
 `arya` ships as a self-contained executable (Deno + arya + mu embedded) — no
-Deno install required at runtime:
+runtime dependencies. Install with curl:
 
 ```bash
-# from a published release
 curl -fsSL https://raw.githubusercontent.com/gaetan-puleo/arya/main/install.sh | sh
-# → installs `arya` to ~/.local/bin (override with ARYA_INSTALL_DIR / ARYA_VERSION)
 ```
 
-Build the binaries locally (cross-compiles 5 targets into `dist/arya-*`):
+This installs `arya` to `~/.local/bin` (override with `ARYA_INSTALL_DIR` or
+pin a version with `ARYA_VERSION`). On Windows, download
+`arya-windows-x64.exe` from the
+[releases page](https://github.com/gaetan-puleo/arya/releases).
 
-```bash
-deno task compile              # all targets
-deno task compile linux-x64    # one target
-```
+## Configure
 
-Pushing a `v*` tag runs `.github/workflows/release.yml`, which cross-compiles
-the binaries and attaches them to the GitHub release. The binary resolves
-project-relative config/agents/tasks from the directory it is launched in.
-
-Server config lives at `~/.config/arya/config.json` (template below). It
-binds loopback-only by default; a LAN bind (`"wsHost": "0.0.0.0"`) requires a
-non-empty `authToken` or arya refuses to start.
+arya does not generate any config — create `~/.config/arya/config.json`
+yourself (it falls back to `<repo>/config.json`). It binds loopback-only by
+default; a LAN bind (`"wsHost": "0.0.0.0"`) requires a non-empty `authToken`
+or arya refuses to start.
 
 ```json
 {
@@ -70,12 +46,29 @@ non-empty `authToken` or arya refuses to start.
 }
 ```
 
+Make sure a llama-swap server is reachable at `baseUrl` with at least one
+model loaded, then run:
+
+```bash
+arya                     # show help
+arya serve               # autonomous host — WebSocket server for channels (companion, TUI)
+arya --channel tui       # interactive TUI: boots a server in-process, then connects to it
+arya --channel tui --connect ws://host:port   # TUI against an already-running arya server
+```
+
+arya is used two ways: **same process** (`arya --channel tui` boots the harness
+and connects locally) or a **separate process** (`--connect` to a remote
+`arya serve`). The TUI is always a channel client — the autonomous host never
+renders a TUI directly. The channel layer (WebSocket server + client, the
+companion bridge, and the TUI proxy) lives in `mu-harness`
+(`channels/` — `webSocketAdapter` / `connectHarness`); arya just registers it.
+
 ## Agents
 
 Agents are markdown files (frontmatter + body) under
-`~/.config/arya/agents/` or `<repo>/definitions/agents/`. The new
-`mu-harness` agent schema is `name`, `description`, `model`, `tools` (an
-allow-list of tool-name globs), `extends`, body = system prompt:
+`~/.config/arya/agents/` or `<repo>/definitions/agents/`. The `mu-harness`
+agent schema is `name`, `description`, `model`, `tools` (an allow-list of
+tool-name globs), `extends`, body = system prompt:
 
 ```markdown
 ---
@@ -87,34 +80,26 @@ tools: [read, list_dir, webfetch, write, edit, bash, subagent]
 You are Arya…
 ```
 
-`primaryAgent` in the config selects which agent supplies the primary system
-prompt; the rest are reachable as sub-agents via the `subagent` tool.
-
-### Sub-agent previews
-
-When the primary delegates via the `subagent` tool, the harness `runSubAgent`
-drives the run while arya observes the spawned session (`src/runtime.ts`
-`onSubAgentSpawn` → `src/sub-agent-channel.ts`) and streams its lifecycle as
-`sub_agent_event` frames (`started` / `content` / `tool_call` / `tool_result`
-/ `completed` / `error`). The companion reduces these into a live preview card
-in the parent transcript and a tap-through detail timeline of the sub-agent
-session — no extra server-side persistence required.
+arya ships with a built-in `arya` agent, so it works with no `.md` on disk;
+drop your own file only to override it. `primaryAgent` in the config selects
+which agent supplies the primary system prompt; the rest are reachable as
+sub-agents via the `subagent` tool. When the primary delegates, the harness
+streams the sub-agent's lifecycle as `sub_agent_event` frames, which the
+companion renders as a live preview card with a tap-through detail timeline.
 
 ## Tools
 
 Filesystem + shell come from `mu-tools` (`read`, `write`, `edit`, `bash`,
-`list_dir`); web fetch from the `mu-webfetch` plugin (`webfetch`). Both are
-passed straight into `createHarness` (`tools` + `plugins`). Safety is enforced
-by an approval hook — `write`, `edit`, `bash` and `subagent` prompt for
-approval (surfaced to the companion) before running; read-only tools run
-freely. `arya install <path-to-plugin.ts>` stores a plugin file under
-`$XDG_CONFIG_HOME/arya/plugins/`; installed plugins are loaded automatically at
-startup (built-ins stay hard-wired). Skills created by the agent are written to
-the global config dir (`~/.config/arya/skills/`).
+`list_dir`); web fetch from the `mu-webfetch` plugin (`webfetch`). An approval
+hook gates `write`, `edit`, `bash` and `subagent` (surfaced to the companion)
+before they run; read-only tools run freely. `arya install <path-to-plugin.ts>`
+stores a plugin under `~/.config/arya/plugins/`; installed plugins load
+automatically at startup. Skills the agent authors are written to
+`~/.config/arya/skills/`.
 
 ## Scheduled tasks
 
-`croner`-backed scheduler reads YAML from `<repo>/definitions/tasks/` (or a
+A `croner`-backed scheduler reads YAML from `<repo>/definitions/tasks/` (or a
 configured `tasksDir`). Scheduled runs are non-interactive and auto-approve
 their tools:
 
@@ -125,6 +110,19 @@ their tools:
   channel: companion
   prompt: Summarise the day.
 ```
+
+## Development
+
+Build the standalone binaries locally (cross-compiles into `dist/arya-*`):
+
+```bash
+deno task compile              # all targets
+deno task compile linux-x64    # one target
+```
+
+Pushing a `v*` tag runs `.github/workflows/release.yml`, which cross-compiles
+the binaries and attaches them to the GitHub release that `install.sh` pulls
+from.
 
 ## License
 

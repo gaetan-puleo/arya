@@ -2,7 +2,7 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     "packages/arya": {
-      "entry": ["src/init.ts"]
+      "entry": ["src/index.ts"]
     },
     "packages/arya-companion": {
       "entry": ["src/app/**/*.{ts,tsx}"],

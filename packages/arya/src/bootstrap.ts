@@ -10,20 +10,19 @@ import {
   importModule,
   loadAgents,
   type Plugin,
+  runChannels,
+  webSocketAdapter,
+  type WireModel,
 } from 'mu-harness';
-import { createLocalProvider, type LocalProviderConfig } from 'mu-local-provider';
+import { createLocalProvider, listLocalModels, type LocalProviderConfig } from 'mu-local-provider';
 import { createMuTools } from 'mu-tools';
 import webfetchPlugin from 'mu-webfetch';
 
 import { aryaDirs, resolveXdg } from './xdg';
-import { createAryaRuntime } from './runtime';
 import { BUILTIN_AGENTS } from './default-agents';
 import { BUILTIN_SKILLS } from './default-skills';
 import { createScheduler, type Scheduler } from './scheduler';
 import { startDefinitionWatcher } from './watch';
-import { observeSubAgent } from './sub-agent-channel';
-import { createWebSocketServer } from './ws';
-import type { WireAgent, WsOutbound } from './protocol';
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
 const LEVEL_ORDER: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3, silent: 4 };
@@ -238,52 +237,37 @@ export async function buildHarness(cwd: string, config: BootstrapConfig) {
 
 export async function bootstrap(cwd: string = process.cwd(), configPath?: string): Promise<BootstrapHandle> {
   const config = loadConfig(cwd, configPath);
-  const { harness, approvals, primaryName, tools, plugins } = await buildHarness(cwd, config);
+  const { harness, approvals, primaryName } = await buildHarness(cwd, config);
 
-  let pushFrame: (frame: WsOutbound) => void = () => {};
-
-  const runtime = createAryaRuntime({ harness, tools, plugins, primaryName });
-
-  runtime.subAgents.subscribe((run) =>
-    observeSubAgent(
-      run.session,
-      { runId: run.runId, agentName: run.agent, parentSessionId: run.parentId ?? '' },
-      (frame) => pushFrame(frame),
-    )
-  );
-
-  const commands = harness.commands;
-  commands.register(createSessionsCommand(harness.sessions), { override: true });
-  const getAgents = (): WireAgent[] =>
-    runtime.agents().map((a) => ({ name: a.name, description: a.description, color: a.color }));
+  // /sessions command (overrides any built-in of the same name).
+  harness.commands.register(createSessionsCommand(harness.sessions), { override: true });
 
   log.info(`Bootstrap — cwd: ${cwd}`);
   log.info(`Config — baseUrl: ${config.baseUrl}, model: ${config.model}`);
   log.info(`Loaded ${harness.agents.list().length} agent(s); primary: ${primaryName}`);
 
-  const ws = createWebSocketServer({
+  // The WebSocket channel surface (companion + TUI clients) now lives in mu-harness.
+  const adapter = webSocketAdapter({
     port: config.wsPort,
     host: config.wsHost,
     authToken: config.authToken,
-    runtime,
-    approvals,
-    commands,
-    getAgents,
     activeAgentId: primaryName,
+    listModels: async (): Promise<WireModel[]> =>
+      (await listLocalModels({ kind: config.kind, baseUrl: config.baseUrl, apiKey: config.apiKey }))
+        .map((m) => ({ id: m.id, ownedBy: m.ownedBy })),
+    log: (msg) => log.info(`ws: ${msg}`),
   });
 
-  await ws.start();
-  pushFrame = ws.push;
+  const channels = await runChannels({ harness, approvals, adapters: [adapter] });
   log.info(`Listening on ${config.wsHost}:${config.wsPort} — accepting connections`);
 
-  // Always start the scheduler (loadTasks tolerates a missing/empty dir) so the
-  // file watcher can reload newly-written task files live, without a restart.
+  // Scheduled tasks run non-interactively through the harness sub-agent dispatcher.
   let scheduler: Scheduler | undefined;
   if (config.tasksDir) {
     scheduler = createScheduler({
       tasksDir: config.tasksDir,
-      runtime,
-      onEvent: (event) => ws.push({ type: 'scheduler_event', event }),
+      runTask: (agent, prompt) => harness.dispatchSubAgent(agent || primaryName, prompt, '').then((r) => r.text),
+      onEvent: (event) => adapter.push({ type: 'scheduler_event', event }),
       log: (msg) => log.info(`scheduler: ${msg}`),
     });
     log.info(`Scheduler — ${scheduler.tasks().length} task(s) loaded`);
@@ -297,7 +281,11 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
     onChange: async () => {
       await harness.reloadDefinitions();
       await scheduler?.reload();
-      ws.push({ type: 'agents', agents: getAgents(), activeAgentId: primaryName });
+      adapter.push({
+        type: 'agents',
+        agents: harness.agents.list().map((a) => ({ name: a.name, description: a.description, color: a.color })),
+        activeAgentId: primaryName,
+      });
       log.info('reloaded definitions');
     },
     log: (msg) => log.info(`watch: ${msg}`),
@@ -308,8 +296,8 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
       log.info('Shutting down...');
       watcher.stop();
       scheduler?.stop();
-      await ws.stop();
-      runtime.close();
+      await channels.stop();
+      harness.close();
       log.info('Stopped');
     },
   };

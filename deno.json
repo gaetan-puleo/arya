@@ -1,9 +1,8 @@
 {
   "tasks": {
-    "start": "deno run -A --sloppy-imports packages/arya/src/index.ts",
-    "tui": "deno run -A --sloppy-imports packages/arya/src/index.ts tui",
-    "dev": "deno run -A --watch --sloppy-imports packages/arya/src/index.ts",
-    "init": "deno run -A --sloppy-imports packages/arya/src/init.ts",
+    "start": "deno run -A --sloppy-imports packages/arya/src/index.ts serve",
+    "tui": "deno run -A --sloppy-imports packages/arya/src/index.ts --channel tui",
+    "dev": "deno run -A --watch --sloppy-imports packages/arya/src/index.ts serve",
     "check": "deno check --sloppy-imports packages/arya/src/",
     "test": "deno test -A --sloppy-imports packages/arya/src/",
     "compile": "deno run -A --sloppy-imports scripts/compile.ts"
@@ -18,11 +17,12 @@
     "turndown": "npm:turndown@^7.2.2",
     "cli-highlight": "npm:cli-highlight@^2.1.11",
     "@std/yaml": "jsr:@std/yaml@^1.0.0",
-    "mu-core": "npm:mu-core@^0.19.0",
-    "mu-harness": "npm:mu-harness@^0.19.0",
-    "mu-local-provider": "npm:mu-local-provider@^0.19.0",
-    "mu-tools": "npm:mu-ai-tools@^0.19.0",
-    "mu-webfetch": "npm:mu-webfetch@^0.19.0"
+    "mu-core": "../mu/packages/core/src/index.ts",
+    "mu-harness": "../mu/packages/harness/src/index.ts",
+    "mu-tui": "../mu/packages/tui/src/index.ts",
+    "mu-local-provider": "../mu/packages/local-provider/src/index.ts",
+    "mu-tools": "../mu/packages/tools/src/index.ts",
+    "mu-webfetch": "../mu/packages/webfetch/src/plugin.ts"
   },
   "unstable": ["sloppy-imports"],
   "nodeModulesDir": "none",

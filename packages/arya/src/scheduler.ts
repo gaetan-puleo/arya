@@ -6,9 +6,9 @@ import {
   createScheduler as createSchedulerEngine,
   type SchedulerEvent as EngineSchedulerEvent,
   type Task,
+  type WireSchedulerEvent as SchedulerEvent,
+  type WireSchedulerTask as SchedulerTask,
 } from 'mu-harness';
-import type { AryaRuntime } from './runtime';
-import type { SchedulerEvent, SchedulerTask } from './protocol';
 
 export type LoadedTask = SchedulerTask & { agent?: string };
 
@@ -24,7 +24,8 @@ export interface Scheduler {
 
 export interface SchedulerOptions {
   tasksDir?: string;
-  runtime: AryaRuntime;
+  /** Runs a scheduled task non-interactively; returns the agent's final text. */
+  runTask: (agent: string, prompt: string) => Promise<string>;
   onEvent: (event: SchedulerEvent) => void;
   log?: (message: string) => void;
 }
@@ -82,7 +83,7 @@ const toEngineTask = (task: LoadedTask): Task => ({
 });
 
 export function createScheduler(options: SchedulerOptions): Scheduler {
-  const { runtime, onEvent, log } = options;
+  const { runTask, onEvent, log } = options;
   let byId = new Map<string, LoadedTask>();
 
   const wireTaskOf = (task: Task): SchedulerTask => {
@@ -100,7 +101,7 @@ export function createScheduler(options: SchedulerOptions): Scheduler {
 
   const run = async (task: Task) => {
     try {
-      const output = await runtime.runAgentTask(byId.get(task.id)?.agent ?? '', task.prompt);
+      const output = await runTask(byId.get(task.id)?.agent ?? '', task.prompt);
       return { ok: true, output };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };

@@ -1,16 +1,13 @@
 import { expect } from '@std/expect';
 import { describe, it } from '@std/testing/bdd';
+import { type WireSchedulerEvent as SchedulerEvent } from 'mu-harness';
 import { createScheduler } from './scheduler';
-import type { AryaRuntime } from './runtime';
-import type { SchedulerEvent } from './protocol';
 
-const stubRuntime = (onTask?: (agent: string, prompt: string) => void): AryaRuntime =>
-  ({
-    runAgentTask: async (agent: string, prompt: string) => {
-      onTask?.(agent, prompt);
-      return 'ok';
-    },
-  }) as unknown as AryaRuntime;
+const stubRunTask = (onTask?: (agent: string, prompt: string) => void) =>
+(agent: string, prompt: string): Promise<string> => {
+  onTask?.(agent, prompt);
+  return Promise.resolve('ok');
+};
 
 describe('scheduler', () => {
   it('loads YAML task defs and exposes them as wire tasks', async () => {
@@ -19,7 +16,7 @@ describe('scheduler', () => {
       `${dir}/t.yaml`,
       'id: daily\ncron: "0 9 * * *"\nprompt: do it\ntimezone: UTC\nchannel: ops\nagent: arya\n',
     );
-    const scheduler = createScheduler({ tasksDir: dir, runtime: stubRuntime(), onEvent: () => {} });
+    const scheduler = createScheduler({ tasksDir: dir, runTask: stubRunTask(), onEvent: () => {} });
     try {
       expect(scheduler.tasks()).toEqual([
         { id: 'daily', cron: '0 9 * * *', prompt: 'do it', timezone: 'UTC', channel: 'ops' },
@@ -35,7 +32,7 @@ describe('scheduler', () => {
     const prompts: string[] = [];
     const scheduler = createScheduler({
       tasksDir: dir,
-      runtime: stubRuntime((_agent, prompt) => prompts.push(prompt)),
+      runTask: stubRunTask((_agent, prompt) => prompts.push(prompt)),
       onEvent: () => {},
     });
     try {
@@ -65,7 +62,7 @@ describe('scheduler', () => {
     const events: SchedulerEvent[] = [];
     const scheduler = createScheduler({
       tasksDir: dir,
-      runtime: stubRuntime((_agent, prompt) => prompts.push(prompt)),
+      runTask: stubRunTask((_agent, prompt) => prompts.push(prompt)),
       onEvent: (event) => events.push(event),
     });
     try {

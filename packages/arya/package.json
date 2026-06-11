@@ -8,10 +8,7 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./bootstrap": "./src/bootstrap.ts",
-    "./protocol": "./src/protocol.ts",
-    "./ws": "./src/ws.ts",
-    "./companion-channel": "./src/companion-channel.ts"
+    "./bootstrap": "./src/bootstrap.ts"
   },
   "files": ["src", "bin", "README.md"],
   "dependencies": {
