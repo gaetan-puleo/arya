@@ -77,6 +77,12 @@ function isUIEmpty(m: WireMessage): boolean {
  *     stay unattributed rather than incorrectly inherit the currently-
  *     active agent.
  */
+// Strip ANSI SGR codes — server-side commands (e.g. /context) colour their output
+// for the terminal; in the RN UI those escape sequences would render as garbage.
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matching the ESC control char is the point
+const ANSI_RE = /\x1b\[[0-9;]*m/g;
+const stripAnsi = (s: string): string => s.replace(ANSI_RE, "");
+
 export function wireToChatRow(
 	m: WireMessage,
 	streamingAgentId: string | null,
@@ -92,7 +98,7 @@ export function wireToChatRow(
 		id: m.id,
 		// system → assistant coercion is local to the transcript view.
 		role: m.role === "system" ? "assistant" : (m.role as "user" | "assistant"),
-		text: m.content,
+		text: stripAnsi(m.content),
 		authorAgentId,
 		...(m.attachments && m.attachments.length > 0 ? { attachments: m.attachments } : {}),
 	};
