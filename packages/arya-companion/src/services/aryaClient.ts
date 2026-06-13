@@ -28,6 +28,7 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Alert } from "react-native";
 
 import { useStore } from "@/state/store";
 import { readWsConfig } from "@/services/wsConfig";
@@ -234,26 +235,41 @@ export function selectSession(sessionId: string | null): void {
  * row + placeholder so the user sees a clear failure rather than a
  * never-ending typing indicator.
  */
+// Stay safely under the host's WS frame cap (16MB) so a large attachment fails
+// loudly here instead of silently dropping + tearing down the socket.
+const MAX_CHAT_BYTES = 15 * 1024 * 1024;
+
 export function sendChat(
 	sessionId: string,
 	text: string,
 	attachments?: Attachment[],
 ): void {
 	const store = useStore.getState();
+	const hasAttachments = attachments != null && attachments.length > 0;
+	const payload = {
+		type: "chat" as const,
+		sessionId,
+		text,
+		...(hasAttachments ? { attachments } : {}),
+	};
+
+	if (JSON.stringify(payload).length > MAX_CHAT_BYTES) {
+		Alert.alert(
+			"Image too large",
+			"This attachment is too large to send. Try a smaller image.",
+		);
+		return;
+	}
+
 	const optimisticRow = {
 		id: nextOptimisticId("msg"),
 		role: "user" as const,
 		text,
-		...(attachments && attachments.length > 0 ? { attachments } : {}),
+		...(hasAttachments ? { attachments } : {}),
 	};
 	store.appendTranscriptRow(sessionId, optimisticRow);
 	store.setStreamingPlaceholder(sessionId, "");
-	const ok = send({
-		type: "chat",
-		sessionId,
-		text,
-		...(attachments && attachments.length > 0 ? { attachments } : {}),
-	});
+	const ok = send(payload);
 	if (!ok) {
 		// Rollback: drop the optimistic row + placeholder so the UI
 		// doesn't lie about a message that never went out.

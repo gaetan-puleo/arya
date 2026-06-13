@@ -255,6 +255,8 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
     authToken: config.authToken,
     activeAgentId: primaryName,
     capabilities: config.capabilities,
+    // Image attachments are base64 in the chat frame — well above the 1MB default.
+    maxPayloadBytes: 16 * 1024 * 1024,
     listModels: async (): Promise<WireModel[]> =>
       (await listLocalModels({ kind: config.kind, baseUrl: config.baseUrl, apiKey: config.apiKey }))
         .map((m) => ({ id: m.id, ownedBy: m.ownedBy })),

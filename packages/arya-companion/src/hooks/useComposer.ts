@@ -83,9 +83,12 @@ export function useComposer(): ComposerState {
 		void (async () => {
 			const has = await Clipboard.hasImageAsync().catch(() => false);
 			if (!has) return;
-			const img = await Clipboard.getImageAsync({ format: "png" }).catch(
-				() => null,
-			);
+			// JPEG at moderate quality keeps the base64 payload small — a raw PNG
+			// screenshot can blow past the WS frame limit and silently drop.
+			const img = await Clipboard.getImageAsync({
+				format: "jpeg",
+				jpegQuality: 0.7,
+			}).catch(() => null);
 			if (!img) return;
 			const parsed = parseDataUri(img.data);
 			if (!parsed) return;
