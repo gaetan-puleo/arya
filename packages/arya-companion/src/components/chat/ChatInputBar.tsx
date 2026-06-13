@@ -2,6 +2,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import { useCallback, useState } from "react";
 import {
+	Alert,
 	Image,
 	KeyboardAvoidingView,
 	Modal,
@@ -146,22 +147,28 @@ export default function ChatInputBar({
 						/>
 					)}
 					<View className="flex-row items-end gap-2">
-						{canAttachImage && (
-							<Pressable
-								onPress={() => {
+						<Pressable
+							onPress={() => {
+								if (canAttachImage) {
 									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 									onPasteImage();
-								}}
-								hitSlop={8}
-								className="w-11 h-11 justify-center items-center rounded-pill bg-bg-input border border-border"
-							>
-								<Ionicons
-									name="image-outline"
-									size={22}
-									color={theme.colors.textSecondary}
-								/>
-							</Pressable>
-						)}
+								} else {
+									Alert.alert(
+										"Images not available",
+										"The current model doesn't accept images, or its capabilities aren't loaded yet. Switch to a vision-capable model, or send a message first.",
+									);
+								}
+							}}
+							hitSlop={8}
+							className="w-11 h-11 justify-center items-center rounded-pill bg-bg-input border border-border"
+							style={{ opacity: canAttachImage ? 1 : 0.4 }}
+						>
+							<Ionicons
+								name="image-outline"
+								size={22}
+								color={theme.colors.textSecondary}
+							/>
+						</Pressable>
 						<View className="flex-1 bg-bg-input rounded-pill border border-border min-h-[44px] px-1.5 py-1.5 justify-center relative">
 							<View
 								className="relative overflow-hidden justify-center"

@@ -2,7 +2,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { useCallback, useState } from "react";
-import { Image, Pressable, Share, View } from "react-native";
+import { Image, Pressable, Share, Text, View } from "react-native";
 import Animated, { FadeInLeft, FadeInRight } from "react-native-reanimated";
 
 import type { AgentInfo, Attachment } from "@/types/domain";
@@ -19,20 +19,30 @@ interface ChatMessageProps {
 	attachments?: Attachment[];
 }
 
-/** Renders image attachments as inline thumbnails inside a bubble. */
+/** Renders image thumbnails + audio chips inline inside a bubble. */
 function BubbleAttachments({ attachments }: { attachments?: Attachment[] }) {
-	const images = (attachments ?? []).filter((a) => a.kind === "image");
-	if (images.length === 0) return null;
+	const items = attachments ?? [];
+	if (items.length === 0) return null;
 	return (
 		<View className="flex-row flex-wrap gap-1.5 mb-1.5">
-			{images.map((att, i) => (
-				<Image
-					key={`img-${i}`}
-					source={{ uri: `data:${att.mime};base64,${att.data}` }}
-					style={{ width: 160, height: 160, borderRadius: 12 }}
-					resizeMode="cover"
-				/>
-			))}
+			{items.map((att, i) =>
+				att.kind === "image" ? (
+					<Image
+						key={`att-${i}`}
+						source={{ uri: `data:${att.mime};base64,${att.data}` }}
+						style={{ width: 160, height: 160, borderRadius: 12 }}
+						resizeMode="cover"
+					/>
+				) : (
+					<View
+						key={`att-${i}`}
+						className="flex-row items-center gap-1.5 px-3 py-2 rounded-lg bg-bg-input border border-border"
+					>
+						<Ionicons name="musical-notes" size={18} color="#B4B4B4" />
+						<Text className="text-sm text-text-secondary">Audio</Text>
+					</View>
+				),
+			)}
 		</View>
 	);
 }
