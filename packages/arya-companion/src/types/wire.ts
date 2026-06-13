@@ -223,6 +223,7 @@ export type WsInboundMessage =
 			reason?: string;
 	  }
 	| { type: "capabilities"; vision: boolean; audio: boolean }
+	| { type: "model_loading"; model: string; loading: boolean }
 	| { type: "stream"; sessionId?: string; text: string }
 	| { type: "reasoning"; sessionId?: string; text: string }
 	| { type: "turn_start"; sessionId?: string }
@@ -261,6 +262,7 @@ const INBOUND_TYPES = new Set<WsInboundMessage["type"]>([
 	"stream",
 	"reasoning",
 	"capabilities",
+	"model_loading",
 	"turn_start",
 	"turn_end",
 	"message",

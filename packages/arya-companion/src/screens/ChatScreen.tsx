@@ -22,6 +22,7 @@ import type { SessionSummary } from "@/types/domain";
 import AgentChip from "@/components/chat/AgentChip";
 import ChatInputBar from "@/components/chat/ChatInputBar";
 import ChatMessageList from "@/components/chat/ChatMessageList";
+import ModelLoadingBanner from "@/components/chat/ModelLoadingBanner";
 import SessionsLayout from "@/components/layout/SessionsLayout";
 import SessionsDrawer from "@/components/sessions/SessionsDrawer";
 import SessionPopover, {
@@ -174,6 +175,8 @@ export default function ChatScreen() {
 					primaryAgents={agents.primaryAgents}
 					onSelect={agents.setActive}
 				/>
+
+				<ModelLoadingBanner />
 			</View>
 		</SessionsLayout>
 

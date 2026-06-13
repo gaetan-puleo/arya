@@ -33,6 +33,8 @@ export interface StoreState {
 	activeAgentId: string | null;
 	/** Modalities the server's model accepts. Gates the attach/paste affordances. */
 	capabilities: { vision: boolean; audio: boolean };
+	/** Name of the model currently cold-loading on the host, or null when idle. */
+	loadingModel: string | null;
 
 	// sessions
 	sessions: SessionSummary[];
@@ -55,6 +57,7 @@ export interface StoreActions {
 	) => void;
 	setActiveAgentId: (id: string | null) => void;
 	setCapabilities: (caps: { vision: boolean; audio: boolean }) => void;
+	setLoadingModel: (model: string | null) => void;
 
 	setSessions: (sessions: SessionSummary[]) => void;
 	setCurrentSessionId: (id: string | null) => void;
@@ -102,8 +105,10 @@ export const useStore = create<Store>((set) => ({
 	agents: [],
 	activeAgentId: null,
 	capabilities: { vision: false, audio: false },
+	loadingModel: null,
 	setCommands: (commands) => set({ commands }),
 	setCapabilities: (capabilities) => set({ capabilities }),
+	setLoadingModel: (loadingModel) => set({ loadingModel }),
 	setAgents: (agents, activeAgentId) =>
 		set((s) => ({
 			agents,

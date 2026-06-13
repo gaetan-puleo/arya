@@ -44,6 +44,10 @@ export function dispatch(msg: WsInboundMessage): void {
 			store.setCapabilities({ vision: msg.vision, audio: msg.audio });
 			return;
 
+		case "model_loading":
+			store.setLoadingModel(msg.loading ? msg.model : null);
+			return;
+
 		case "active_agent": {
 			// Server confirmed (or independently flipped) the active
 			// agent. If we had an optimistic change pending and the
