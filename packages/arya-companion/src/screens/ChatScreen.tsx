@@ -148,6 +148,10 @@ export default function ChatScreen() {
 						filteredAgents={composer.filteredAgents}
 						keyboardOpen={keyboardOpen}
 						keyboardHeight={keyboardHeight}
+						attachments={composer.attachments}
+						canAttachImage={composer.canAttachImage}
+						onPasteImage={composer.pasteImage}
+						onRemoveAttachment={composer.removeAttachment}
 					/>
 				</View>
 

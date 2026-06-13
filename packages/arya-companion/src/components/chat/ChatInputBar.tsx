@@ -2,6 +2,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import { useCallback, useState } from "react";
 import {
+	Image,
 	KeyboardAvoidingView,
 	Modal,
 	Platform,
@@ -18,7 +19,7 @@ import type {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import type { AgentInfo, CommandInfo } from "@/types/domain";
+import type { AgentInfo, Attachment, CommandInfo } from "@/types/domain";
 import { useTheme } from "@/theme/ThemeContext";
 
 interface ChatInputBarProps {
@@ -32,6 +33,10 @@ interface ChatInputBarProps {
 	filteredAgents: AgentInfo[];
 	keyboardOpen: boolean;
 	keyboardHeight: number;
+	attachments: Attachment[];
+	canAttachImage: boolean;
+	onPasteImage: () => void;
+	onRemoveAttachment: (index: number) => void;
 }
 
 const MIN_INPUT_HEIGHT = 28;
@@ -49,6 +54,10 @@ export default function ChatInputBar({
 	filteredAgents,
 	keyboardOpen,
 	keyboardHeight,
+	attachments,
+	canAttachImage,
+	onPasteImage,
+	onRemoveAttachment,
 }: ChatInputBarProps) {
 	const [inputExpanded, setInputExpanded] = useState(false);
 	const [textHeight, setTextHeight] = useState(MIN_INPUT_HEIGHT);
@@ -56,6 +65,7 @@ export default function ChatInputBar({
 	const theme = useTheme();
 
 	const hasText = input.trim().length > 0;
+	const canSend = hasText || attachments.length > 0;
 	const scrollEnabled = textHeight >= COLLAPSED_MAX_HEIGHT;
 	const showExpandButton =
 		textHeight >= EXPAND_BUTTON_THRESHOLD && !inputExpanded;
@@ -75,10 +85,10 @@ export default function ChatInputBar({
 	);
 
 	const send = useCallback(() => {
-		if (!hasText || loading) return;
+		if (!canSend || loading) return;
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 		onSend();
-	}, [hasText, loading, onSend]);
+	}, [canSend, loading, onSend]);
 
 	return (
 		<>
@@ -129,7 +139,29 @@ export default function ChatInputBar({
 						paddingBottom: keyboardOpen ? 16 : insets.bottom + 8,
 					}}
 				>
+					{attachments.length > 0 && (
+						<AttachmentStrip
+							attachments={attachments}
+							onRemove={onRemoveAttachment}
+						/>
+					)}
 					<View className="flex-row items-end gap-2">
+						{canAttachImage && (
+							<Pressable
+								onPress={() => {
+									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+									onPasteImage();
+								}}
+								hitSlop={8}
+								className="w-11 h-11 justify-center items-center rounded-pill bg-bg-input border border-border"
+							>
+								<Ionicons
+									name="image-outline"
+									size={22}
+									color={theme.colors.textSecondary}
+								/>
+							</Pressable>
+						)}
 						<View className="flex-1 bg-bg-input rounded-pill border border-border min-h-[44px] px-1.5 py-1.5 justify-center relative">
 							<View
 								className="relative overflow-hidden justify-center"
@@ -169,7 +201,7 @@ export default function ChatInputBar({
 							</View>
 
 							<SendButton
-								hasText={hasText}
+								hasText={canSend}
 								loading={loading}
 								onSend={send}
 							/>
@@ -225,7 +257,7 @@ export default function ChatInputBar({
 						</Pressable>
 
 						<SendButton
-							hasText={hasText}
+							hasText={canSend}
 							loading={loading}
 							onSend={send}
 							fullScreen
@@ -236,6 +268,45 @@ export default function ChatInputBar({
 				</KeyboardAvoidingView>
 			</Modal>
 		</>
+	);
+}
+
+function AttachmentStrip({
+	attachments,
+	onRemove,
+}: {
+	attachments: Attachment[];
+	onRemove: (index: number) => void;
+}) {
+	return (
+		<ScrollView
+			horizontal
+			showsHorizontalScrollIndicator={false}
+			className="mb-2"
+			contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}
+		>
+			{attachments.map((att, i) => (
+				<View key={`${att.kind}-${i}`} className="relative">
+					{att.kind === "image" ? (
+						<Image
+							source={{ uri: `data:${att.mime};base64,${att.data}` }}
+							style={{ width: 56, height: 56, borderRadius: 8 }}
+						/>
+					) : (
+						<View className="w-14 h-14 rounded-lg bg-bg-input border border-border justify-center items-center">
+							<Ionicons name="musical-notes" size={22} color="#8E8E8E" />
+						</View>
+					)}
+					<Pressable
+						onPress={() => onRemove(i)}
+						hitSlop={6}
+						className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-black/70 justify-center items-center"
+					>
+						<Ionicons name="close" size={14} color="#fff" />
+					</Pressable>
+				</View>
+			))}
+		</ScrollView>
 	);
 }
 

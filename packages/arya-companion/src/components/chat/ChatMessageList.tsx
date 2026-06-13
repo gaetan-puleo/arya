@@ -250,6 +250,7 @@ export default function ChatMessageList({
 								isLastInGroup
 								animate={msg.role === "user"}
 								authorAgent={resolveAuthorAgent(msg)}
+								attachments={msg.attachments}
 							/>
 						</View>
 					);

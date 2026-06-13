@@ -62,7 +62,7 @@ export function isVisibleWireMessage(m: WireMessage): boolean {
  * content offers nothing to render — drop it.
  */
 function isUIEmpty(m: WireMessage): boolean {
-	return m.content.trim().length === 0;
+	return m.content.trim().length === 0 && !(m.attachments && m.attachments.length > 0);
 }
 
 /**
@@ -94,6 +94,7 @@ export function wireToChatRow(
 		role: m.role === "system" ? "assistant" : (m.role as "user" | "assistant"),
 		text: m.content,
 		authorAgentId,
+		...(m.attachments && m.attachments.length > 0 ? { attachments: m.attachments } : {}),
 	};
 }
 

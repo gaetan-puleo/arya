@@ -2,10 +2,10 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { useCallback, useState } from "react";
-import { Pressable, Share, View } from "react-native";
+import { Image, Pressable, Share, View } from "react-native";
 import Animated, { FadeInLeft, FadeInRight } from "react-native-reanimated";
 
-import type { AgentInfo } from "@/types/domain";
+import type { AgentInfo, Attachment } from "@/types/domain";
 import { useTheme } from "@/theme/ThemeContext";
 import MessageMarkdown from "@/components/markdown/MessageMarkdown";
 
@@ -16,6 +16,25 @@ interface ChatMessageProps {
 	isLastInGroup?: boolean;
 	animate?: boolean;
 	authorAgent?: AgentInfo | null;
+	attachments?: Attachment[];
+}
+
+/** Renders image attachments as inline thumbnails inside a bubble. */
+function BubbleAttachments({ attachments }: { attachments?: Attachment[] }) {
+	const images = (attachments ?? []).filter((a) => a.kind === "image");
+	if (images.length === 0) return null;
+	return (
+		<View className="flex-row flex-wrap gap-1.5 mb-1.5">
+			{images.map((att, i) => (
+				<Image
+					key={`img-${i}`}
+					source={{ uri: `data:${att.mime};base64,${att.data}` }}
+					style={{ width: 160, height: 160, borderRadius: 12 }}
+					resizeMode="cover"
+				/>
+			))}
+		</View>
+	);
 }
 
 /**
@@ -28,8 +47,10 @@ export default function ChatMessage({
 	isFirstInGroup = true,
 	isLastInGroup = true,
 	animate = true,
+	attachments,
 }: ChatMessageProps) {
 	const isUser = role === "user";
+	const hasAttachments = attachments != null && attachments.length > 0;
 	const theme = useTheme();
 	const [copied, setCopied] = useState(false);
 
@@ -68,7 +89,12 @@ export default function ChatMessage({
 								borderTopRightRadius: isFirstInGroup ? 20 : 16,
 							}}
 						>
-							<MessageMarkdown text={text} color={theme.colors.text} />
+							{hasAttachments && (
+								<BubbleAttachments attachments={attachments} />
+							)}
+							{text.trim().length > 0 && (
+								<MessageMarkdown text={text} color={theme.colors.text} />
+							)}
 						</View>
 					</Pressable>
 				</View>
@@ -82,6 +108,9 @@ export default function ChatMessage({
 				<View className="w-full">
 					<Pressable onLongPress={handleCopy}>
 						<View className={copied ? "opacity-60" : ""}>
+							{hasAttachments && (
+								<BubbleAttachments attachments={attachments} />
+							)}
 							<MessageMarkdown text={text} color={theme.colors.text} />
 						</View>
 					</Pressable>

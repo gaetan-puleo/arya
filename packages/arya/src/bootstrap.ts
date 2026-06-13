@@ -51,6 +51,8 @@ export interface BootstrapConfig {
   primaryAgent?: string;
   agentsDir?: string;
   tasksDir?: string;
+  /** Modalities the configured model accepts. Image/audio attachments are dropped when off. */
+  capabilities?: { vision?: boolean; audio?: boolean };
 }
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
@@ -112,6 +114,10 @@ function validateConfig(obj: Record<string, unknown>, configPath: string | undef
   const primaryAgent = typeof obj.primaryAgent === 'string' ? obj.primaryAgent : undefined;
   const agentsDir = typeof obj.agentsDir === 'string' ? obj.agentsDir : join(cwd, 'definitions', 'agents');
   const tasksDir = typeof obj.tasksDir === 'string' ? obj.tasksDir : join(cwd, 'definitions', 'tasks');
+  const capsObj = typeof obj.capabilities === 'object' && obj.capabilities !== null
+    ? obj.capabilities as Record<string, unknown>
+    : {};
+  const capabilities = { vision: capsObj.vision === true, audio: capsObj.audio === true };
 
   if (!authToken) {
     if (!isLoopback(wsHost)) {
@@ -136,6 +142,7 @@ function validateConfig(obj: Record<string, unknown>, configPath: string | undef
     primaryAgent,
     agentsDir,
     tasksDir,
+    capabilities,
   };
 }
 
@@ -181,6 +188,9 @@ export async function buildHarness(cwd: string, config: BootstrapConfig) {
   const primary = allAgents.find((a) => a.name === primaryName) ?? allAgents[0];
 
   let harnessRef: Harness | undefined;
+  // Filled in by bootstrap once the WS adapter exists; the provider fires onModelInfo
+  // lazily on the first model load, which routes detected modalities into the adapter.
+  const capsSink: { apply?: (caps: { vision: boolean; audio: boolean }) => void } = {};
   const harness = await createHarness({
     hostName: 'arya',
     xdg,
@@ -191,6 +201,11 @@ export async function buildHarness(cwd: string, config: BootstrapConfig) {
         baseUrl: config.baseUrl,
         model: config.model,
         apiKey: config.apiKey,
+        // llama.cpp reports input modalities in /props (read for free alongside the context
+        // window). When present, they OVERRIDE the manual `capabilities` config flag.
+        onModelInfo: ({ modalities }) => {
+          if (modalities) capsSink.apply?.({ vision: modalities.vision, audio: modalities.audio });
+        },
       }),
     },
     model: `local/${config.model}`,
@@ -221,12 +236,12 @@ export async function buildHarness(cwd: string, config: BootstrapConfig) {
   // boot-time resolution if it ever vanishes.
   const getPrimary = () => harness.agents.get(primaryName) ?? primary;
 
-  return { harness, approvals, primary, getPrimary, primaryName, tools, plugins };
+  return { harness, approvals, primary, getPrimary, primaryName, tools, plugins, capsSink };
 }
 
 export async function bootstrap(cwd: string = process.cwd(), configPath?: string): Promise<BootstrapHandle> {
   const config = loadConfig(cwd, configPath);
-  const { harness, approvals, primaryName } = await buildHarness(cwd, config);
+  const { harness, approvals, primaryName, capsSink } = await buildHarness(cwd, config);
 
   harness.commands.register(createSessionsCommand(harness.sessions), { override: true });
 
@@ -239,11 +254,19 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
     host: config.wsHost,
     authToken: config.authToken,
     activeAgentId: primaryName,
+    capabilities: config.capabilities,
     listModels: async (): Promise<WireModel[]> =>
       (await listLocalModels({ kind: config.kind, baseUrl: config.baseUrl, apiKey: config.apiKey }))
         .map((m) => ({ id: m.id, ownedBy: m.ownedBy })),
     log: (msg) => log.info(`ws: ${msg}`),
   });
+
+  // Now that the adapter exists, route detected modalities into it. Until the first model
+  // load fires this, clients see the manual `capabilities` config flag the adapter started with.
+  capsSink.apply = (caps) => {
+    log.info(`model capabilities detected — vision:${caps.vision} audio:${caps.audio}`);
+    adapter.setCapabilities(caps);
+  };
 
   const channels = await runChannels({ harness, approvals, adapters: [adapter] });
   log.info(`Listening on ${config.wsHost}:${config.wsPort} — accepting connections`);

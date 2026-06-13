@@ -31,6 +31,8 @@ export interface StoreState {
 	commands: CommandInfo[];
 	agents: AgentInfo[];
 	activeAgentId: string | null;
+	/** Modalities the server's model accepts. Gates the attach/paste affordances. */
+	capabilities: { vision: boolean; audio: boolean };
 
 	// sessions
 	sessions: SessionSummary[];
@@ -52,6 +54,7 @@ export interface StoreActions {
 		activeAgentId: string | null | undefined,
 	) => void;
 	setActiveAgentId: (id: string | null) => void;
+	setCapabilities: (caps: { vision: boolean; audio: boolean }) => void;
 
 	setSessions: (sessions: SessionSummary[]) => void;
 	setCurrentSessionId: (id: string | null) => void;
@@ -98,7 +101,9 @@ export const useStore = create<Store>((set) => ({
 	commands: [],
 	agents: [],
 	activeAgentId: null,
+	capabilities: { vision: false, audio: false },
 	setCommands: (commands) => set({ commands }),
+	setCapabilities: (capabilities) => set({ capabilities }),
 	setAgents: (agents, activeAgentId) =>
 		set((s) => ({
 			agents,

@@ -19,6 +19,28 @@ missing (see `bootstrap.ts:loadConfig`).
 | `streamTimeoutMs` | Inactivity timeout for streaming | `60000` |
 | `wsPort` | Companion WebSocket port | `3001` |
 | `authToken` | Token required by companion (empty = none) | _(none)_ |
+| `capabilities.vision` | Model accepts image input (enables paste-an-image) | `false` |
+| `capabilities.audio` | Model accepts audio input | `false` |
+
+## Multimodal (image + audio)
+
+Image/audio attachments (paste-an-image in the TUI/companion) are **off by
+default** and only work when the configured model actually accepts them. Opt in
+explicitly — arya advertises the capability to clients, which gate their attach
+affordances and drop unsupported attachments with a clear message:
+
+```json
+{
+  "baseUrl": "http://<vision-model-host>:8080/v1",
+  "model": "<a-vision-capable-model>",
+  "capabilities": { "vision": true }
+}
+```
+
+In the **companion** app, an image button appears next to the composer when
+`vision` is on — it pastes the current clipboard image. In the **TUI**, Ctrl+V
+(or pasting an image-file path) attaches it; Linux needs `wl-clipboard`
+(Wayland) or `xclip` (X11) installed to read clipboard images.
 
 ## llama-swap setup
 

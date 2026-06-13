@@ -43,6 +43,7 @@ import {
 import { nextOptimisticId, removeTranscriptRow } from "@/services/optimistic";
 import { markActiveAgentPending } from "@/services/activeAgent";
 import { isWsInboundMessage } from "@/types/wire";
+import type { Attachment } from "@/types/domain";
 
 // Re-exports — keep the surface used by hooks/components unchanged.
 export { send } from "@/services/outbound";
@@ -233,16 +234,26 @@ export function selectSession(sessionId: string | null): void {
  * row + placeholder so the user sees a clear failure rather than a
  * never-ending typing indicator.
  */
-export function sendChat(sessionId: string, text: string): void {
+export function sendChat(
+	sessionId: string,
+	text: string,
+	attachments?: Attachment[],
+): void {
 	const store = useStore.getState();
 	const optimisticRow = {
 		id: nextOptimisticId("msg"),
 		role: "user" as const,
 		text,
+		...(attachments && attachments.length > 0 ? { attachments } : {}),
 	};
 	store.appendTranscriptRow(sessionId, optimisticRow);
 	store.setStreamingPlaceholder(sessionId, "");
-	const ok = send({ type: "chat", sessionId, text });
+	const ok = send({
+		type: "chat",
+		sessionId,
+		text,
+		...(attachments && attachments.length > 0 ? { attachments } : {}),
+	});
 	if (!ok) {
 		// Rollback: drop the optimistic row + placeholder so the UI
 		// doesn't lie about a message that never went out.

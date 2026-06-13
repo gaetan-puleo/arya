@@ -8,6 +8,13 @@
 
 export type WireRole = "user" | "assistant" | "system" | "tool";
 
+/** A non-text content part (image/audio) carried over the wire as base64. Mirrors mu-harness's WireAttachment. */
+export interface WireAttachment {
+	kind: "image" | "audio";
+	mime: string;
+	data: string;
+}
+
 export interface WireToolCall {
 	id: string;
 	function: { name: string; arguments: string };
@@ -40,6 +47,7 @@ export interface WireMessage {
 	toolCalls?: WireToolCall[];
 	toolCallId?: string;
 	toolResult?: WireToolResultInfo;
+	attachments?: WireAttachment[];
 	meta?: WireMessageMeta;
 }
 
@@ -214,6 +222,7 @@ export type WsInboundMessage =
 			from?: string | null;
 			reason?: string;
 	  }
+	| { type: "capabilities"; vision: boolean; audio: boolean }
 	| { type: "stream"; sessionId?: string; text: string }
 	| { type: "reasoning"; sessionId?: string; text: string }
 	| { type: "turn_start"; sessionId?: string }
@@ -251,6 +260,7 @@ const INBOUND_TYPES = new Set<WsInboundMessage["type"]>([
 	"active_agent",
 	"stream",
 	"reasoning",
+	"capabilities",
 	"turn_start",
 	"turn_end",
 	"message",
@@ -282,7 +292,7 @@ export function isWsInboundMessage(value: unknown): value is WsInboundMessage {
 export type WsOutboundMessage =
 	| { type: "commands" }
 	| { type: "agents" }
-	| { type: "chat"; sessionId: string; text: string }
+	| { type: "chat"; sessionId: string; text: string; attachments?: WireAttachment[] }
 	| { type: "command"; sessionId: string; text: string }
 	| {
 			type: "set_active_agent";

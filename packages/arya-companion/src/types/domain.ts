@@ -33,11 +33,19 @@ export interface SessionSummary {
  * the main transcript — tool calls surface inside approval / sub-agent
  * cards via the dedicated snapshot types.
  */
+/** Image/audio attached to a message, base64-encoded. Mirrors the wire `WireAttachment`. */
+export interface Attachment {
+	kind: "image" | "audio";
+	mime: string;
+	data: string;
+}
+
 export interface ChatMessageItem {
 	id: string;
 	role: "user" | "assistant";
 	text: string;
 	authorAgentId?: string;
+	attachments?: Attachment[];
 }
 
 /**

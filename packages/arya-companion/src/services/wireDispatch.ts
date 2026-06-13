@@ -40,6 +40,10 @@ export function dispatch(msg: WsInboundMessage): void {
 			);
 			return;
 
+		case "capabilities":
+			store.setCapabilities({ vision: msg.vision, audio: msg.audio });
+			return;
+
 		case "active_agent": {
 			// Server confirmed (or independently flipped) the active
 			// agent. If we had an optimistic change pending and the

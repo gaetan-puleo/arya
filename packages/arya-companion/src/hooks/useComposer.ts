@@ -7,9 +7,10 @@
 
 import { useCallback, useState } from "react";
 import * as Haptics from "expo-haptics";
+import * as Clipboard from "expo-clipboard";
 import * as arya from "@/services/aryaClient";
 import { useStore } from "@/state/store";
-import type { AgentInfo, CommandInfo } from "@/types/domain";
+import type { AgentInfo, Attachment, CommandInfo } from "@/types/domain";
 
 interface ComposerState {
 	input: string;
@@ -23,6 +24,20 @@ interface ComposerState {
 	agents: AgentInfo[];
 	showAgentMenu: boolean;
 	filteredAgents: AgentInfo[];
+	/** Pending image/audio attachments to send with the next message. */
+	attachments: Attachment[];
+	/** True when the server's model accepts images (gates the paste-image button). */
+	canAttachImage: boolean;
+	/** Paste an image from the clipboard into the pending attachments. */
+	pasteImage: () => void;
+	removeAttachment: (index: number) => void;
+}
+
+/** Split a `data:<mime>;base64,<payload>` URI into its mime + raw base64 payload. */
+function parseDataUri(uri: string): { mime: string; data: string } | null {
+	const match = /^data:([^;]+);base64,(.*)$/s.exec(uri);
+	if (!match) return null;
+	return { mime: match[1], data: match[2] };
 }
 
 function newSessionId(): string {
@@ -31,10 +46,12 @@ function newSessionId(): string {
 
 export function useComposer(): ComposerState {
 	const [input, setInput] = useState("");
+	const [attachments, setAttachments] = useState<Attachment[]>([]);
 
 	const connected = useStore((s) => s.connected);
 	const commands = useStore((s) => s.commands);
 	const agents = useStore((s) => s.agents);
+	const canAttachImage = useStore((s) => s.capabilities.vision);
 	const currentSessionId = useStore((s) => s.currentSessionId);
 	const loading = useStore((s) =>
 		currentSessionId
@@ -61,9 +78,34 @@ export function useComposer(): ComposerState {
 	// Re-enable once the server emits sub-agent entries on the `agents` wire.
 	const filteredAgents: AgentInfo[] = [];
 
+	const pasteImage = useCallback(() => {
+		if (!canAttachImage) return;
+		void (async () => {
+			const has = await Clipboard.hasImageAsync().catch(() => false);
+			if (!has) return;
+			const img = await Clipboard.getImageAsync({ format: "png" }).catch(
+				() => null,
+			);
+			if (!img) return;
+			const parsed = parseDataUri(img.data);
+			if (!parsed) return;
+			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+			setAttachments((prev) => [
+				...prev,
+				{ kind: "image", mime: parsed.mime, data: parsed.data },
+			]);
+		})();
+	}, [canAttachImage]);
+
+	const removeAttachment = useCallback((index: number) => {
+		setAttachments((prev) => prev.filter((_, i) => i !== index));
+	}, []);
+
 	const send = useCallback(() => {
 		const txt = input.trim();
-		if (!txt || loading || !connected) return;
+		const atts = attachments;
+		// Allow attachment-only messages (no text) as long as something is present.
+		if ((!txt && atts.length === 0) || loading || !connected) return;
 
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -75,9 +117,10 @@ export function useComposer(): ComposerState {
 		}
 
 		setInput("");
+		setAttachments([]);
 		if (txt.startsWith("/")) arya.sendCommand(sid, txt);
-		else arya.sendChat(sid, txt);
-	}, [input, loading, connected]);
+		else arya.sendChat(sid, txt, atts.length > 0 ? atts : undefined);
+	}, [input, attachments, loading, connected]);
 
 	return {
 		input,
@@ -91,5 +134,9 @@ export function useComposer(): ComposerState {
 		agents,
 		showAgentMenu,
 		filteredAgents,
+		attachments,
+		canAttachImage,
+		pasteImage,
+		removeAttachment,
 	};
 }
