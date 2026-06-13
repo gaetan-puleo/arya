@@ -191,6 +191,7 @@ export async function buildHarness(cwd: string, config: BootstrapConfig) {
   // Filled in by bootstrap once the WS adapter exists; the provider fires onModelInfo
   // lazily on the first model load, which routes detected modalities into the adapter.
   const capsSink: { apply?: (caps: { vision: boolean; audio: boolean }) => void } = {};
+  const modelLoadingSink: { apply?: (model: string, loading: boolean) => void } = {};
   const harness = await createHarness({
     hostName: 'arya',
     xdg,
@@ -206,6 +207,8 @@ export async function buildHarness(cwd: string, config: BootstrapConfig) {
         onModelInfo: ({ modalities }) => {
           if (modalities) capsSink.apply?.({ vision: modalities.vision, audio: modalities.audio });
         },
+        // Cold-start on the first message → surface a loader to all channels.
+        onModelLoading: (model, loading) => modelLoadingSink.apply?.(model, loading),
       }),
     },
     model: `local/${config.model}`,
@@ -236,12 +239,12 @@ export async function buildHarness(cwd: string, config: BootstrapConfig) {
   // boot-time resolution if it ever vanishes.
   const getPrimary = () => harness.agents.get(primaryName) ?? primary;
 
-  return { harness, approvals, primary, getPrimary, primaryName, tools, plugins, capsSink };
+  return { harness, approvals, primary, getPrimary, primaryName, tools, plugins, capsSink, modelLoadingSink };
 }
 
 export async function bootstrap(cwd: string = process.cwd(), configPath?: string): Promise<BootstrapHandle> {
   const config = loadConfig(cwd, configPath);
-  const { harness, approvals, primaryName, capsSink } = await buildHarness(cwd, config);
+  const { harness, approvals, primaryName, capsSink, modelLoadingSink } = await buildHarness(cwd, config);
 
   harness.commands.register(createSessionsCommand(harness.sessions), { override: true });
 
@@ -269,6 +272,7 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
     log.info(`model capabilities detected — vision:${caps.vision} audio:${caps.audio}`);
     adapter.setCapabilities(caps);
   };
+  modelLoadingSink.apply = (model, loading) => adapter.push({ type: 'model_loading', model: `local/${model}`, loading });
 
   const channels = await runChannels({ harness, approvals, adapters: [adapter] });
   log.info(`Listening on ${config.wsHost}:${config.wsPort} — accepting connections`);
