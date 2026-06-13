@@ -7,7 +7,7 @@
  */
 
 import * as Haptics from "expo-haptics";
-import { Stack, useRouter } from "expo-router";
+import { type Href, Stack, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
 	Alert,
@@ -146,6 +146,18 @@ export default function SettingsScreen() {
 							{connected ? "Configured" : "Not configured"}
 						</Text>
 					</View>
+
+					<Pressable
+						onPress={() => router.push("/scan" as Href)}
+						className="h-12 rounded-pill items-center justify-center bg-primary active:opacity-80 mb-3"
+					>
+						<Text className="text-[15px] font-bold text-text-inverse">
+							Scan QR code
+						</Text>
+					</Pressable>
+					<Text className="text-[13px] text-text-secondary mb-7 text-center">
+						or enter the connection manually
+					</Text>
 
 					<FormGroup
 						label="Server URL"

@@ -1,0 +1,10 @@
+{
+  "//": "Expo/Metro + its deps run under NODE (npm/npx), not `deno run npm:@expo/cli`. Deno's --node-modules-dir builds a parallel `.deno` store that duplicates React and breaks NativeWind's cssInterop (className styles silently stop applying); =none can't resolve metro.config deps. node uses the single npm node_modules directly. The deno-launched arya runtime is unaffected. See memory: companion-nativewind-duplicate-react.",
+  "tasks": {
+    "install": "npm install",
+    "check": "npx tsc --noEmit",
+    "start": "npx expo start",
+    "android": "deno run -A scripts/expo.ts run:android",
+    "ios": "deno run -A scripts/expo.ts run:ios"
+  }
+}

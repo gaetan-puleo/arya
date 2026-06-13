@@ -15,7 +15,7 @@ export interface RunTuiOptions {
   connect?: string;
 }
 
-function isPortOpen(host: string, port: number, timeoutMs = 600): Promise<boolean> {
+export function isPortOpen(host: string, port: number, timeoutMs = 600): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = createConnection({ host, port });
     const done = (open: boolean) => {

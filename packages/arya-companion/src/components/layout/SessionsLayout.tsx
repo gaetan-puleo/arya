@@ -184,19 +184,31 @@ export default function SessionsLayout({
 
 	return (
 		<View className="flex-1 bg-bg">
+			{/* These two layers are styled inline rather than with `className`:
+			    NativeWind's cssInterop merges className→style during render, and on a
+			    reanimated Animated.View that trips a render-phase setState. Plain Views
+			    elsewhere use className normally. (The app-wide className breakage was a
+			    duplicate React from mixed bun/deno node_modules — deduped in
+			    metro.config.js.) */}
 			<Animated.View
 				{...closePanResponder.panHandlers}
-				className="flex-1"
-				style={panelStyle}
+				style={[{ flex: 1 }, panelStyle]}
 			>
 				{panel}
 			</Animated.View>
 
+			{/* Chat overlay (front): absolute full-bleed (NativeWind's `absolute
+			    inset-0`), slides right (chatStyle) to reveal the panel underneath. */}
 			<Animated.View
 				{...openPanResponder.panHandlers}
-				className="absolute inset-0 bg-bg"
 				style={[
 					{
+						position: "absolute",
+						top: 0,
+						left: 0,
+						right: 0,
+						bottom: 0,
+						backgroundColor: theme.colors.background,
 						shadowColor: "#000",
 						shadowOffset: { width: -4, height: 0 },
 						shadowOpacity: 0.18,

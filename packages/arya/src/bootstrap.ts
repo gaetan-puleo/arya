@@ -102,7 +102,7 @@ function validateConfig(obj: Record<string, unknown>, configPath: string | undef
   if (missing.length > 0) {
     throw new Error(
       `[arya] Missing required config field(s): ${missing.join(', ')}.\n` +
-        `       Edit ${configPath ?? '~/.config/arya/config.json'}.`,
+        `       Run \`arya init\` to set them up interactively, or edit ${configPath ?? '~/.config/arya/config.json'}.`,
     );
   }
 

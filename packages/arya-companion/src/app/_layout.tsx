@@ -5,6 +5,7 @@ import * as NavigationBar from "expo-navigation-bar";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
+import * as SystemUI from "expo-system-ui";
 import { useEffect } from "react";
 import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -51,13 +52,15 @@ export default function RootLayout() {
 function StackNavigator() {
 	const insets = useSafeAreaInsets();
 
-	// Android edge-to-edge mode: the navigation bar is transparent and
-	// the app's root view bg shows through (see `enforceContrast: false`
-	// in app.json's expo-navigation-bar plugin config). We only set the
-	// button (icon) style so glyphs read well on the dark background.
+	// Android edge-to-edge: the nav bar is transparent and shows the window
+	// background behind it (expo-navigation-bar's setBackgroundColorAsync is a
+	// no-op under edge-to-edge). Paint that window bg black via expo-system-ui so
+	// the bar reads black instead of the light splash default, and use light
+	// buttons so the glyphs stay visible.
 	useEffect(() => {
 		if (Platform.OS !== "android") return;
-		NavigationBar.setStyle("light");
+		SystemUI.setBackgroundColorAsync("#000000").catch(() => {});
+		NavigationBar.setButtonStyleAsync("light").catch(() => {});
 	}, []);
 
 	return (
@@ -66,7 +69,7 @@ function StackNavigator() {
 			<Stack screenOptions={{ headerShown: false }}>
 				<Stack.Screen
 					name="index"
-					options={{ contentStyle: { paddingTop: insets.top } }}
+					options={{ contentStyle: { flex: 1, paddingTop: insets.top } }}
 				/>
 				<Stack.Screen name="settings" />
 				<Stack.Screen name="sub-agent/[runId]" />
