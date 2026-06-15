@@ -22,6 +22,7 @@ import { aryaDirs, resolveXdg } from './xdg';
 import { BUILTIN_AGENTS } from './default-agents';
 import { BUILTIN_SKILLS } from './default-skills';
 import { createScheduler, type Scheduler } from './scheduler';
+import { withVoiceRouting } from './voice-routing';
 import { startDefinitionWatcher } from './watch';
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
@@ -53,6 +54,11 @@ export interface BootstrapConfig {
   tasksDir?: string;
   /** Modalities the configured model accepts. Image/audio attachments are dropped when off. */
   capabilities?: { vision?: boolean; audio?: boolean };
+  /** Speech-to-text model for `/voice`; falls back to the selected model when unset. */
+  voiceModel?: string;
+  /** Extra `chat_template_kwargs` for the MAIN model's requests (not the voice model).
+   * E.g. `{ "enable_thinking": false }` to turn off Qwen3 reasoning in chat. */
+  chatTemplateKwargs?: Record<string, unknown>;
 }
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
@@ -143,6 +149,10 @@ function validateConfig(obj: Record<string, unknown>, configPath: string | undef
     agentsDir,
     tasksDir,
     capabilities,
+    voiceModel: typeof obj.voiceModel === 'string' && obj.voiceModel ? obj.voiceModel : undefined,
+    chatTemplateKwargs: typeof obj.chatTemplateKwargs === 'object' && obj.chatTemplateKwargs !== null
+      ? obj.chatTemplateKwargs as Record<string, unknown>
+      : undefined,
   };
 }
 
@@ -197,23 +207,32 @@ export async function buildHarness(cwd: string, config: BootstrapConfig) {
     xdg,
     cwd,
     providers: {
-      local: createLocalProvider({
-        kind: config.kind,
-        baseUrl: config.baseUrl,
-        model: config.model,
-        apiKey: config.apiKey,
-        // llama.cpp reports input modalities in /props (read for free alongside the context
-        // window). When present, they OVERRIDE the manual `capabilities` config flag.
-        onModelInfo: ({ modalities }) => {
-          if (modalities) capsSink.apply?.({ vision: modalities.vision, audio: modalities.audio });
-        },
-        // Cold-start on the first message → surface a loader to all channels.
-        onModelLoading: (model, loading) => modelLoadingSink.apply?.(model, loading),
-      }),
+      // Route by input modality on the same chat path: an audio attachment is
+      // transcribed by the voice model, then answered by the main model (no
+      // separate transcription port). See voice-routing.ts.
+      local: withVoiceRouting(
+        createLocalProvider({
+          kind: config.kind,
+          baseUrl: config.baseUrl,
+          model: config.model,
+          apiKey: config.apiKey,
+          // llama.cpp reports input modalities in /props (read for free alongside the context
+          // window). When present, they OVERRIDE the manual `capabilities` config flag.
+          onModelInfo: ({ modalities }) => {
+            if (modalities) capsSink.apply?.({ vision: modalities.vision, audio: modalities.audio });
+          },
+          // Cold-start on the first message → surface a loader to all channels.
+          onModelLoading: (model, loading) => modelLoadingSink.apply?.(model, loading),
+          // Extra chat-template kwargs (main model only) — e.g. disable Qwen3 reasoning.
+          chatTemplateKwargs: config.chatTemplateKwargs,
+        }),
+        { voiceModel: config.voiceModel, log: (msg) => log.info(msg) },
+      ),
     },
     model: `local/${config.model}`,
     tools,
     plugins,
+    voice: { model: config.voiceModel },
     approvals: {
       manager: approvals,
       // Read the live registry so a hot-reloaded primary's grants take effect.
@@ -272,10 +291,33 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
     log.info(`model capabilities detected — vision:${caps.vision} audio:${caps.audio}`);
     adapter.setCapabilities(caps);
   };
-  modelLoadingSink.apply = (model, loading) => adapter.push({ type: 'model_loading', model: `local/${model}`, loading });
+  modelLoadingSink.apply = (model, loading) =>
+    adapter.push({ type: 'model_loading', model: `local/${model}`, loading });
 
   const channels = await runChannels({ harness, approvals, adapters: [adapter] });
   log.info(`Listening on ${config.wsHost}:${config.wsPort} — accepting connections`);
+
+  // Voice (companion call mode) now rides the chat WS: the companion sends the
+  // recorded audio as an attachment and the provider wrapper (withVoiceRouting)
+  // transcribes it with the voice model then answers with the main model — no
+  // separate transcription port.
+
+  // Eagerly detect the configured model's input modalities (vision/audio) so the
+  // server advertises real capabilities from the start — no manual `capabilities`
+  // config flag needed. Without this, caps only refine on the first model load
+  // (after that turn's attachments were already filtered), so the first image/
+  // audio turn would be dropped. Probing /props loads the model (a llama-swap
+  // cold start), so run it in the background and broadcast once it resolves;
+  // mirrors mu's coding-agent. setCapabilities is idempotent with the later
+  // onModelInfo path.
+  void harness.models.capabilities()
+    .then((modalities) => {
+      if (modalities) {
+        log.info(`detected model capabilities — vision:${modalities.vision} audio:${modalities.audio}`);
+        adapter.setCapabilities({ vision: modalities.vision, audio: modalities.audio });
+      }
+    })
+    .catch((err) => log.warn(`capability probe failed: ${err instanceof Error ? err.message : String(err)}`));
 
   let scheduler: Scheduler | undefined;
   if (config.tasksDir) {

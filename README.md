@@ -96,6 +96,16 @@ stores a plugin under `~/.config/arya/plugins/`; installed plugins load
 automatically at startup. Skills the agent authors are written to
 `~/.config/arya/skills/`.
 
+## Voice
+
+Set `voiceModel` to an audio-capable model to enable voice input. In the TUI, `/voice`
+records a clip and transcribes it into the composer and `/call` is hands-free realtime
+dictation. The companion's call button records audio and sends it on the chat stream —
+arya routes the audio turn to `voiceModel` for transcription, then answers with the main
+model (both stay resident in llama-swap, so there's no model-swap cost). Recording needs a
+microphone recorder on the host (ffmpeg / arecord / parecord); if `voiceModel` is unset,
+voice falls back to the selected model when it accepts audio. See `CONFIG.md`.
+
 ## Scheduled tasks
 
 A `croner`-backed scheduler reads YAML from `<repo>/definitions/tasks/` (or a

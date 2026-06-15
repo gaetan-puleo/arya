@@ -61,7 +61,10 @@ export function startSetupServer(opts: SetupServerOptions): Promise<SetupServerH
       const token = typeof config.authToken === 'string' && config.authToken ? config.authToken : '';
       const tokenNote = token ? `\n\nAccess token: ${token}\n(Companion: paste this into Settings → Token.)` : '';
       for (const client of wss.clients) {
-        send(client as WebSocket, assistant(`Setup complete — configuration saved.${tokenNote}\n\nRelaunch to start arya:  arya serve`));
+        send(
+          client as WebSocket,
+          assistant(`Setup complete — configuration saved.${tokenNote}\n\nRelaunch to start arya:  arya serve`),
+        );
       }
       resolveDone({ configPath: opts.configPath, config });
     };
@@ -108,6 +111,16 @@ export function startSetupServer(opts: SetupServerOptions): Promise<SetupServerH
         case 'abort':
           send(ws, { type: 'turn_end', sessionId: msg.sessionId ?? SESSION, reason: 'aborted' });
           return;
+        case 'voice:check':
+          send(ws, {
+            type: 'voice:availability',
+            requestId: msg.requestId,
+            reason: 'voice is unavailable during setup',
+          });
+          return;
+        case 'voice:transcribe':
+          send(ws, { type: 'voice:error', requestId: msg.requestId, message: 'voice is unavailable during setup' });
+          return;
         default:
           return; // ignore anything else in setup mode
       }
@@ -129,7 +142,12 @@ export function startSetupServer(opts: SetupServerOptions): Promise<SetupServerH
 
       const state = createSetupState(opts.startingConfig);
       states.set(ws, state);
-      send(ws, assistant("Welcome to arya — let's set up your provider. Type your answer below (Enter accepts the [default])."));
+      send(
+        ws,
+        assistant(
+          "Welcome to arya — let's set up your provider. Type your answer below (Enter accepts the [default]).",
+        ),
+      );
       const q = currentQuestion(state);
       if (q) send(ws, assistant(promptText(q)));
 
