@@ -1,26 +1,28 @@
 # Arya — Local Configuration
 
 All runtime configuration lives in `config.json` (`~/.config/arya/config.json` by default). Edit it directly — there are
-no environment-variable overrides for runtime config. Environment variables are reserved for plugin integrations only
-(see `.env.example`).
+no environment-variable overrides for runtime config. Environment variables are reserved for plugin integrations only.
 
 Required fields are validated at boot; arya refuses to start if any are missing (see `bootstrap.ts:loadConfig`).
 
 ## Fields
 
-| `config.json` key     | Description                                                                                                                                                                                      | Default                     |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------- |
-| `baseUrl`             | OpenAI-compatible API endpoint                                                                                                                                                                   | `http://localhost:11434/v1` |
-| `model`               | Model name advertised by your provider                                                                                                                                                           | `qwen2.5-coder:7b`          |
-| `maxTokens`           | Max tokens per response                                                                                                                                                                          | `4096`                      |
-| `temperature`         | Sampling temperature                                                                                                                                                                             | `0.7`                       |
-| `streamTimeoutMs`     | Inactivity timeout for streaming                                                                                                                                                                 | `60000`                     |
-| `wsPort`              | Companion WebSocket port                                                                                                                                                                         | `3001`                      |
-| `authToken`           | Token required by companion (empty = none)                                                                                                                                                       | _(none)_                    |
-| `capabilities.vision` | Model accepts image input (enables paste-an-image)                                                                                                                                               | `false`                     |
-| `capabilities.audio`  | Model accepts audio input                                                                                                                                                                        | `false`                     |
+| `config.json` key     | Description                                                                                                                                                                                                                                      | Default                     |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------- |
+| `baseUrl`             | OpenAI-compatible API endpoint                                                                                                                                                                                                                   | `http://localhost:11434/v1` |
+| `model`               | Model name advertised by your provider (**required**)                                                                                                                                                                                            | `qwen2.5-coder:7b`          |
+| `kind`                | Provider backend kind passed to `mu-local-provider` (e.g. `llama-swap`)                                                                                                                                                                          | _(none)_                    |
+| `apiKey`              | API key/token for the provider endpoint, if it requires one                                                                                                                                                                                      | _(none)_                    |
+| `wsPort`              | Companion/TUI WebSocket port (**required**)                                                                                                                                                                                                      | _(none)_                    |
+| `wsHost`              | Bind address. A non-loopback value (e.g. `0.0.0.0`) requires a non-empty `authToken`                                                                                                                                                             | `127.0.0.1`                 |
+| `authToken`           | Token required by companion/TUI clients (empty = none, allowed only on a loopback bind)                                                                                                                                                          | _(none)_                    |
+| `primaryAgent`        | Name of the agent supplying the primary system prompt; the rest are reachable as sub-agents                                                                                                                                                      | _(built-in `arya`)_         |
+| `agentsDir`           | Directory of agent definition files                                                                                                                                                                                                              | `<cwd>/definitions/agents`  |
+| `tasksDir`            | Directory of scheduled-task YAML files                                                                                                                                                                                                           | `<cwd>/definitions/tasks`   |
+| `capabilities.vision` | Model accepts image input (enables paste-an-image)                                                                                                                                                                                               | `false`                     |
+| `capabilities.audio`  | Model accepts audio input                                                                                                                                                                                                                        | `false`                     |
 | `voiceModel`          | Speech-to-text model for voice input (sent the recorded audio): the TUI's `/voice`/`/call` and the companion's call mode. Falls back to the selected model when unset; if that model has no audio support, voice reports it instead of recording | _(selected model)_          |
-| `chatTemplateKwargs`  | Extra `chat_template_kwargs` merged into the **main** chat model's requests (not the voice model), forwarded verbatim — e.g. `{ "enable_thinking": false }` to disable Qwen3 reasoning                                                              | _(none)_                    |
+| `chatTemplateKwargs`  | Extra `chat_template_kwargs` merged into the **main** chat model's requests (not the voice model), forwarded verbatim — e.g. `{ "enable_thinking": false }` to disable Qwen3 reasoning                                                           | _(none)_                    |
 
 ## Multimodal (image + audio)
 

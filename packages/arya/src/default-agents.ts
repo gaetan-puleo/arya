@@ -13,7 +13,7 @@ export const ARYA_AGENT: Agent = {
     'definition file; changes apply live).',
   tools: {
     read: 'allow',
-    list_dir: 'allow',
+    list: 'allow',
     webfetch: 'allow',
     write: 'ask',
     edit: 'ask',
