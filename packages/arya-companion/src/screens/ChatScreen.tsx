@@ -16,7 +16,9 @@ import { useKeyboard } from "@/hooks/useKeyboard";
 import { useSessions } from "@/hooks/useSessions";
 import { useSubAgentRuns } from "@/hooks/useSubAgentRun";
 import { useTranscript } from "@/hooks/useTranscript";
+import { useVoiceCall } from "@/hooks/useVoiceCall";
 
+import { APPROVAL_ROW_PREFIX } from "@/services/optimistic";
 import type { SessionSummary } from "@/types/domain";
 
 import AgentChip from "@/components/chat/AgentChip";
@@ -38,6 +40,7 @@ export default function ChatScreen() {
 	const agents = useAgents();
 	const approvals = useApprovals();
 	const composer = useComposer();
+	const voice = useVoiceCall();
 	const { keyboardOpen, keyboardHeight } = useKeyboard();
 	const subAgentRuns = useSubAgentRuns();
 
@@ -119,8 +122,8 @@ export default function ChatScreen() {
 					messages={messages}
 					approvals={approvals.approvals}
 					onRespondApproval={(rowId, action) => {
-						const approvalId = rowId.startsWith("approval-")
-							? rowId.slice("approval-".length)
+						const approvalId = rowId.startsWith(APPROVAL_ROW_PREFIX)
+							? rowId.slice(APPROVAL_ROW_PREFIX.length)
 							: rowId;
 						approvals.respond(approvalId, action);
 					}}
@@ -153,6 +156,12 @@ export default function ChatScreen() {
 						canAttachImage={composer.canAttachImage}
 						onPasteImage={composer.pasteImage}
 						onRemoveAttachment={composer.removeAttachment}
+						callActive={voice.active}
+						callPhase={voice.phase}
+						callPartial={voice.partial}
+						callWaveform={voice.waveform}
+						onStartCall={voice.start}
+						onEndCall={voice.end}
 					/>
 				</View>
 

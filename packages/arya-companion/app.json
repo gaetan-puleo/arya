@@ -29,6 +29,7 @@
     },
     "plugins": [
       "expo-router",
+      "@siteed/audio-studio",
       "expo-system-ui",
       "./plugins/withSuppressKotlinWarnings",
       [
@@ -50,7 +51,18 @@
         {
           "cameraPermission": "Allow arya companion to scan the setup QR code from your Arya server."
         }
-      ]
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow arya companion to use the microphone for voice calls.",
+          "speechRecognitionPermission": "Allow arya companion to transcribe your speech during voice calls.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
+        }
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true

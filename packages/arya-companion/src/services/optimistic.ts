@@ -42,3 +42,11 @@ export function removeTranscriptRow(sessionId: string, rowId: string): void {
 		store.replaceTranscript(sessionId, next);
 	}
 }
+
+/**
+ * Client-side session id — lets a chat start instantly without a server
+ * round-trip. Shared by the composer, the sessions drawer, and voice call mode.
+ */
+export function newSessionId(): string {
+	return `sess_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}

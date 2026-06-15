@@ -9,6 +9,7 @@ import { useCallback, useState } from "react";
 import * as Haptics from "expo-haptics";
 import * as Clipboard from "expo-clipboard";
 import * as arya from "@/services/aryaClient";
+import { newSessionId } from "@/services/optimistic";
 import { useStore } from "@/state/store";
 import type { AgentInfo, Attachment, CommandInfo } from "@/types/domain";
 
@@ -38,10 +39,6 @@ function parseDataUri(uri: string): { mime: string; data: string } | null {
 	const match = /^data:([^;]+);base64,(.*)$/s.exec(uri);
 	if (!match) return null;
 	return { mime: match[1], data: match[2] };
-}
-
-function newSessionId(): string {
-	return `sess_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export function useComposer(): ComposerState {

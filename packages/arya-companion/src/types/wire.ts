@@ -247,6 +247,10 @@ export type WsInboundMessage =
 	| { type: "sub_agent_event"; event: SubAgentEventWire }
 	| ({ type: "approval_request" } & ApprovalRequestWire)
 	| { type: "scheduler_event"; event: SchedulerEvent }
+	// Session-less voice transcription (request/response, correlated by requestId).
+	| { type: "voice:result"; requestId: string; text: string }
+	| { type: "voice:error"; requestId: string; message: string }
+	| { type: "voice:availability"; requestId: string; reason?: string }
 	| { type: "error"; sessionId?: string; message?: string };
 
 /**
@@ -272,6 +276,9 @@ const INBOUND_TYPES = new Set<WsInboundMessage["type"]>([
 	"sub_agent_event",
 	"approval_request",
 	"scheduler_event",
+	"voice:result",
+	"voice:error",
+	"voice:availability",
 	"error",
 ]);
 
@@ -306,6 +313,7 @@ export type WsOutboundMessage =
 	| { type: "sessions:delete"; sessionId: string }
 	| { type: "sessions:rename"; sessionId: string; title: string }
 	| { type: "sessions:get"; sessionId: string }
+	| { type: "voice:transcribe"; requestId: string; mime: string; data: string }
 	| {
 			type: "approval_response";
 			requestId: string;

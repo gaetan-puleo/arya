@@ -44,14 +44,6 @@ export function send(payload: WsOutboundMessage): boolean {
 
 // ─── Typed read-only requests ─────────────────────────────────────────
 
-export function requestCommands(): void {
-	send({ type: "commands" });
-}
-
-export function requestAgents(): void {
-	send({ type: "agents" });
-}
-
 export function requestSessions(): void {
 	send({ type: "sessions:list" });
 }

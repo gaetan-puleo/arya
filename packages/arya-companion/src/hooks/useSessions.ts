@@ -9,12 +9,9 @@
 import * as Haptics from "expo-haptics";
 import { useCallback, useMemo } from "react";
 import * as arya from "@/services/aryaClient";
+import { newSessionId } from "@/services/optimistic";
 import { useStore } from "@/state/store";
 import type { SessionSummary } from "@/types/domain";
-
-function newSessionId(): string {
-	return `sess_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
 
 export function useSessions() {
 	const sessions = useStore((s) => s.sessions);

@@ -17,7 +17,7 @@
  * `?? ""` sprinkles, no defensive null checks.
  */
 
-import type { ChatMessageItem, MessageDisplayRow } from "@/types/domain";
+import type { ChatMessageItem } from "@/types/domain";
 import type { WireMessage, WireRole } from "@/types/wire";
 
 const VALID_ROLES: ReadonlySet<WireRole> = new Set<WireRole>([
@@ -126,37 +126,4 @@ export function wireSessionToRows(
 		out.push(wireToChatRow(raw, null, false));
 	}
 	return out;
-}
-
-/**
- * Project a single message for the sub-agent timeline view (which
- * does render tool rows). Used by snapshot reducers, not the main
- * transcript.
- */
-export function wireToTimelineRow(
-	m: WireMessage,
-	indexHint: number,
-): MessageDisplayRow {
-	const id = m.id || m.toolCallId || `m-${indexHint}`;
-	const role: MessageDisplayRow["role"] =
-		m.role === "system" ? "assistant" : m.role;
-	const text = m.role === "tool" ? "" : m.content;
-
-	const row: MessageDisplayRow = { id, role, text, ts: m.ts };
-	if (m.toolResult) {
-		row.toolName = m.toolResult.name;
-		row.toolResult = m.toolResult.content;
-		row.toolError = m.toolResult.error === true;
-	}
-	const firstCall = m.toolCalls?.[0];
-	if (firstCall) {
-		row.toolName ??= firstCall.function.name;
-		try {
-			const parsed = JSON.parse(firstCall.function.arguments) as unknown;
-			row.toolArgs = JSON.stringify(parsed, null, 2);
-		} catch {
-			row.toolArgs = firstCall.function.arguments;
-		}
-	}
-	return row;
 }

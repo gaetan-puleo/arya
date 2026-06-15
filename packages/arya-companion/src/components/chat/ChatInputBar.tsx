@@ -20,8 +20,12 @@ import type {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import type { SharedValue } from "react-native-reanimated";
+
 import type { AgentInfo, Attachment, CommandInfo } from "@/types/domain";
 import { useTheme } from "@/theme/ThemeContext";
+import type { CallPhase } from "@/hooks/useVoiceCall";
+import CallBar from "@/components/chat/CallBar";
 
 interface ChatInputBarProps {
 	input: string;
@@ -38,6 +42,13 @@ interface ChatInputBarProps {
 	canAttachImage: boolean;
 	onPasteImage: () => void;
 	onRemoveAttachment: (index: number) => void;
+	/** Voice-call mode (in-chat, no extra screen). */
+	callActive: boolean;
+	callPhase: CallPhase;
+	callPartial: string;
+	callWaveform: SharedValue<number[]>;
+	onStartCall: () => void;
+	onEndCall: () => void;
 }
 
 const MIN_INPUT_HEIGHT = 28;
@@ -59,6 +70,12 @@ export default function ChatInputBar({
 	canAttachImage,
 	onPasteImage,
 	onRemoveAttachment,
+	callActive,
+	callPhase,
+	callPartial,
+	callWaveform,
+	onStartCall,
+	onEndCall,
 }: ChatInputBarProps) {
 	const [inputExpanded, setInputExpanded] = useState(false);
 	const [textHeight, setTextHeight] = useState(MIN_INPUT_HEIGHT);
@@ -146,8 +163,27 @@ export default function ChatInputBar({
 							onRemove={onRemoveAttachment}
 						/>
 					)}
-					<View className="flex-row items-end gap-2">
-						<Pressable
+					{callActive ? (
+						<CallBar
+							phase={callPhase}
+							partial={callPartial}
+							waveform={callWaveform}
+							onEnd={onEndCall}
+						/>
+					) : (
+						<View className="flex-row items-end gap-2">
+							<Pressable
+								onPress={onStartCall}
+								hitSlop={8}
+								className="w-11 h-11 justify-center items-center rounded-pill bg-bg-input border border-border"
+							>
+								<Ionicons
+									name="call-outline"
+									size={20}
+									color={theme.colors.textSecondary}
+								/>
+							</Pressable>
+							<Pressable
 							onPress={() => {
 								if (canAttachImage) {
 									Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -214,6 +250,7 @@ export default function ChatInputBar({
 							/>
 						</View>
 					</View>
+					)}
 				</View>
 			</KeyboardAvoidingView>
 

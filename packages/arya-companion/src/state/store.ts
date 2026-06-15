@@ -1,7 +1,7 @@
 /**
  * Single zustand store, organised into four conceptual slices:
  *
- *   - connection — socket + connected flag
+ *   - connection — connected flag
  *   - registry   — commands, agents, activeAgentId
  *   - sessions   — list, current, transcripts, streaming placeholders
  *   - snapshots  — sub-agent runs + approvals
@@ -16,16 +16,13 @@ import type {
 	ApprovalSnapshot,
 	ChatMessageItem,
 	CommandInfo,
-	ConnectionState,
 	SessionSummary,
 	SubAgentRunSnapshot,
 } from "@/types/domain";
 
 export interface StoreState {
 	// connection
-	socket: WebSocket | null;
 	connected: boolean;
-	connectionState: ConnectionState;
 
 	// registry
 	commands: CommandInfo[];
@@ -48,7 +45,7 @@ export interface StoreState {
 }
 
 export interface StoreActions {
-	setConnection: (socket: WebSocket | null, connected: boolean) => void;
+	setConnection: (connected: boolean) => void;
 
 	setCommands: (commands: CommandInfo[]) => void;
 	setAgents: (
@@ -66,39 +63,21 @@ export interface StoreActions {
 	clearTranscript: (sid: string) => void;
 	dropTranscript: (sid: string) => void;
 	setStreamingPlaceholder: (sid: string, text: string) => void;
+	appendStreamingPlaceholder: (sid: string, delta: string) => void;
 	clearStreamingPlaceholder: (sid: string) => void;
 
 	upsertSubAgentRun: (snap: SubAgentRunSnapshot) => void;
 	resetSubAgentRuns: () => void;
 
 	upsertApproval: (snap: ApprovalSnapshot) => void;
-	resetApprovals: () => void;
-	/**
-	 * Drop every approval whose `channelId` matches `sessionId`. Called when
-	 * a session is deleted or swapped so stale prompts don't leak into the
-	 * new context. Approvals with `channelId: null` (raised outside any
-	 * session) are unaffected.
-	 */
-	clearApprovalsForSession: (sessionId: string) => void;
 }
 
 export type Store = StoreState & StoreActions;
 
 export const useStore = create<Store>((set) => ({
 	// ── connection ─────────────────────────────────────────────────
-	socket: null,
 	connected: false,
-	connectionState: "disconnected",
-	setConnection: (socket, connected) =>
-		set({
-			socket,
-			connected,
-			connectionState: !socket
-				? "disconnected"
-				: connected
-					? "connected"
-					: "connecting",
-		}),
+	setConnection: (connected) => set({ connected }),
 
 	// ── registry ───────────────────────────────────────────────────
 	commands: [],
@@ -155,6 +134,14 @@ export const useStore = create<Store>((set) => ({
 			next.set(sid, text);
 			return { streamingPlaceholders: next };
 		}),
+	// `stream` frames carry incremental DELTAS, so accumulate them into the live
+	// placeholder (replacing would leave only the last token visible).
+	appendStreamingPlaceholder: (sid, delta) =>
+		set((s) => {
+			const next = new Map(s.streamingPlaceholders);
+			next.set(sid, (s.streamingPlaceholders.get(sid) ?? "") + delta);
+			return { streamingPlaceholders: next };
+		}),
 	clearStreamingPlaceholder: (sid) =>
 		set((s) => {
 			if (!s.streamingPlaceholders.has(sid)) return {};
@@ -178,18 +165,5 @@ export const useStore = create<Store>((set) => ({
 			const next = new Map(s.approvals);
 			next.set(snap.approvalId, snap);
 			return { approvals: next };
-		}),
-	resetApprovals: () => set({ approvals: new Map() }),
-	clearApprovalsForSession: (sessionId) =>
-		set((s) => {
-			let removed = 0;
-			const next = new Map(s.approvals);
-			for (const [id, snap] of s.approvals) {
-				if (snap.channelId === sessionId) {
-					next.delete(id);
-					removed++;
-				}
-			}
-			return removed > 0 ? { approvals: next } : {};
 		}),
 }));

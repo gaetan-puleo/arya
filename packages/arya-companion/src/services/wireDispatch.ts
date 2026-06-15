@@ -18,6 +18,7 @@ import {
 	rollbackPendingActiveAgent,
 } from "@/services/activeAgent";
 import { SUBAGENT_ROW_PREFIX } from "@/services/optimistic";
+import { resolveTranscription, rejectTranscription } from "@/services/voiceTranscribe";
 import type { WsInboundMessage } from "@/types/wire";
 
 export function dispatch(msg: WsInboundMessage): void {
@@ -59,7 +60,9 @@ export function dispatch(msg: WsInboundMessage): void {
 		}
 
 		case "sessions:listed":
-			store.setSessions(msg.sessions);
+			// Hide internal sessions (e.g. the `__arya_stt__` voice-transcription
+			// scratch session) from the drawer — they're machinery, not conversations.
+			store.setSessions(msg.sessions.filter((s) => !s.id.startsWith("__arya")));
 			return;
 
 		case "sessions:changed":
@@ -79,7 +82,8 @@ export function dispatch(msg: WsInboundMessage): void {
 		case "stream": {
 			const sid = msg.sessionId;
 			if (!sid) return;
-			store.setStreamingPlaceholder(sid, msg.text);
+			// `stream.text` is an incremental delta — accumulate it into the placeholder.
+			store.appendStreamingPlaceholder(sid, msg.text);
 			return;
 		}
 
@@ -101,7 +105,21 @@ export function dispatch(msg: WsInboundMessage): void {
 			const sid = msg.sessionId;
 			if (!sid) return;
 			const rows = wireSessionToRows([msg.message], store.activeAgentId);
-			for (const row of rows) store.appendTranscriptRow(sid, row);
+			const existing = store.transcripts.get(sid) ?? [];
+			for (const row of rows) {
+				// `turn_start` re-broadcasts the user's own message; we already added it
+				// optimistically (a `local-…` row) in sendChat, so drop the echo to
+				// avoid a duplicate bubble.
+				if (
+					row.role === "user" &&
+					existing.some(
+						(r) => r.role === "user" && r.text === row.text && r.id.startsWith("local-"),
+					)
+				) {
+					continue;
+				}
+				store.appendTranscriptRow(sid, row);
+			}
 			// Assistant message landed → drop the streaming placeholder.
 			if (rows.length > 0) store.clearStreamingPlaceholder(sid);
 			return;
@@ -139,6 +157,18 @@ export function dispatch(msg: WsInboundMessage): void {
 
 		case "scheduler_event":
 			// Server's next `sessions:listed` keeps the drawer fresh.
+			return;
+
+		case "voice:result":
+			resolveTranscription(msg.requestId, msg.text);
+			return;
+
+		case "voice:error":
+			rejectTranscription(msg.requestId, msg.message);
+			return;
+
+		case "voice:availability":
+			// Only relevant to an explicit voice:check; nothing to do for transcription.
 			return;
 
 		case "error": {

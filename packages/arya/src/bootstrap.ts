@@ -19,10 +19,11 @@ import { createMuTools } from 'mu-tools';
 import webfetchPlugin from 'mu-webfetch';
 
 import { aryaDirs, resolveXdg } from './xdg';
+import { isLoopbackHost, isValidPort } from './init';
 import { BUILTIN_AGENTS } from './default-agents';
 import { BUILTIN_SKILLS } from './default-skills';
 import { createScheduler, type Scheduler } from './scheduler';
-import { withVoiceRouting } from './voice-routing';
+import { withCallModeReasoning } from './voice-routing';
 import { startDefinitionWatcher } from './watch';
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
@@ -61,9 +62,6 @@ export interface BootstrapConfig {
   chatTemplateKwargs?: Record<string, unknown>;
 }
 
-const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
-const isLoopback = (host: string): boolean => LOOPBACK_HOSTS.has(host);
-
 const isPlugin = (value: unknown): value is Plugin =>
   typeof value === 'object' && value !== null && typeof (value as { name?: unknown }).name === 'string';
 
@@ -94,10 +92,10 @@ async function loadInstalledPlugins(pluginsDir: string, skip: Set<string>): Prom
 }
 
 function validatePort(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 65535) {
+  if (!isValidPort(value)) {
     throw new Error(`[arya] Invalid wsPort: ${JSON.stringify(value)}. Must be an integer in [1, 65535].`);
   }
-  return value;
+  return value as number;
 }
 
 function validateConfig(obj: Record<string, unknown>, configPath: string | undefined, cwd: string): BootstrapConfig {
@@ -126,7 +124,7 @@ function validateConfig(obj: Record<string, unknown>, configPath: string | undef
   const capabilities = { vision: capsObj.vision === true, audio: capsObj.audio === true };
 
   if (!authToken) {
-    if (!isLoopback(wsHost)) {
+    if (!isLoopbackHost(wsHost)) {
       throw new Error(
         `[arya] Refusing to start: authToken is empty/missing and wsHost is "${wsHost}" (non-loopback).\n` +
           `       Set a non-empty "authToken" in your config, or set "wsHost": "127.0.0.1".`,
@@ -172,7 +170,7 @@ export interface BootstrapHandle {
   shutdown: () => Promise<void>;
 }
 
-export async function buildHarness(cwd: string, config: BootstrapConfig) {
+async function buildHarness(cwd: string, config: BootstrapConfig) {
   const xdg = resolveXdg();
   const primaryName = config.primaryAgent ?? 'arya';
   const agentsDir = config.agentsDir ?? join(cwd, 'definitions', 'agents');
@@ -207,10 +205,11 @@ export async function buildHarness(cwd: string, config: BootstrapConfig) {
     xdg,
     cwd,
     providers: {
-      // Route by input modality on the same chat path: an audio attachment is
-      // transcribed by the voice model, then answered by the main model (no
-      // separate transcription port). See voice-routing.ts.
-      local: withVoiceRouting(
+      // Wrap the provider so a call-mode turn (carrying the zero-width marker) disables
+      // the chat model's reasoning for that one turn — fast spoken replies. Speech-to-text
+      // itself rides the session-less `voice:transcribe` endpoint (harness.voice), not the
+      // chat path. See voice-routing.ts.
+      local: withCallModeReasoning(
         createLocalProvider({
           kind: config.kind,
           baseUrl: config.baseUrl,
@@ -226,7 +225,7 @@ export async function buildHarness(cwd: string, config: BootstrapConfig) {
           // Extra chat-template kwargs (main model only) — e.g. disable Qwen3 reasoning.
           chatTemplateKwargs: config.chatTemplateKwargs,
         }),
-        { voiceModel: config.voiceModel, log: (msg) => log.info(msg) },
+        { log: (msg) => log.info(msg) },
       ),
     },
     model: `local/${config.model}`,
@@ -254,11 +253,7 @@ export async function buildHarness(cwd: string, config: BootstrapConfig) {
   });
   harnessRef = harness;
 
-  // Resolve the primary from the (hot-reloadable) registry, falling back to the
-  // boot-time resolution if it ever vanishes.
-  const getPrimary = () => harness.agents.get(primaryName) ?? primary;
-
-  return { harness, approvals, primary, getPrimary, primaryName, tools, plugins, capsSink, modelLoadingSink };
+  return { harness, approvals, primaryName, capsSink, modelLoadingSink };
 }
 
 export async function bootstrap(cwd: string = process.cwd(), configPath?: string): Promise<BootstrapHandle> {
@@ -297,10 +292,10 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
   const channels = await runChannels({ harness, approvals, adapters: [adapter] });
   log.info(`Listening on ${config.wsHost}:${config.wsPort} — accepting connections`);
 
-  // Voice (companion call mode) now rides the chat WS: the companion sends the
-  // recorded audio as an attachment and the provider wrapper (withVoiceRouting)
-  // transcribes it with the voice model then answers with the main model — no
-  // separate transcription port.
+  // Voice (companion call mode): the companion records audio and transcribes each
+  // segment through the session-less `voice:transcribe` endpoint (harness.voice, the
+  // voice model only — no session/persistence), then sends the concatenated transcript
+  // as a normal text chat turn answered by the main model.
 
   // Eagerly detect the configured model's input modalities (vision/audio) so the
   // server advertises real capabilities from the start — no manual `capabilities`
@@ -342,6 +337,12 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
         type: 'agents',
         agents: harness.agents.list().map((a) => ({ name: a.name, description: a.description, color: a.color })),
         activeAgentId: primaryName,
+      });
+      // Re-broadcast commands too: a reloaded skill adds/removes slash commands, and
+      // without this the client's command palette stays stale until it reconnects.
+      adapter.push({
+        type: 'commands',
+        commands: harness.commands.list().map((c) => ({ command: `/${c.name}`, description: c.description })),
       });
       log.info('reloaded definitions');
     },

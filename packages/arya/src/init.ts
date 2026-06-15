@@ -56,7 +56,7 @@ export function firstReadable(paths: string[]): string | undefined {
   return undefined;
 }
 
-const isLoopbackHost = (h: string): boolean => h === '127.0.0.1' || h === 'localhost' || h === '::1';
+export const isLoopbackHost = (h: string): boolean => h === '127.0.0.1' || h === 'localhost' || h === '::1';
 
 // --- transport-agnostic question/answer state machine ---
 
@@ -83,7 +83,11 @@ export function createSetupState(starting: Config): SetupState {
   const missing = missingMandatory(config);
   const pending: SetupQuestion[] = [];
   if (missing.includes('baseUrl')) {
-    pending.push({ field: 'provider', prompt: 'Which provider? (llama-swap / ollama / openai / other)', default: 'llama-swap' });
+    pending.push({
+      field: 'provider',
+      prompt: 'Which provider? (llama-swap / ollama / openai / other)',
+      default: 'llama-swap',
+    });
     pending.push({ field: 'host', prompt: 'Provider host or full URL', default: 'localhost' });
     pending.push({ field: 'port', prompt: 'Provider port' });
   }
@@ -128,7 +132,7 @@ export function applyAnswer(s: SetupState, answerRaw: string): SetupStep {
     }
     case 'port': {
       const n = Number(answer);
-      if (!Number.isInteger(n) || n < 1 || n > 65535) {
+      if (!isValidPort(n)) {
         return { kind: 'reask', question: q, error: 'Port must be an integer in [1, 65535].' };
       }
       s.config.baseUrl = `http://${s.draft.host ?? 'localhost'}:${n}/v1`;

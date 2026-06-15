@@ -18,14 +18,10 @@ import ChatMessage from "@/components/chat/ChatMessage";
 import SubAgentCard from "@/components/chat/SubAgentCard";
 import TypingDots from "@/components/chat/TypingDots";
 import { AryaAvatar } from "@/components/primitives/AryaAvatar";
-
-// Row-id prefixes that signal an in-transcript card. Producers live in
-// services/approvals.ts and services/wireDispatch.ts; ChatMessageList
-// consumes the same prefixes to know "this transcript row is actually
-// an inline card, not a chat bubble". Kept named so renames stay
-// consistent across producer + consumer.
-const APPROVAL_PREFIX = "approval-";
-const SUBAGENT_PREFIX = "sub-agent-";
+// Row-id prefixes that flag an in-transcript card are owned by services/optimistic.ts
+// (the producers in approvals.ts / wireDispatch.ts stamp them); consume the SAME constants
+// here so a rename can't desync producer + consumer.
+import { APPROVAL_ROW_PREFIX, SUBAGENT_ROW_PREFIX } from "@/services/optimistic";
 
 interface ChatMessageListProps {
 	messages: ChatMessageItem[];
@@ -45,16 +41,16 @@ function approvalFromRow(
 	msg: ChatMessageItem,
 	approvals: Map<string, ApprovalSnapshot>,
 ): ApprovalSnapshot | undefined {
-	if (!msg.id.startsWith(APPROVAL_PREFIX)) return undefined;
-	return approvals.get(msg.id.slice(APPROVAL_PREFIX.length));
+	if (!msg.id.startsWith(APPROVAL_ROW_PREFIX)) return undefined;
+	return approvals.get(msg.id.slice(APPROVAL_ROW_PREFIX.length));
 }
 
 function subAgentFromRow(
 	msg: ChatMessageItem,
 	runs: Map<string, SubAgentRunSnapshot>,
 ): SubAgentRunSnapshot | undefined {
-	if (!msg.id.startsWith(SUBAGENT_PREFIX)) return undefined;
-	return runs.get(msg.id.slice(SUBAGENT_PREFIX.length));
+	if (!msg.id.startsWith(SUBAGENT_ROW_PREFIX)) return undefined;
+	return runs.get(msg.id.slice(SUBAGENT_ROW_PREFIX.length));
 }
 
 export default function ChatMessageList({
@@ -174,8 +170,8 @@ export default function ChatMessageList({
 				renderItem={({ item: msg, index: i }) => {
 					const kindOf = (m: ChatMessageItem): string => {
 						if (m.role === "user") return "user";
-						if (m.id.startsWith(APPROVAL_PREFIX)) return "approval";
-						if (m.id.startsWith(SUBAGENT_PREFIX)) return "subagent";
+						if (m.id.startsWith(APPROVAL_ROW_PREFIX)) return "approval";
+						if (m.id.startsWith(SUBAGENT_ROW_PREFIX)) return "subagent";
 						if (m.id === STREAMING_ROW_ID && m.text === "")
 							return "streaming";
 						return "assistant";

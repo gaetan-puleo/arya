@@ -5,10 +5,10 @@ import { readFileSync } from 'node:fs';
 
 import { createPluginStore } from 'mu-harness';
 import { aryaDirs } from './xdg';
+import { firstReadable, isValidPort, missingMandatory, readConfig } from './init';
 
 /** Resolve the active config path/contents and which mandatory fields are missing. */
 async function resolveConfigState(): Promise<{ target: string; config: Record<string, unknown>; missing: string[] }> {
-  const { firstReadable, readConfig, missingMandatory } = await import('./init');
   const xdgFile = aryaDirs('arya').configFile;
   const existing = firstReadable([xdgFile, resolve(root, 'config.json')]);
   const target = existing ?? xdgFile;
@@ -16,8 +16,7 @@ async function resolveConfigState(): Promise<{ target: string; config: Record<st
   return { target, config, missing: missingMandatory(config) };
 }
 
-const portOf = (c: Record<string, unknown>): number =>
-  typeof c.wsPort === 'number' && Number.isInteger(c.wsPort) && c.wsPort >= 1 && c.wsPort <= 65535 ? c.wsPort : 3001;
+const portOf = (c: Record<string, unknown>): number => isValidPort(c.wsPort) ? (c.wsPort as number) : 3001;
 
 // The directory arya is launched from — its project config/agents/tasks. Uses
 // process.cwd() (not the module path) so a compiled standalone binary resolves
@@ -126,7 +125,14 @@ if (subcommand === '--channel') {
     const authToken = typeof startingConfig.authToken === 'string' && startingConfig.authToken
       ? startingConfig.authToken
       : undefined;
-    const setup = await startSetupServer({ port, host, startingConfig, configPath: target, authToken, log: (m) => console.log(`[arya] ${m}`) });
+    const setup = await startSetupServer({
+      port,
+      host,
+      startingConfig,
+      configPath: target,
+      authToken,
+      log: (m) => console.log(`[arya] ${m}`),
+    });
     console.log('[arya] First-run setup — no complete config found. Connect a channel and answer the questions:');
     console.log(`[arya]   • TUI:        arya --channel tui --connect ws://127.0.0.1:${port}`);
     console.log(`[arya]   • Companion:  scan the QR below (or Settings → ws://${lanIp()}:${port})`);
@@ -145,7 +151,9 @@ if (subcommand === '--channel') {
   const { printConnectQr, lanIp } = await import('./qr');
   await printConnectQr({
     url: `ws://${lanIp()}:${portOf(startingConfig)}`,
-    token: typeof startingConfig.authToken === 'string' && startingConfig.authToken ? startingConfig.authToken : undefined,
+    token: typeof startingConfig.authToken === 'string' && startingConfig.authToken
+      ? startingConfig.authToken
+      : undefined,
   }, (l) => console.log(l));
 
   const { bootstrap } = await import('./bootstrap');

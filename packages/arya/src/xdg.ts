@@ -16,30 +16,18 @@ export function resolveXdg(): XdgDirs {
   };
 }
 
+/** The XDG-derived arya paths consumed OUTSIDE the harness: the plugin install
+ *  dir and the config file. Everything else (sessions, catalog, agent dirs, data/
+ *  state homes) is owned and computed by the mu harness from `resolveXdg()`. */
 export interface AryaDirs {
-  configDir: string;
-  dataDir: string;
-  stateDir: string;
-  agentsDir: string;
   pluginsDir: string;
-  sessionsDir: string;
-  catalogFile: string;
   configFile: string;
 }
 
 export function aryaDirs(hostName = 'arya'): AryaDirs {
-  const xdg = resolveXdg();
-  const configDir = join(xdg.configHome, hostName);
-  const dataDir = join(xdg.dataHome, hostName);
-  const stateDir = join(xdg.stateHome, hostName);
+  const configDir = join(resolveXdg().configHome, hostName);
   return {
-    configDir,
-    dataDir,
-    stateDir,
-    agentsDir: join(configDir, 'agents'),
     pluginsDir: join(configDir, 'plugins'),
-    sessionsDir: join(dataDir, 'sessions'),
-    catalogFile: join(dataDir, 'sessions.db'),
     configFile: join(configDir, 'config.json'),
   };
 }

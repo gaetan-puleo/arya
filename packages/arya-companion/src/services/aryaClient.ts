@@ -46,15 +46,9 @@ import { markActiveAgentPending } from "@/services/activeAgent";
 import { isWsInboundMessage } from "@/types/wire";
 import type { Attachment } from "@/types/domain";
 
-// Re-exports — keep the surface used by hooks/components unchanged.
-export { send } from "@/services/outbound";
+// Re-export the one outbound sender consumed through this module's namespace
+// (`arya.respondApproval`). Everything else imports from its own service directly.
 export { respondApproval } from "@/services/approvals";
-export {
-	requestCommands,
-	requestAgents,
-	requestSessions,
-	requestSessionHistory,
-} from "@/services/outbound";
 
 const SESSION_ID_KEY = "arya-companion-current-session";
 
@@ -105,7 +99,7 @@ async function doStart(): Promise<void> {
 
 	const cfg = await readWsConfig();
 	if (!cfg) {
-		useStore.getState().setConnection(null, false);
+		useStore.getState().setConnection(false);
 		return;
 	}
 
@@ -123,7 +117,7 @@ async function doStart(): Promise<void> {
 			// stale socket back into the store after a fast reconnect.
 			const live = transportRef.current?.getSocket() ?? socket;
 			console.log(`[ws] connected to ${cfg.url}`);
-			useStore.getState().setConnection(live, true);
+			useStore.getState().setConnection(true);
 			// Server pushes the registries on connect; re-request defensively
 			// in case we reconnected silently after a transient drop.
 			sendRaw(live, { type: "commands" });
@@ -145,7 +139,7 @@ async function doStart(): Promise<void> {
 			// overwrite that from an older socket's tail event.
 			const live = transportRef.current?.getSocket() ?? null;
 			if (live === socket || live === null) {
-				useStore.getState().setConnection(live, false);
+				useStore.getState().setConnection(false);
 			}
 		});
 
@@ -173,7 +167,7 @@ async function doStart(): Promise<void> {
 		// Initial "socket exists, not yet open" state. Subsequent `open`
 		// will flip `connected` to true. Use the ref-resolved socket if
 		// available to avoid writing a stale reference.
-		useStore.getState().setConnection(socket, false);
+		useStore.getState().setConnection(false);
 	});
 
 	setTransportHandle(handle);
@@ -183,7 +177,7 @@ async function doStart(): Promise<void> {
 export function stop(): void {
 	transportRef.current?.dispose();
 	setTransportHandle(null);
-	useStore.getState().setConnection(null, false);
+	useStore.getState().setConnection(false);
 }
 
 // ─── Outbound senders that pair an optimistic local effect ────────────
@@ -243,6 +237,7 @@ export function sendChat(
 	sessionId: string,
 	text: string,
 	attachments?: Attachment[],
+	opts?: { silent?: boolean },
 ): void {
 	const store = useStore.getState();
 	const hasAttachments = attachments != null && attachments.length > 0;
@@ -261,20 +256,24 @@ export function sendChat(
 		return;
 	}
 
-	const optimisticRow = {
-		id: nextOptimisticId("msg"),
-		role: "user" as const,
-		text,
-		...(hasAttachments ? { attachments } : {}),
-	};
-	store.appendTranscriptRow(sessionId, optimisticRow);
+	// `silent` (voice transcription turn): no optimistic user bubble — we don't
+	// want the raw audio shown; only the transcript text turn becomes visible.
+	const optimisticRow = opts?.silent
+		? null
+		: {
+				id: nextOptimisticId("msg"),
+				role: "user" as const,
+				text,
+				...(hasAttachments ? { attachments } : {}),
+			};
+	if (optimisticRow) store.appendTranscriptRow(sessionId, optimisticRow);
 	store.setStreamingPlaceholder(sessionId, "");
 	const ok = send(payload);
 	if (!ok) {
 		// Rollback: drop the optimistic row + placeholder so the UI
 		// doesn't lie about a message that never went out.
 		store.clearStreamingPlaceholder(sessionId);
-		removeTranscriptRow(sessionId, optimisticRow.id);
+		if (optimisticRow) removeTranscriptRow(sessionId, optimisticRow.id);
 		console.warn(
 			`[ws] chat dropped (not connected): sessionId=${sessionId}`,
 		);
