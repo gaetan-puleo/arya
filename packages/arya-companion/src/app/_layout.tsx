@@ -7,7 +7,7 @@ import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import * as SystemUI from "expo-system-ui";
 import { useEffect } from "react";
-import { Platform } from "react-native";
+import { LogBox, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import "react-native-reanimated";
 import "../../global.css";
@@ -19,6 +19,11 @@ export { ErrorBoundary } from "expo-router";
 export const unstable_settings = {
 	initialRouteName: "index",
 };
+
+// In dev, the [ws] reconnect retries spam LogBox toasts that cover the chat input
+// (incl. the call button) when no arya server is reachable. Silence just that noise
+// — real errors still surface. (Only affects the dev LogBox overlay.)
+if (__DEV__) LogBox.ignoreLogs([/\[ws\]/]);
 
 SplashScreen.preventAutoHideAsync();
 
