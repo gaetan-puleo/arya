@@ -1,31 +1,37 @@
 # arya-agent
 
-A llama-swap-backed coding agent served over WebSocket, built on **mu** (consumed from the published `mu-*` npm
-packages, so no sibling checkout is needed). Ships as a self-contained standalone binary that runs as a local terminal
-TUI or a WebSocket server for the companion app.
+A local autonomous agent and assistant backed by [llama-swap](https://github.com/mostlygeek/llama-swap), served over
+WebSocket and built on **mu**. Runs as a terminal TUI or as a server for the companion app.
 
-- **`packages/arya`** — server. Composes the `mu-harness` primitives (agent sessions, session store/catalog, sub-agents,
-  hooks, channels) with `mu-local-provider`, `mu-ai-tools`, a croner scheduler, and a WebSocket transport.
-- **`packages/arya-companion`** — Expo/React Native mobile client that connects to the server, streams replies, and
-  surfaces approvals, sub-agents and slash commands.
+- **`packages/arya`** — the server (agent sessions, sub-agents, tools, scheduler, WebSocket transport).
+- **`packages/arya-companion`** — the Expo/React Native mobile client.
 
-## Install
+## Quick start
 
-`arya` ships as a self-contained executable (Deno + arya + mu embedded) — no runtime dependencies. Install with curl:
+**1. Install** — a self-contained binary, no runtime dependencies:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gaetan-puleo/arya/main/install.sh | sh
 ```
 
-This installs `arya` to `~/.local/bin` (override with `ARYA_INSTALL_DIR` or pin a version with `ARYA_VERSION`). On
-Windows, download `arya-windows-x64.exe` from the [releases page](https://github.com/gaetan-puleo/arya/releases).
+Installs the latest `arya` to `~/.local/bin` (override with `ARYA_INSTALL_DIR`). On Windows, grab
+`arya-windows-x64.exe` from the [releases page](https://github.com/gaetan-puleo/arya/releases).
+
+**2. Run a model backend** — arya needs a [llama-swap](https://github.com/mostlygeek/llama-swap) server with at least
+one model loaded, reachable at the `baseUrl` you configure below.
+
+**3. Run arya:**
+
+```bash
+arya serve         # server for the companion app + TUI clients
+arya               # interactive TUI (connects to a running `arya serve`)
+```
+
+On first launch with no config, arya walks you through a setup Q&A and writes `~/.config/arya/config.json`.
 
 ## Configure
 
-On first launch with no/incomplete config, `arya serve` (or the TUI) runs an in-channel setup Q&A — answer over the TUI,
-or scan the printed QR from the companion — and writes `~/.config/arya/config.json` for you (it falls back to
-`<repo>/config.json`). You can also create/edit that file by hand. arya binds loopback-only by default; a LAN bind
-(`"wsHost": "0.0.0.0"`) requires a non-empty `authToken` or arya refuses to start.
+`~/.config/arya/config.json` (falls back to `<repo>/config.json`):
 
 ```json
 {
@@ -39,25 +45,13 @@ or scan the printed QR from the companion — and writes `~/.config/arya/config.
 }
 ```
 
-Make sure a llama-swap server is reachable at `baseUrl` with at least one model loaded, then run:
-
-```bash
-arya                     # show help
-arya serve               # autonomous host — WebSocket server for channels (companion, TUI)
-arya --channel tui       # interactive TUI client — connects to a running `arya serve`
-arya --channel tui --connect ws://host:port   # TUI client of a remote arya server
-```
-
-The TUI is a **pure client** — start `arya serve` first; the autonomous host owns the server and the TUI never boots one
-(run them as two processes, or two TUIs share one server). The channel layer (WebSocket server + client, the companion
-bridge, and the TUI proxy) lives in `mu-harness` (`channels/` — `webSocketAdapter` / `connectHarness`); arya just
-registers it.
+arya binds to loopback only by default. To expose it on your LAN (`"wsHost": "0.0.0.0"`) you **must** set a non-empty
+`authToken`, or arya refuses to start.
 
 ## Agents
 
-Agents are markdown files (frontmatter + body) under `~/.config/arya/agents/` or `<repo>/definitions/agents/`. The
-`mu-harness` agent schema is `name`, `description`, `model`, `tools` (an allow-list of tool-name globs), `extends`, body
-= system prompt:
+Agents are markdown files (frontmatter + system-prompt body) under `~/.config/arya/agents/` or
+`<repo>/definitions/agents/`:
 
 ```markdown
 ---
@@ -70,31 +64,24 @@ tools: [read, list, webfetch, write, edit, bash, subagent]
 You are Arya…
 ```
 
-arya ships with a built-in `arya` agent, so it works with no `.md` on disk; drop your own file only to override it.
-`primaryAgent` in the config selects which agent supplies the primary system prompt; the rest are reachable as
-sub-agents via the `subagent` tool. When the primary delegates, the harness streams the sub-agent's lifecycle as
-`sub_agent_event` frames, which the companion renders as a live preview card with a tap-through detail timeline.
+arya ships with a built-in `arya` agent, so it works with no file on disk — add one only to override it. `primaryAgent`
+picks which agent owns the main prompt; the others are reachable as sub-agents via the `subagent` tool.
 
 ## Tools
 
-Filesystem + shell come from `mu-tools` (`read`, `write`, `edit`, `bash`, `list`); web fetch from the `mu-webfetch`
-plugin (`webfetch`). An approval hook gates `write`, `edit`, `bash` and `subagent` (surfaced to the companion) before
-they run; read-only tools run freely. `arya install <path-to-plugin.ts>` stores a plugin under
-`~/.config/arya/plugins/`; installed plugins load automatically at startup. Skills the agent authors are written to
-`~/.config/arya/skills/`.
+`read`, `write`, `edit`, `bash`, `list` (filesystem + shell) and `webfetch` are built in. `write`, `edit`, `bash` and
+`subagent` go through an approval gate; read-only tools run freely. Install extra plugins with
+`arya install <plugin.ts>` (loaded automatically from `~/.config/arya/plugins/`).
 
 ## Voice
 
-Set `voiceModel` to an audio-capable model to enable voice input. In the TUI, `/voice` records a clip and transcribes it
-into the composer and `/call` is hands-free realtime dictation. The companion's call button records audio and sends it
-on the chat stream — arya routes the audio turn to `voiceModel` for transcription, then answers with the main model
-(both stay resident in llama-swap, so there's no model-swap cost). Recording needs a microphone recorder on the host
-(ffmpeg / arecord / parecord); if `voiceModel` is unset, voice falls back to the selected model when it accepts audio.
-See `CONFIG.md`.
+Set `voiceModel` to an audio-capable model to enable voice. In the TUI, `/voice` transcribes a clip into the composer
+and `/call` is hands-free dictation. The companion's call button records audio, arya transcribes it with `voiceModel`,
+then answers with the main model. Host recording needs `ffmpeg`, `arecord` or `parecord`. See `CONFIG.md`.
 
 ## Scheduled tasks
 
-A `croner`-backed scheduler reads YAML from `<repo>/definitions/tasks/` (or a configured `tasksDir`). Scheduled runs are
+A `croner` scheduler reads YAML from `<repo>/definitions/tasks/` (or a configured `tasksDir`). Scheduled runs are
 non-interactive and auto-approve their tools:
 
 ```yaml
@@ -107,15 +94,15 @@ non-interactive and auto-approve their tools:
 
 ## Development
 
-Build the standalone binaries locally (cross-compiles into `dist/arya-*`):
+Run from source (needs [Deno](https://deno.com/); mu is pulled from npm automatically):
 
 ```bash
-deno task compile              # all targets
-deno task compile linux-x64    # one target
+deno task arya:serve     # run the server
+deno task arya:tui       # run the TUI
+deno task compile        # build standalone binaries into dist/
 ```
 
-Pushing a `v*` tag runs `.github/workflows/release.yml`, which cross-compiles the binaries and attaches them to the
-GitHub release that `install.sh` pulls from.
+Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds the binaries `install.sh` pulls from.
 
 ## License
 
