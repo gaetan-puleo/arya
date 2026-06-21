@@ -1,5 +1,7 @@
-import { expect } from '@std/expect';
-import { describe, it } from '@std/testing/bdd';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
 import { type WireSchedulerEvent as SchedulerEvent } from 'mu-harness';
 import { createScheduler } from './scheduler';
 
@@ -11,8 +13,8 @@ const stubRunTask = (onTask?: (agent: string, prompt: string) => void) =>
 
 describe('scheduler', () => {
   it('loads YAML task defs and exposes them as wire tasks', async () => {
-    const dir = await Deno.makeTempDir();
-    await Deno.writeTextFile(
+    const dir = await mkdtemp(join(tmpdir(), 'arya-test-'));
+    await writeFile(
       `${dir}/t.yaml`,
       'id: daily\ncron: "0 9 * * *"\nprompt: do it\ntimezone: UTC\nchannel: ops\nagent: arya\n',
     );
@@ -23,12 +25,12 @@ describe('scheduler', () => {
       ]);
     } finally {
       scheduler.stop();
-      await Deno.remove(dir, { recursive: true });
+      await rm(dir, { recursive: true, force: true });
     }
   });
 
   it('reload() picks up a task added to disk and drops a deleted one', async () => {
-    const dir = await Deno.makeTempDir();
+    const dir = await mkdtemp(join(tmpdir(), 'arya-test-'));
     const prompts: string[] = [];
     const scheduler = createScheduler({
       tasksDir: dir,
@@ -39,25 +41,25 @@ describe('scheduler', () => {
       expect(scheduler.tasks()).toEqual([]);
 
       // Create on disk → reload → live (appears + fires).
-      await Deno.writeTextFile(`${dir}/live.yaml`, 'id: live\ncron: "* * * * * *"\nprompt: tick\n');
+      await writeFile(`${dir}/live.yaml`, 'id: live\ncron: "* * * * * *"\nprompt: tick\n');
       await scheduler.reload();
       expect(scheduler.tasks().map((t) => t.id)).toContain('live');
       await new Promise((resolve) => setTimeout(resolve, 1200));
       expect(prompts).toContain('tick');
 
       // Delete on disk → reload → gone.
-      await Deno.remove(`${dir}/live.yaml`);
+      await rm(`${dir}/live.yaml`, { force: true });
       await scheduler.reload();
       expect(scheduler.tasks()).toEqual([]);
     } finally {
       scheduler.stop();
-      await Deno.remove(dir, { recursive: true });
+      await rm(dir, { recursive: true, force: true });
     }
   });
 
   it('fires a due task through the runtime and emits start/complete wire events', async () => {
-    const dir = await Deno.makeTempDir();
-    await Deno.writeTextFile(`${dir}/t.yaml`, 'id: tick\ncron: "* * * * * *"\nprompt: ping\nagent: arya\n');
+    const dir = await mkdtemp(join(tmpdir(), 'arya-test-'));
+    await writeFile(`${dir}/t.yaml`, 'id: tick\ncron: "* * * * * *"\nprompt: ping\nagent: arya\n');
     const prompts: string[] = [];
     const events: SchedulerEvent[] = [];
     const scheduler = createScheduler({
@@ -81,7 +83,7 @@ describe('scheduler', () => {
       });
     } finally {
       scheduler.stop();
-      await Deno.remove(dir, { recursive: true });
+      await rm(dir, { recursive: true, force: true });
     }
   });
 });

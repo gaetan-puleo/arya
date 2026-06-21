@@ -31,12 +31,16 @@ On first launch with no config, arya walks you through a setup Q&A and writes `~
 
 ## Development
 
-Run from source (needs [Deno](https://deno.com/); mu is pulled from npm automatically):
+pnpm workspace (Node >= 24; mu is pulled from npm automatically):
 
 ```bash
-deno task arya:serve     # run the server
-deno task arya:tui       # run the TUI
-deno task compile        # build standalone binaries into dist/
+pnpm install         # install workspace deps (server + companion app)
+pnpm dev             # run the server from source (tsx)
+pnpm tui             # run the TUI client
+pnpm test            # vitest
+pnpm check           # type-check (tsc)
+pnpm compile         # cross-compile standalone binaries into dist/
+pnpm app:start       # start the companion (Expo) dev server
 ```
 
 Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds the binaries `install.sh` pulls from.

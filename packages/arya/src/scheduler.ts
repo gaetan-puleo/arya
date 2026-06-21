@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parse as parseYaml } from '@std/yaml';
+import { parse as parseYaml } from 'yaml';
 import {
   createMemoryTaskStore,
   createScheduler as createSchedulerEngine,

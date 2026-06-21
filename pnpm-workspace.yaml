@@ -1,0 +1,18 @@
+packages:
+  - "packages/*"
+# Pin a single React (Expo SDK 54's version). Without this, a transitive dep hoists
+# a newer react@19.2.x while the companion pins 19.1.0 — two React instances break
+# react-native-css-interop's context so NativeWind className styles silently no-op.
+overrides:
+  react: 19.1.0
+  react-dom: 19.1.0
+allowBuilds:
+  esbuild: true
+  unrs-resolver: true
+minimumReleaseAgeExclude:
+  - mu-ai-tools@0.34.0
+  - mu-core@0.34.0
+  - mu-harness@0.34.0
+  - mu-local-provider@0.34.0
+  - mu-tui@0.34.0
+  - mu-webfetch@0.34.0
