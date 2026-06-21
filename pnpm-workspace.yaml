@@ -10,9 +10,9 @@ allowBuilds:
   esbuild: true
   unrs-resolver: true
 minimumReleaseAgeExclude:
-  - mu-ai-tools@0.34.0
-  - mu-core@0.34.0
-  - mu-harness@0.34.0
-  - mu-local-provider@0.34.0
-  - mu-tui@0.34.0
-  - mu-webfetch@0.34.0
+  - mu-ai-tools@0.35.0
+  - mu-core@0.35.0
+  - mu-harness@0.35.0
+  - mu-local-provider@0.35.0
+  - mu-tui@0.35.0
+  - mu-webfetch@0.35.0

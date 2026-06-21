@@ -37,20 +37,20 @@ importers:
         specifier: ^9.0.0
         version: 9.1.0
       mu-core:
-        specifier: ^0.34.0
-        version: 0.34.0
+        specifier: ^0.35.0
+        version: 0.35.0
       mu-harness:
-        specifier: ^0.34.0
-        version: 0.34.0
+        specifier: ^0.35.0
+        version: 0.35.0
       mu-local-provider:
-        specifier: ^0.34.0
-        version: 0.34.0(ws@8.21.0)
+        specifier: ^0.35.0
+        version: 0.35.0(ws@8.21.0)
       mu-tools:
-        specifier: npm:mu-ai-tools@^0.34.0
-        version: mu-ai-tools@0.34.0
+        specifier: npm:mu-ai-tools@^0.35.0
+        version: mu-ai-tools@0.35.0
       mu-webfetch:
-        specifier: ^0.34.0
-        version: 0.34.0
+        specifier: ^0.35.0
+        version: 0.35.0
       qrcode:
         specifier: ^1.5.4
         version: 1.5.4
@@ -4447,23 +4447,23 @@ packages:
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
 
-  mu-ai-tools@0.34.0:
-    resolution: {integrity: sha512-+Hy7V9+1UdcbmlC+nxra1BdEejcygjnOaDGUoKHgU2qVSTeTtec8IqoTgwcLeU2LQXdlF0nPZOQV8xlVSIcyHg==}
+  mu-ai-tools@0.35.0:
+    resolution: {integrity: sha512-5Idm8dDE+4t7ZUoG+gisO46sMY8vdMzZy1e2xSMdMDoNQu8qWuAH72mF4mYbQeboQExeXoNLRZmtCspBUROJNg==}
 
-  mu-core@0.34.0:
-    resolution: {integrity: sha512-FDnPokpTY/LvUlPvb9yE8SgLS4KKzw529xBe16Gzr0EoXBosP7V7NH5a0zOIU74lmH0CR0QuyYUr6MeJXMbV9Q==}
+  mu-core@0.35.0:
+    resolution: {integrity: sha512-AbKWBZ544FblOzz0kPJQsEoOsp4fRf+agE25VSWTaSxCiWlBZNT9qHpb6KbuoK2hLTFT4J9AZQGOQVb/JLx1cQ==}
 
-  mu-harness@0.34.0:
-    resolution: {integrity: sha512-wDHROrlAmDgsIdxB8WWL95I07QvRmizCLsHkBagewRgCNwkm/Vgzcr0CxFJS4Ix7Om4F+rHN/hP+Vg1yR1o6+w==}
+  mu-harness@0.35.0:
+    resolution: {integrity: sha512-bz3eTjtIVODZY01aVO1vgyuRq24WsgYqZOq3uOIkbMVXXHIXDmJAOr3iJe37Iv1f1zKBcH32QKJ+psGrcomoQw==}
 
-  mu-local-provider@0.34.0:
-    resolution: {integrity: sha512-S3eMmMlN4lO3qiJn7QT9Q+djOltwZhnOvVHwPX9CVJ3BUbuDAMMDtr3EBwoiW/iHIwn0DFi1aUv1gc62OupKVw==}
+  mu-local-provider@0.35.0:
+    resolution: {integrity: sha512-wHLGEaF9iRcz7O8ukaSiL7lvowH7aNB2dm4CXlwQzvlS887h0+FtslVXtalUlPEd0Gj9vSslb9O3xbxzovsBvA==}
 
-  mu-tui@0.34.0:
-    resolution: {integrity: sha512-PrsQ4nviZzXVNkc9Gpq/2n+Utw9vgYH+sol1XLnuzPpf/K1UeJDq1A0S05j0j7qJI1WYkmd5ABwqg9RnGhIHzg==}
+  mu-tui@0.35.0:
+    resolution: {integrity: sha512-5erE5+nFfTbP/nk1wc8iwjWTEUx+Nq6XZQfmgFwz46Njsbqa3BKdBBpBP9m4eKo4a9r4NkqM8DM4Jo+JJBcZrA==}
 
-  mu-webfetch@0.34.0:
-    resolution: {integrity: sha512-Cg2Nn8bNCrjaL3BLSCp1Sb++wmlCoSy1083yRfnDRTdsZcX4oS0c4eMytWJj55F9nYSjLjOyUGgqczc9riyISg==}
+  mu-webfetch@0.35.0:
+    resolution: {integrity: sha512-dfnPXzNGcxK8NfnFNsMV6FeHtXPhSg8wSILzRMjoCxzmB8TxGg6izDh5zMkB4zH1Gq5ma7ERXWCzG2RSBuDENA==}
 
   multistream@4.1.0:
     resolution: {integrity: sha512-J1XDiAmmNpRCBfIWJv+n0ymC4ABcf/Pl+5YvC5B/D2f/2+8PtHvCNxMPKiQcZyi922Hq69J2YOpb1pTywfifyw==}
@@ -10859,39 +10859,39 @@ snapshots:
 
   ms@2.1.3: {}
 
-  mu-ai-tools@0.34.0:
+  mu-ai-tools@0.35.0:
     dependencies:
-      mu-core: 0.34.0
+      mu-core: 0.35.0
 
-  mu-core@0.34.0: {}
+  mu-core@0.35.0: {}
 
-  mu-harness@0.34.0:
+  mu-harness@0.35.0:
     dependencies:
       '@swc/wasm-typescript': 1.15.41
       cli-highlight: 2.1.11
       croner: 9.1.0
-      mu-core: 0.34.0
-      mu-tui: 0.34.0
+      mu-core: 0.35.0
+      mu-tui: 0.35.0
       ws: 8.21.0
       yaml: 2.9.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  mu-local-provider@0.34.0(ws@8.21.0):
+  mu-local-provider@0.35.0(ws@8.21.0):
     dependencies:
-      mu-core: 0.34.0
+      mu-core: 0.35.0
       openai: 6.44.0(ws@8.21.0)
     transitivePeerDependencies:
       - ws
       - zod
 
-  mu-tui@0.34.0: {}
+  mu-tui@0.35.0: {}
 
-  mu-webfetch@0.34.0:
+  mu-webfetch@0.35.0:
     dependencies:
-      mu-core: 0.34.0
-      mu-harness: 0.34.0
+      mu-core: 0.35.0
+      mu-harness: 0.35.0
       turndown: 7.2.4
     transitivePeerDependencies:
       - bufferutil
