@@ -4,7 +4,7 @@
   "packageManager": "pnpm@11.8.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx packages/arya/src/index.ts serve",
+    "dev": "tsx packages/arya/src/index.ts",
     "serve": "tsx packages/arya/src/index.ts serve",
     "tui": "tsx packages/arya/src/index.ts --channel tui",
     "test": "vitest run",

@@ -20,14 +20,25 @@ Installs the latest `arya` to `~/.local/bin` (override with `ARYA_INSTALL_DIR`).
 **2. Run a model backend** — arya needs a [llama-swap](https://github.com/mostlygeek/llama-swap) server with at least
 one model loaded.
 
-**3. Run arya:**
+**3. Configure** — run the terminal setup wizard once:
+
+```bash
+arya setup         # interactive wizard → writes ~/.config/arya/config.json
+arya setup model   # re-run just the provider/model section
+arya setup server  # re-run just the WebSocket section
+```
+
+It asks for your provider/endpoint, lists the models the endpoint advertises (pick by number), and sets the
+WebSocket port/bind. Press Enter to accept each `[default]`.
+
+**4. Run arya:**
 
 ```bash
 arya serve         # server for the companion app + TUI clients
 arya               # interactive TUI (connects to a running `arya serve`)
 ```
 
-On first launch with no config, arya walks you through a setup Q&A and writes `~/.config/arya/config.json`.
+If config is incomplete, `arya serve`/`arya` tell you to run `arya setup` first.
 
 ## Development
 

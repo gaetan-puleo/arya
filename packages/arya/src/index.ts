@@ -30,6 +30,7 @@ const HELP = `arya — autonomous multi-agent runtime powered by mu
 
 Usage:
   arya                       Show this help
+  arya setup [model|server]  Interactive terminal wizard for config.json
   arya serve                 Run the autonomous host (WebSocket server for channels)
   arya --channel tui         Interactive TUI client of a running 'arya serve' (local)
   arya --channel tui --connect ws://host:port
@@ -37,8 +38,8 @@ Usage:
   arya install <plugin.ts>   Install a local plugin into the XDG data dir
 
 The TUI is a pure client — start 'arya serve' first (the autonomous host owns the
-server; the TUI never boots one). Config: ~/.config/arya/config.json
-(falls back to <repo>/config.json).`;
+server; the TUI never boots one). Run 'arya setup' on first run to write the
+config. Config: ~/.config/arya/config.json (falls back to <repo>/config.json).`;
 
 if (!subcommand || subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
   console.log(HELP);
@@ -66,6 +67,23 @@ if (subcommand === 'install' || subcommand === 'i') {
   }
 }
 
+if (subcommand === 'setup') {
+  const sectionArg = argv[1];
+  if (sectionArg && sectionArg !== 'model' && sectionArg !== 'server') {
+    console.error(`[arya] Unknown setup section "${sectionArg}". Available: model, server`);
+    process.exit(1);
+  }
+  const { target } = await resolveConfigState();
+  const { runSetupWizard } = await import('./setup-wizard');
+  try {
+    const written = await runSetupWizard({ configPath: target, section: sectionArg as 'model' | 'server' | undefined });
+    process.exit(written ? 0 : 1);
+  } catch (err) {
+    console.error('[arya] Setup failed:', err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
+}
+
 if (subcommand === '--channel') {
   const channel = argv[1];
   if (channel !== 'tui') {
@@ -78,34 +96,22 @@ if (subcommand === '--channel') {
     console.error('usage: arya --channel tui --connect ws://host:port');
     process.exit(1);
   }
-  const { runChannelTui, isPortOpen } = await import('./run-tui');
+  const { runChannelTui } = await import('./run-tui');
   try {
     if (connect) {
       // Remote server: connect directly, no local config needed.
       await runChannelTui(root, undefined, { connect });
     } else {
-      const { target, config, missing } = await resolveConfigState();
+      const { target, missing } = await resolveConfigState();
       if (missing.length === 0) {
         // Complete config: ordinary client of a running `arya serve`.
         await runChannelTui(root, target, {});
       } else {
-        // First run: do setup inside this TUI. Join a setup server if `arya serve`
-        // is already hosting one on the port; otherwise host one on loopback.
-        const port = portOf(config);
-        let stopSetup: (() => Promise<void>) | undefined;
-        if (!(await isPortOpen('127.0.0.1', port))) {
-          const { startSetupServer } = await import('./setup-server');
-          const setup = await startSetupServer({ port, host: '127.0.0.1', startingConfig: config, configPath: target });
-          stopSetup = setup.stop;
-          console.log('[arya] First-run setup — answer the questions in the TUI, then relaunch: arya serve');
-        } else {
-          console.log(`[arya] Joining first-run setup already running on 127.0.0.1:${port}`);
-        }
-        try {
-          await runChannelTui(root, undefined, { connect: `ws://127.0.0.1:${port}` });
-        } finally {
-          await stopSetup?.();
-        }
+        // First run: config is incomplete. The TUI is a pure client — point the
+        // user at the terminal wizard rather than configuring in-channel.
+        console.error(`[arya] Config incomplete (missing: ${missing.join(', ')}). Run the setup wizard first:`);
+        console.error('[arya]   arya setup');
+        process.exit(1);
       }
     }
   } catch (err) {
@@ -116,32 +122,11 @@ if (subcommand === '--channel') {
   const { target, config: startingConfig, missing } = await resolveConfigState();
 
   if (missing.length > 0) {
-    // First run: host the setup server on a reachable address and wait for a
-    // channel (TUI/companion) to answer; print a QR the companion can scan.
-    const { startSetupServer } = await import('./setup-server');
-    const { printConnectQr, lanIp } = await import('./qr');
-    const port = portOf(startingConfig);
-    const host = typeof startingConfig.wsHost === 'string' && startingConfig.wsHost ? startingConfig.wsHost : '0.0.0.0';
-    const authToken = typeof startingConfig.authToken === 'string' && startingConfig.authToken
-      ? startingConfig.authToken
-      : undefined;
-    const setup = await startSetupServer({
-      port,
-      host,
-      startingConfig,
-      configPath: target,
-      authToken,
-      log: (m) => console.log(`[arya] ${m}`),
-    });
-    console.log('[arya] First-run setup — no complete config found. Connect a channel and answer the questions:');
-    console.log(`[arya]   • TUI:        arya --channel tui --connect ws://127.0.0.1:${port}`);
-    console.log(`[arya]   • Companion:  scan the QR below (or Settings → ws://${lanIp()}:${port})`);
-    await printConnectQr({ url: `ws://${lanIp()}:${port}`, token: authToken }, (l) => console.log(l));
-    const { configPath } = await setup.done;
-    await setup.stop();
-    console.log(`[arya] Configuration written to ${configPath}.`);
-    console.log('[arya] Setup complete — relaunch to start arya:  arya serve');
-    process.exit(0);
+    // First run: no complete config. Point the user at the terminal wizard
+    // rather than configuring in-channel.
+    console.error(`[arya] Config incomplete (missing: ${missing.join(', ')}). Run the setup wizard first:`);
+    console.error('[arya]   arya setup');
+    process.exit(1);
   }
 
   const configPath = target;

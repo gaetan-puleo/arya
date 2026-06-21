@@ -2,8 +2,8 @@
  * Scan the connection QR printed by `arya serve`.
  *
  * The QR payload is a JSON blob `{ "url": "ws://…", "token"?: "…" }`. On a valid
- * scan we persist it to wsConfig, reconnect, and jump to the chat — where the
- * server's first-run setup questions (if any) appear as messages.
+ * scan we persist it to wsConfig, reconnect, and jump to the chat. The server
+ * must already be configured (run `arya setup` on the host first).
  */
 
 import { CameraView, useCameraPermissions } from "expo-camera";

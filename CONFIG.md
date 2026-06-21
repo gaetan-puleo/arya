@@ -1,7 +1,10 @@
 # Arya — Local Configuration
 
-All runtime configuration lives in `config.json` (`~/.config/arya/config.json` by default). Edit it directly — there are
-no environment-variable overrides for runtime config. Environment variables are reserved for plugin integrations only.
+All runtime configuration lives in `config.json` (`~/.config/arya/config.json` by default). Run `arya setup` for an
+interactive terminal wizard that creates or edits this file in place (existing values are shown as defaults — press
+Enter to keep them), or edit it directly. Re-run a single section with `arya setup model` or `arya setup server`. There
+are no environment-variable overrides for runtime config — environment variables are reserved for plugin integrations
+only.
 
 Required fields are validated at boot; arya refuses to start if any are missing (see `bootstrap.ts:loadConfig`).
 
