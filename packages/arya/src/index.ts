@@ -36,6 +36,8 @@ Usage:
   arya --channel tui --connect ws://host:port
                              Interactive TUI client of a remote arya server
   arya install <plugin.ts>   Install a local plugin into the XDG data dir
+  arya service <action>      Manage arya as a background service (install|start|stop|status|uninstall)
+  arya doctor                Diagnose config, model endpoint, server, and service health
 
 The TUI is a pure client — start 'arya serve' first (the autonomous host owns the
 server; the TUI never boots one). Run 'arya setup' on first run to write the
@@ -82,6 +84,21 @@ if (subcommand === 'setup') {
     console.error('[arya] Setup failed:', err instanceof Error ? err.message : String(err));
     process.exit(1);
   }
+}
+
+if (subcommand === 'service') {
+  const action = argv[1];
+  if (!action) {
+    console.error('usage: arya service <install|start|stop|restart|status|uninstall>');
+    process.exit(1);
+  }
+  const { runServiceCommand } = await import('./service');
+  process.exit(await runServiceCommand(action, root));
+}
+
+if (subcommand === 'doctor') {
+  const { runDoctor } = await import('./doctor');
+  process.exit(await runDoctor(root));
 }
 
 if (subcommand === '--channel') {

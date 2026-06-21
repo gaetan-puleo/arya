@@ -10,7 +10,7 @@ import {
   importModule,
   loadAgents,
   type Plugin,
-  runChannels,
+  serveHost,
   webSocketAdapter,
   type WireModel,
 } from 'mu-harness';
@@ -289,8 +289,8 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
   modelLoadingSink.apply = (model, loading) =>
     adapter.push({ type: 'model_loading', model: `local/${model}`, loading });
 
-  const channels = await runChannels({ harness, approvals, adapters: [adapter] });
-  log.info(`Listening on ${config.wsHost}:${config.wsPort} — accepting connections`);
+  // The host (channel adapter + background services + lifecycle) is assembled at
+  // the end via serveHost, once the scheduler and watcher exist.
 
   // Voice (companion call mode): the companion records audio and transcribes each
   // segment through the session-less `voice:transcribe` endpoint (harness.voice, the
@@ -349,13 +349,25 @@ export async function bootstrap(cwd: string = process.cwd(), configPath?: string
     log: (msg) => log.info(`watch: ${msg}`),
   });
 
+  // arya as a thin consumer of mu's autonomous-host primitive: serveHost owns the
+  // channel host + ordered lifecycle. Services stop in reverse on shutdown
+  // (watcher → scheduler → channels → harness.close()).
+  const sched = scheduler;
+  const host = await serveHost({
+    harness,
+    approvals,
+    adapters: [adapter],
+    services: [
+      ...(sched ? [{ stop: () => sched.stop() }] : []),
+      { stop: () => watcher.stop() },
+    ],
+  });
+  log.info(`Listening on ${config.wsHost}:${config.wsPort} — accepting connections`);
+
   return {
     shutdown: async () => {
       log.info('Shutting down...');
-      watcher.stop();
-      scheduler?.stop();
-      await channels.stop();
-      harness.close();
+      await host.shutdown();
       log.info('Stopped');
     },
   };
