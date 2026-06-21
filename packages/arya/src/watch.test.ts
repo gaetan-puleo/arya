@@ -1,19 +1,21 @@
-import { expect } from '@std/expect';
-import { describe, it } from '@std/testing/bdd';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
 import { startDefinitionWatcher } from './watch';
 
 describe('startDefinitionWatcher', () => {
   it('fires onChange (debounced) when a watched file is created', async () => {
-    const dir = await Deno.makeTempDir();
+    const dir = await mkdtemp(join(tmpdir(), 'arya-test-'));
     let calls = 0;
     const watcher = startDefinitionWatcher({ paths: [dir], onChange: () => void calls++, debounceMs: 50 });
     try {
-      await Deno.writeTextFile(`${dir}/a.md`, 'x');
+      await writeFile(`${dir}/a.md`, 'x');
       await new Promise((resolve) => setTimeout(resolve, 500));
       expect(calls).toBeGreaterThanOrEqual(1);
     } finally {
       watcher.stop();
-      await Deno.remove(dir, { recursive: true });
+      await rm(dir, { recursive: true, force: true });
     }
   });
 

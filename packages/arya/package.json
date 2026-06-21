@@ -15,14 +15,22 @@
     "bin",
     "README.md"
   ],
+  "scripts": {
+    "build": "tsup"
+  },
   "dependencies": {
-    "mu-core": "^0.32.0",
-    "mu-harness": "^0.32.0",
-    "mu-local-provider": "^0.32.0",
-    "mu-ai-tools": "^0.32.0",
-    "mu-webfetch": "^0.32.0",
-    "mu-tui": "^0.32.0",
+    "mu-core": "^0.33.0",
+    "mu-harness": "^0.33.0",
+    "mu-local-provider": "^0.33.0",
+    "mu-webfetch": "^0.33.0",
+    "mu-tools": "npm:mu-ai-tools@^0.33.0",
     "ws": "^8.18.0",
-    "croner": "^9.0.0"
+    "croner": "^9.0.0",
+    "qrcode": "^1.5.4",
+    "yaml": "^2.6.1"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13",
+    "@types/qrcode": "^1.5.5"
   }
 }

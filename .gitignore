@@ -51,3 +51,4 @@ pnpm-debug.log*
 
 # EAS
 .eas/
+bundle/

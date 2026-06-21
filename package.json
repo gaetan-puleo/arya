@@ -1,10 +1,27 @@
 {
   "name": "arya-agent",
   "private": true,
-  "workspaces": ["packages/arya", "packages/arya-companion"],
-  "comment:overrides": "Pin a single React (Expo SDK 54's version) across the workspace. Without this, a transitive dep hoists a newer react@19.2.x at the root while the companion pins 19.1.0 — two React instances break react-native-css-interop's context so NativeWind className styles silently stop applying. See memory: companion-nativewind-duplicate-react.",
-  "overrides": {
-    "react": "19.1.0",
-    "react-dom": "19.1.0"
+  "packageManager": "pnpm@11.8.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx packages/arya/src/index.ts serve",
+    "serve": "tsx packages/arya/src/index.ts serve",
+    "tui": "tsx packages/arya/src/index.ts --channel tui",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "tsc --noEmit",
+    "build": "pnpm --filter arya build",
+    "compile": "node scripts/compile.mjs",
+    "app:start": "pnpm --filter arya-companion start",
+    "app:android": "pnpm --filter arya-companion android",
+    "app:ios": "pnpm --filter arya-companion ios"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@yao-pkg/pkg": "^6.20.0",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
   }
 }

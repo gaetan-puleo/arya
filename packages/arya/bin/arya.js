@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run -A --sloppy-imports
+#!/usr/bin/env -S node --import tsx
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 

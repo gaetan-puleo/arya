@@ -10,23 +10,14 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "ignoreDeprecations": "5.0",
-    "baseUrl": ".",
     "jsx": "react-jsx",
-    "paths": {
-      "mu-core": ["../mu/packages/core/src"],
-      "mu-harness": ["../mu/packages/harness/src"],
-      "mu-local-provider": ["../mu/packages/local-provider/src"],
-      "mu-tools": ["../mu/packages/tools/src"],
-      "mu-webfetch": ["../mu/packages/webfetch/src/plugin"]
-    }
+    "types": ["node"]
   },
-  "include": ["packages/**/src/**/*.ts", "packages/**/src/**/*.tsx"],
+  "include": ["packages/arya/src/**/*.ts"],
   "exclude": [
     "node_modules",
     "dist",
     "packages/arya-companion",
-    "packages/**/src/**/*.test.ts",
-    "packages/**/src/**/*.test.tsx"
+    "packages/**/src/**/*.test.ts"
   ]
 }
