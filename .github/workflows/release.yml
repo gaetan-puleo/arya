@@ -9,6 +9,43 @@ permissions:
   contents: write
 
 jobs:
+  npm:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - name: "Pack publishable packages (arya, arya-core)"
+        run: pnpm --filter arya --filter arya-core pack
+      - name: "Guard: reject local link: deps (must be registry versions before publish)"
+        run: |
+          shopt -s nullglob
+          bad=0
+          for tgz in arya-*.tgz; do
+            if tar -xOf "$tgz" package/package.json | grep -q '"link:'; then
+              echo "::error::$tgz still contains local link: dependencies. Convert mu-* deps to registry versions (e.g. ^0.36.0) before publishing."
+              bad=1
+            fi
+          done
+          [ "$bad" -eq 0 ] && echo "OK: no link: deps in packed manifests"
+          exit "$bad"
+      - name: "Publish to npm via OIDC trusted publishing"
+        run: |
+          shopt -s nullglob
+          for tgz in arya-*.tgz; do
+            echo "Publishing $tgz"
+            npm publish "$tgz" --access public
+          done
+
   binaries:
     runs-on: ubuntu-latest
     steps:
