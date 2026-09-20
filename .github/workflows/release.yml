@@ -2,20 +2,23 @@ name: release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
-  npm:
+  release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
+    outputs:
+      released: ${{ steps.sr.outputs.release }}
+      tag: ${{ steps.sr.outputs.release_gitTag }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -24,32 +27,20 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
-      - name: "Pack publishable packages (arya, arya-core)"
-        run: pnpm --filter @arya-ai/arya --filter @arya-ai/arya-core pack
-      - name: "Guard: reject local link: deps (must be registry versions before publish)"
-        run: |
-          shopt -s nullglob
-          bad=0
-          for tgz in arya-*.tgz; do
-            if tar -xOf "$tgz" package/package.json | grep -q '"link:'; then
-              echo "::error::$tgz still contains local link: dependencies. Convert mu-* deps to registry versions (e.g. ^0.36.0) before publishing."
-              bad=1
-            fi
-          done
-          [ "$bad" -eq 0 ] && echo "OK: no link: deps in packed manifests"
-          exit "$bad"
-      - name: "Publish to npm via OIDC trusted publishing"
-        run: |
-          shopt -s nullglob
-          for tgz in arya-*.tgz; do
-            echo "Publishing $tgz"
-            npm publish "$tgz" --access public
-          done
+      - name: semantic-release
+        id: sr
+        run: npx semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   binaries:
+    needs: release
+    if: needs.release.outputs.released == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.tag }}
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -65,4 +56,5 @@ jobs:
       - name: Attach binaries to the GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.release.outputs.tag }}
           files: dist/arya-*

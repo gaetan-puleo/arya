@@ -1,0 +1,34 @@
+{
+  "branches": ["main"],
+  "tagFormat": "v${version}",
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    "@semantic-release/changelog",
+    [
+      "@semantic-release/exec",
+      {
+        "prepareCmd": "node scripts/bump-version.js ${nextRelease.version} && pnpm install --lockfile-only"
+      }
+    ],
+    [
+      "@semantic-release/git",
+      {
+        "assets": [
+          "packages/arya/package.json",
+          "packages/arya-core/package.json",
+          "pnpm-lock.yaml",
+          "CHANGELOG.md"
+        ],
+        "message": "chore(release): ${nextRelease.version}\n\n${nextRelease.notes}"
+      }
+    ],
+    [
+      "@semantic-release/exec",
+      {
+        "publishCmd": "pnpm --filter @arya-ai/arya --filter @arya-ai/arya-core pack && shopt -s nullglob && for tgz in arya-ai-*.tgz; do npm publish \"$tgz\" --access public; done"
+      }
+    ],
+    "@semantic-release/github"
+  ]
+}
