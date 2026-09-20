@@ -1,6 +1,6 @@
 {
   "name": "@arya-ai/arya-core",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Arya host stack: WebSocket channels, serveHost lifecycle, service controller (systemd/launchd), and doctor primitives — the autonomous-host layer that sits on top of the mu-coding SDK.",
   "repository": {
     "type": "git",
