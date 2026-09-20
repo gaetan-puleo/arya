@@ -26,7 +26,7 @@
     [
       "@semantic-release/exec",
       {
-        "publishCmd": "pnpm --filter @arya-ai/arya --filter @arya-ai/arya-core pack && shopt -s nullglob && for tgz in arya-ai-*.tgz; do npm publish \"$tgz\" --access public; done"
+        "publishCmd": "bash scripts/publish.sh"
       }
     ],
     "@semantic-release/github"
