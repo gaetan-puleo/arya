@@ -1,0 +1,42 @@
+import type { ContentPart } from 'mu-core';
+import { createEmitter } from 'mu-coding';
+import type { AgentSession, AgentSessionEvent, TurnOptions } from 'mu-coding';
+import type { Channel } from './types';
+
+export const createChannel = (config: {
+  id: string;
+  title: string;
+  createSession: (id: string) => AgentSession | Promise<AgentSession>;
+}): Channel => {
+  let session: AgentSession | undefined;
+  let pending: Promise<AgentSession> | undefined;
+  const emitter = createEmitter<AgentSessionEvent>();
+
+  const ensure = (): Promise<AgentSession> => {
+    if (!pending) {
+      pending = Promise.resolve(config.createSession(config.id)).then((s) => {
+        session = s;
+        s.subscribe(emitter.emit);
+        return s;
+      });
+    }
+    return pending;
+  };
+
+  return {
+    id: config.id,
+    title: config.title,
+    get started() {
+      return session !== undefined;
+    },
+    get messages() {
+      return session?.messages ?? [];
+    },
+    get session() {
+      return session;
+    },
+    send: async (input: string | ContentPart[], opts?: TurnOptions) => (await ensure()).send(input, opts),
+    abort: () => session?.abort(),
+    subscribe: emitter.subscribe,
+  };
+};

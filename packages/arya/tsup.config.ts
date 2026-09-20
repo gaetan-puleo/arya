@@ -20,7 +20,7 @@ export default defineConfig({
   // it instead of throwing "Dynamic require not supported" (some CJS deps, e.g. ws,
   // require node builtins at runtime).
   banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" },
-  // esbuild doesn't know the recent `node:sqlite` builtin (used by mu-harness) and
+  // esbuild doesn't know the recent `node:sqlite` builtin (used by mu-coding) and
   // strips the prefix to a bare `sqlite` import that fails at runtime. Re-add it.
   onSuccess: async () => {
     const code = readFileSync(BUNDLE, 'utf8').replaceAll('from "sqlite"', 'from "node:sqlite"');

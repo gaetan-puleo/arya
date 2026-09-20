@@ -1,5 +1,5 @@
 // `arya doctor` — a health check that composes the generic doctor primitives
-// from mu-harness (runChecks/formatReport + the ok/warn/fail/info helpers and
+// from mu-coding (runChecks/formatReport + the ok/warn/fail/info helpers and
 // the tcp/command/service probes) with arya-specific knowledge: where the
 // config lives, which fields are mandatory, and the reachability of the model
 // endpoint and a running `arya serve`. Each check degrades gracefully — a probe
@@ -7,6 +7,7 @@
 // produces a report and a single exit code.
 
 import { resolve } from 'node:path';
+import { loadSkillsFromRoots, summarizeIssues } from 'mu-coding';
 import {
   type Check,
   createServiceController,
@@ -19,10 +20,10 @@ import {
   runChecks,
   tcpProbe,
   warn,
-} from 'mu-harness';
+} from 'arya-core';
 
 import { aryaServiceDescriptor } from './service';
-import { aryaDirs } from './xdg';
+import { aryaDirs, resolveXdg } from './xdg';
 import { type Config, firstReadable, isValidPort, missingMandatory, readConfig } from './init';
 
 const str = (value: unknown): string | undefined =>
@@ -99,6 +100,17 @@ export async function runDoctor(cwd: string): Promise<number> {
       } catch {
         return info('service', 'not supported on this platform');
       }
+    },
+
+    // 7. Agent Skills (agentskills.io) compliance — validate every SKILL.md
+    // under the project and global skill roots against the spec.
+    async () => {
+      const roots = [resolve(cwd, 'skills'), resolveXdg().configHome + '/arya/skills'];
+      const skills = await loadSkillsFromRoots(roots);
+      if (!skills.length) return info('skills', 'none found');
+      const issues = summarizeIssues(skills);
+      if (!issues.length) return ok(`skills valid (${skills.length})`);
+      return warn(`skills: ${issues.length} issue(s)`, issues.slice(0, 8).join('; '));
     },
   ];
 

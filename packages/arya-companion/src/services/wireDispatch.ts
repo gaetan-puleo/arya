@@ -25,6 +25,17 @@ export function dispatch(msg: WsInboundMessage): void {
 	const store = useStore.getState();
 
 	switch (msg.type) {
+		case "server_hello":
+			// Version handshake. This build speaks protocol v1. A newer server
+			// (v > 1) may send frames we don't understand — surface it loudly
+			// instead of failing silently frame-by-frame.
+			if (msg.protocolVersion > 1) {
+				console.warn(
+					`[ws] server protocol v${msg.protocolVersion} > companion v1 — some features may not work; update the companion`,
+				);
+			}
+			return;
+
 		case "commands":
 			store.setCommands(msg.commands);
 			return;

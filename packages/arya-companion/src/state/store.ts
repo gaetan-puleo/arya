@@ -60,14 +60,12 @@ export interface StoreActions {
 	setCurrentSessionId: (id: string | null) => void;
 	replaceTranscript: (sid: string, rows: ChatMessageItem[]) => void;
 	appendTranscriptRow: (sid: string, row: ChatMessageItem) => void;
-	clearTranscript: (sid: string) => void;
 	dropTranscript: (sid: string) => void;
 	setStreamingPlaceholder: (sid: string, text: string) => void;
 	appendStreamingPlaceholder: (sid: string, delta: string) => void;
 	clearStreamingPlaceholder: (sid: string) => void;
 
 	upsertSubAgentRun: (snap: SubAgentRunSnapshot) => void;
-	resetSubAgentRuns: () => void;
 
 	upsertApproval: (snap: ApprovalSnapshot) => void;
 }
@@ -116,12 +114,6 @@ export const useStore = create<Store>((set) => ({
 			next.set(sid, [...prev, row]);
 			return { transcripts: next };
 		}),
-	clearTranscript: (sid) =>
-		set((s) => {
-			const next = new Map(s.transcripts);
-			next.set(sid, []);
-			return { transcripts: next };
-		}),
 	dropTranscript: (sid) =>
 		set((s) => {
 			const next = new Map(s.transcripts);
@@ -159,7 +151,6 @@ export const useStore = create<Store>((set) => ({
 			next.set(snap.runId, snap);
 			return { subAgentRuns: next };
 		}),
-	resetSubAgentRuns: () => set({ subAgentRuns: new Map() }),
 	upsertApproval: (snap) =>
 		set((s) => {
 			const next = new Map(s.approvals);

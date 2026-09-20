@@ -4,7 +4,7 @@
 // mandatory field, and by the terminal setup wizard (setup-wizard.ts) to read,
 // validate, and write config. No stdin/transport concerns live here.
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 export type Config = Record<string, unknown>;
@@ -54,6 +54,7 @@ export function firstReadable(paths: string[]): string | undefined {
 export const isLoopbackHost = (h: string): boolean => h === '127.0.0.1' || h === 'localhost' || h === '::1';
 
 export function writeConfig(path: string, config: Config): void {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, 'utf-8');
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+  writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, { encoding: 'utf-8', mode: 0o600 });
+  chmodSync(path, 0o600);
 }

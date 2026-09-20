@@ -118,6 +118,9 @@ async function doStart(): Promise<void> {
 			const live = transportRef.current?.getSocket() ?? socket;
 			console.log(`[ws] connected to ${cfg.url}`);
 			useStore.getState().setConnection(true);
+			// Version handshake first: lets a stale build detect a server it
+			// can't speak instead of failing opaquely frame-by-frame.
+			sendRaw(live, { type: "hello", protocolVersion: 1, client: "arya-companion" });
 			// Server pushes the registries on connect; re-request defensively
 			// in case we reconnected silently after a transient drop.
 			sendRaw(live, { type: "commands" });
@@ -237,7 +240,7 @@ export function sendChat(
 	sessionId: string,
 	text: string,
 	attachments?: Attachment[],
-	opts?: { silent?: boolean },
+	opts?: { silent?: boolean; thinking?: "off" },
 ): void {
 	const store = useStore.getState();
 	const hasAttachments = attachments != null && attachments.length > 0;
@@ -246,6 +249,7 @@ export function sendChat(
 		sessionId,
 		text,
 		...(hasAttachments ? { attachments } : {}),
+		...(opts?.thinking ? { thinking: opts.thinking } : {}),
 	};
 
 	if (JSON.stringify(payload).length > MAX_CHAT_BYTES) {

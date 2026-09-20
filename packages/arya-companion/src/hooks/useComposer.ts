@@ -11,7 +11,7 @@ import * as Clipboard from "expo-clipboard";
 import * as arya from "@/services/aryaClient";
 import { newSessionId } from "@/services/optimistic";
 import { useStore } from "@/state/store";
-import type { AgentInfo, Attachment, CommandInfo } from "@/types/domain";
+import type { Attachment, CommandInfo } from "@/types/domain";
 
 interface ComposerState {
 	input: string;
@@ -22,9 +22,6 @@ interface ComposerState {
 	commands: CommandInfo[];
 	showCommandMenu: boolean;
 	filteredCommands: CommandInfo[];
-	agents: AgentInfo[];
-	showAgentMenu: boolean;
-	filteredAgents: AgentInfo[];
 	/** Pending image/audio attachments to send with the next message. */
 	attachments: Attachment[];
 	/** True when the server's model accepts images (gates the paste-image button). */
@@ -47,7 +44,6 @@ export function useComposer(): ComposerState {
 
 	const connected = useStore((s) => s.connected);
 	const commands = useStore((s) => s.commands);
-	const agents = useStore((s) => s.agents);
 	const canAttachImage = useStore((s) => s.capabilities.vision);
 	const currentSessionId = useStore((s) => s.currentSessionId);
 	const loading = useStore((s) =>
@@ -57,7 +53,6 @@ export function useComposer(): ComposerState {
 	);
 
 	const showCommandMenu = input.startsWith("/") && !input.includes(" ");
-	const showAgentMenu = input.startsWith("@") && !input.includes(" ");
 	const query = input.slice(1).toLowerCase();
 
 	const filteredCommands = showCommandMenu
@@ -68,12 +63,6 @@ export function useComposer(): ComposerState {
 					c.description.toLowerCase().includes(query),
 			)
 		: [];
-
-	// The `@` agent menu is plumbed end-to-end but currently has no rows
-	// to surface — every wire agent is hardcoded `type: "primary"` and
-	// the previous filter (`=== "subagent"`) produced an empty list.
-	// Re-enable once the server emits sub-agent entries on the `agents` wire.
-	const filteredAgents: AgentInfo[] = [];
 
 	const pasteImage = useCallback(() => {
 		if (!canAttachImage) return;
@@ -131,9 +120,6 @@ export function useComposer(): ComposerState {
 		commands,
 		showCommandMenu,
 		filteredCommands,
-		agents,
-		showAgentMenu,
-		filteredAgents,
 		attachments,
 		canAttachImage,
 		pasteImage,

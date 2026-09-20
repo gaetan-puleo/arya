@@ -1,20 +1,9 @@
-import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { XdgDirs } from 'mu-harness';
+import { resolveXdg } from 'mu-coding';
 
-const fromEnv = (name: string, fallback: string): string => {
-  const value = process.env[name];
-  return value && value.trim() ? value : fallback;
-};
-
-export function resolveXdg(): XdgDirs {
-  const home = homedir();
-  return {
-    configHome: fromEnv('XDG_CONFIG_HOME', join(home, '.config')),
-    dataHome: fromEnv('XDG_DATA_HOME', join(home, '.local', 'share')),
-    stateHome: fromEnv('XDG_STATE_HOME', join(home, '.local', 'state')),
-  };
-}
+// XDG resolution is owned by mu-coding (`resolveXdg`); re-exported here so
+// existing arya call sites keep working without a second implementation.
+export { resolveXdg };
 
 /** The XDG-derived arya paths consumed OUTSIDE the harness: the plugin install
  *  dir and the config file. Everything else (sessions, catalog, agent dirs, data/

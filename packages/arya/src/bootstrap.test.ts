@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from './bootstrap';
+import { loadConfig, buildPanelProvider, type BootstrapConfig, type PanelSectionConfig } from './bootstrap';
+import { TaskStore } from 'arya-core';
 
 describe('loadConfig', () => {
   let dir: string;
@@ -69,5 +70,67 @@ describe('loadConfig', () => {
     const config = loadConfig('/some/cwd', path);
     expect(config.agentsDir).toBe('/some/cwd/definitions/agents');
     expect(config.tasksDir).toBe('/some/cwd/definitions/tasks');
+  });
+
+  it('parses a declarative panel array', () => {
+    const path = write({
+      baseUrl: 'http://x',
+      model: 'm',
+      wsPort: 9000,
+      panel: [
+        { title: 'TASKS', source: 'tasks' },
+        { title: 'INFO', items: [{ label: 'Host', value: 'arya-01' }] },
+      ],
+    });
+    const config = loadConfig(dir, path);
+    expect(config.panel).toHaveLength(2);
+    expect(config.panel?.[0].source).toBe('tasks');
+    expect(config.panel?.[1].items?.[0]).toEqual({ label: 'Host', value: 'arya-01' });
+  });
+});
+
+describe('buildPanelProvider', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'arya-panel-'));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const cfg = (panel?: PanelSectionConfig[]): BootstrapConfig => ({
+    baseUrl: 'http://x',
+    model: 'm',
+    wsPort: 9000,
+    panel,
+  });
+
+  it('renders a tasks source from the TaskStore, sorted by priority', () => {
+    const store = new TaskStore(join(dir, 'tasks'));
+    store.create({ title: 'low task', priority: 'low', status: 'backlog' });
+    store.create({ title: 'urgent task', priority: 'urgent', status: 'in_progress' });
+    const sections = buildPanelProvider(cfg([{ title: 'TASKS', source: 'tasks' }]), store)();
+    expect(sections[0].title).toBe('TASKS');
+    expect(sections[0].items[0].label).toBe('urgent task');
+    expect(sections[0].items[0].status).toBe('running');
+    expect(sections[0].items[1].label).toBe('low task');
+    expect(sections[0].items[1].status).toBeUndefined();
+  });
+
+  it('renders static key/value and status items', () => {
+    const store = new TaskStore(join(dir, 'static'));
+    const sections = buildPanelProvider(
+      cfg([{ title: 'INFO', items: [{ label: 'Host', value: 'arya-01' }, { label: 'Env', value: 'prod', status: 'done' }] }]),
+      store,
+    )();
+    expect(sections[0].items).toEqual([
+      { label: 'Host', value: 'arya-01' },
+      { label: 'Env', value: 'prod', status: 'done' },
+    ]);
+  });
+
+  it('returns no sections when panel is unset', () => {
+    const store = new TaskStore(join(dir, 'none'));
+    expect(buildPanelProvider(cfg(), store)()).toEqual([]);
   });
 });

@@ -3,9 +3,10 @@
 import { basename, resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 
-import { createPluginStore } from 'mu-harness';
+import { createPluginStore } from 'mu-coding';
 import { aryaDirs } from './xdg';
 import { firstReadable, isValidPort, missingMandatory, readConfig } from './init';
+import { errMsg } from 'mu-core';
 
 /** Resolve the active config path/contents and which mandatory fields are missing. */
 async function resolveConfigState(): Promise<{ target: string; config: Record<string, unknown>; missing: string[] }> {
@@ -32,8 +33,8 @@ Usage:
   arya                       Show this help
   arya setup [model|server]  Interactive terminal wizard for config.json
   arya serve                 Run the autonomous host (WebSocket server for channels)
-  arya --channel tui         Interactive TUI client of a running 'arya serve' (local)
-  arya --channel tui --connect ws://host:port
+  arya tui                   Interactive TUI client of a running 'arya serve' (local)
+  arya tui --connect ws://host:port
                              Interactive TUI client of a remote arya server
   arya install <plugin.ts>   Install a local plugin into the XDG data dir
   arya service <action>      Manage arya as a background service (install|start|stop|status|uninstall)
@@ -64,7 +65,7 @@ if (subcommand === 'install' || subcommand === 'i') {
     console.log(`[arya] installed ${dest}`);
     process.exit(0);
   } catch (err) {
-    console.error('[arya] install failed:', err instanceof Error ? err.message : String(err));
+    console.error('[arya] install failed:', errMsg(err));
     process.exit(1);
   }
 }
@@ -81,7 +82,7 @@ if (subcommand === 'setup') {
     const written = await runSetupWizard({ configPath: target, section: sectionArg as 'model' | 'server' | undefined });
     process.exit(written ? 0 : 1);
   } catch (err) {
-    console.error('[arya] Setup failed:', err instanceof Error ? err.message : String(err));
+    console.error('[arya] Setup failed:', errMsg(err));
     process.exit(1);
   }
 }
@@ -101,31 +102,26 @@ if (subcommand === 'doctor') {
   process.exit(await runDoctor(root));
 }
 
-if (subcommand === '--channel') {
-  const channel = argv[1];
-  if (channel !== 'tui') {
-    console.error(`[arya] Unknown channel "${channel ?? ''}". Available channels: tui`);
-    process.exit(1);
-  }
+if (subcommand === 'tui') {
   const connectIdx = argv.indexOf('--connect');
   const connect = connectIdx >= 0 ? argv[connectIdx + 1] : undefined;
   if (connectIdx >= 0 && !connect) {
-    console.error('usage: arya --channel tui --connect ws://host:port');
+    console.error('usage: arya tui --connect ws://host:port');
     process.exit(1);
   }
-  const { runChannelTui } = await import('./run-tui');
+  const { runTui } = await import('./run-tui');
   try {
     if (connect) {
       // Remote server: connect directly, no local config needed.
-      await runChannelTui(root, undefined, { connect });
+      await runTui(root, undefined, { connect });
     } else {
       const { target, missing } = await resolveConfigState();
       if (missing.length === 0) {
         // Complete config: ordinary client of a running `arya serve`.
-        await runChannelTui(root, target, {});
+        await runTui(root, target, {});
       } else {
         // First run: config is incomplete. The TUI is a pure client — point the
-        // user at the terminal wizard rather than configuring in-channel.
+        // user at the terminal wizard rather than configuring in-app.
         console.error(`[arya] Config incomplete (missing: ${missing.join(', ')}). Run the setup wizard first:`);
         console.error('[arya]   arya setup');
         process.exit(1);
@@ -151,8 +147,14 @@ if (subcommand === '--channel') {
   console.log(`[arya] Config: ${configPath}`);
 
   const { printConnectQr, lanIp } = await import('./qr');
+  const tlsCfg = typeof startingConfig.tls === 'object' && startingConfig.tls !== null
+    ? (startingConfig.tls as Record<string, unknown>)
+    : {};
+  const tlsKey = (typeof tlsCfg.keyPath === 'string' && tlsCfg.keyPath) || process.env.ARYA_TLS_KEY;
+  const tlsCert = (typeof tlsCfg.certPath === 'string' && tlsCfg.certPath) || process.env.ARYA_TLS_CERT;
+  const tlsOn = Boolean(tlsKey && tlsCert);
   await printConnectQr({
-    url: `ws://${lanIp()}:${portOf(startingConfig)}`,
+    url: `${tlsOn ? 'wss' : 'ws'}://${lanIp()}:${portOf(startingConfig)}`,
     token: typeof startingConfig.authToken === 'string' && startingConfig.authToken
       ? startingConfig.authToken
       : undefined,

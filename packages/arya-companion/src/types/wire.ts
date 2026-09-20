@@ -8,7 +8,7 @@
 
 export type WireRole = "user" | "assistant" | "system" | "tool";
 
-/** A non-text content part (image/audio) carried over the wire as base64. Mirrors mu-harness's WireAttachment. */
+/** A non-text content part (image/audio) carried over the wire as base64. Mirrors mu-coding's WireAttachment. */
 export interface WireAttachment {
 	kind: "image" | "audio";
 	mime: string;
@@ -71,7 +71,7 @@ export interface SessionSummaryWire {
 export type SessionChangeKind = "created" | "updated" | "deleted" | "renamed";
 
 /**
- * Sub-agent lifecycle event emitted by mu-agents' SubAgentBus.
+ * Sub-agent lifecycle event emitted by mu-coding's sub-agent bus.
  *
  * Discriminated by `type`; the `detail` payload's shape varies per variant.
  * Reducers can switch on `type` and the compiler will narrow `detail` for
@@ -135,7 +135,7 @@ export type SubAgentEventWire =
 
 /**
  * Permission rule shape emitted with `approval_request`. Mirrors
- * `arya/src/protocol.ts:WireRule`, which mirrors mu-harness's
+ * `arya-core/src/ws/protocol.ts:WireRule`, which mirrors mu-coding's
  * `PermissionRule`. The server stamps it verbatim from the runtime; the
  * companion only reads it to display the matched policy.
  */
@@ -146,19 +146,19 @@ export interface WireRule {
 }
 
 /**
- * Approval prompt emitted by the server's `ApprovalQueue`.
+ * Approval prompt emitted by the server's approval queue.
  *
- * NOTE: matches the actual server emission (`arya/src/protocol.ts:
+ * Matches the server emission (`arya-core/src/ws/protocol.ts:
  * WireApprovalRequest`):
+ *   - `agentName` is the agent that triggered the approval (from `PendingApproval.agent`).
  *   - `args` is a STRING (the LLM's raw stringified tool arguments).
  *   - `matchedRule` is a `WireRule | undefined` (object, not string).
- *   - `agentName` is NOT emitted by the current server; older builds may.
  *   - `sessionId` may be null (no session pinned at issue time).
  */
 export interface ApprovalRequestWire {
 	requestId: string;
 	sessionId: string | null;
-	/** Server doesn't always include this — keep optional for older builds. */
+	/** The agent that triggered the approval, when known. */
 	agentName?: string;
 	toolName: string;
 	args: string;
@@ -177,7 +177,7 @@ export interface CommandWire {
 }
 
 /**
- * Scheduler event mirrors mu-harness's `SchedulerEvent` union (verbatim,
+ * Scheduler event mirrors mu-coding's `SchedulerEvent` union (verbatim,
  * forwarded by the server inside `scheduler_event` frames). The companion
  * unwraps `frame.event` and pattern-matches on `type`.
  */
@@ -188,6 +188,8 @@ export type SchedulerEvent =
 			task: SchedulerTask;
 			at: number;
 			durationMs: number;
+			silent?: boolean;
+			output?: string;
 	  }
 	| {
 			type: "task_failed";
@@ -201,14 +203,17 @@ export interface SchedulerTask {
 	cron: string;
 	prompt: string;
 	timezone?: string;
-	channel?: string;
+	/** When set, the task runs this shell command directly (no agent / no LLM).
+	 * Mirrors the server's `WireSchedulerTask.command` (arya-core scheduler). */
+	command?: string;
 }
 
 /**
  * Discriminated union over `type`. The single source of truth for what
- * arrives over the WebSocket from arya's server (`packages/arya/src/ws.ts`).
+ * arrives over the WebSocket from arya's server (`arya-core/src/ws/protocol.ts`).
  */
 export type WsInboundMessage =
+	| { type: "server_hello"; protocolVersion: number }
 	| { type: "commands"; commands: CommandWire[] }
 	| {
 			type: "agents";
@@ -219,7 +224,6 @@ export type WsInboundMessage =
 			type: "active_agent";
 			agentId: string | null;
 			sessionId?: string;
-			from?: string | null;
 			reason?: string;
 	  }
 	| { type: "capabilities"; vision: boolean; audio: boolean }
@@ -260,6 +264,7 @@ export type WsInboundMessage =
  * "new variant? add it here too" requirement obvious.
  */
 const INBOUND_TYPES = new Set<WsInboundMessage["type"]>([
+	"server_hello",
 	"commands",
 	"agents",
 	"active_agent",
@@ -299,9 +304,17 @@ export function isWsInboundMessage(value: unknown): value is WsInboundMessage {
  * each variant matches a handler in arya's WS dispatch.
  */
 export type WsOutboundMessage =
+	| { type: "hello"; protocolVersion: number; client?: string }
 	| { type: "commands" }
 	| { type: "agents" }
-	| { type: "chat"; sessionId: string; text: string; attachments?: WireAttachment[] }
+	| {
+			type: "chat";
+			sessionId: string;
+			text: string;
+			attachments?: WireAttachment[];
+			/** `'off'` = skip model reasoning this turn (voice call mode). */
+			thinking?: "off";
+	  }
 	| { type: "command"; sessionId: string; text: string }
 	| {
 			type: "set_active_agent";

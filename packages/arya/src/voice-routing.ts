@@ -1,8 +1,12 @@
-// Provider wrapper for CALL-MODE replies. The companion's voice call mode appends an
-// invisible (zero-width) marker to its transcribed turn so the chat model skips
-// reasoning for that one turn (fast spoken replies). This wrapper strips the marker
-// before the model sees it and sets `enable_thinking:false` for that turn only. Plain
-// typed chat (no marker) keeps the model's default reasoning.
+// Provider wrapper for CALL-MODE replies — RETROCOMPAT path only.
+//
+// Current companions signal call mode with the `thinking:'off'` field on the chat
+// frame, handled natively in arya-core (ws/server.ts → enable_thinking:false).
+// Older companion builds (pre-`thinking` field) instead appended an invisible
+// zero-width marker to the transcribed turn. This wrapper keeps those old clients
+// working: it strips the marker before the model sees it and sets
+// `enable_thinking:false` for that turn only. Plain typed chat (no marker, no
+// `thinking` field) keeps the model's default reasoning.
 //
 // Transcription itself is NOT handled here: call mode records audio and transcribes it
 // through the session-less `voice:transcribe` endpoint (harness.voice), then sends the
@@ -10,10 +14,11 @@
 
 import type { Message, Provider } from 'mu-core';
 
-// Invisible (zero-width) marker the companion appends to a CALL-MODE reply to ask the
-// chat model to skip reasoning for that one turn (Qwen3 `enable_thinking:false`). Kept
-// out-of-band as zero-width so it never shows in the UI; stripped before the model sees
-// it. Must match NO_THINK_MARKER in the companion's useVoiceCall.
+// Legacy zero-width marker appended by OLD companion builds to request a no-reasoning
+// turn (Qwen3 `enable_thinking:false`). Kept out-of-band as zero-width so it never
+// shows in the UI; stripped before the model sees it. New clients use the
+// `thinking:'off'` frame field instead — this path exists only for phones we can't
+// force-update. Safe to drop once no such build remains in the wild.
 const NO_THINK_MARKER = '\u200b\u200c\u200b';
 
 /** The most recent user message, or undefined. */

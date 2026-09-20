@@ -1,0 +1,31 @@
+{
+  "name": "arya-core",
+  "version": "0.6.0",
+  "description": "Arya host stack: WebSocket channels, serveHost lifecycle, service controller (systemd/launchd), and doctor primitives — the autonomous-host layer that sits on top of the mu-coding SDK.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gaetan-puleo/arya.git",
+    "directory": "packages/arya-core"
+  },
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean"
+  },
+  "dependencies": {
+    "mu-core": "^0.36.0",
+    "mu-coding": "^0.36.0",
+    "ws": "^8.18.0",
+    "yaml": "^2.6.1"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13"
+  }
+}

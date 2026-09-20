@@ -1,4 +1,4 @@
-import type { Skill } from 'mu-harness';
+import type { Skill } from 'mu-coding';
 
 // Skill bodies use single-quoted lines (backticks stay literal) and `~~~` code
 // fences (so they don't collide with markdown's ``` in the model's view).
@@ -53,25 +53,35 @@ const MANAGE_AGENT = lines(
 );
 
 const MANAGE_SKILL = lines(
-  'Skills are `skills/<name>/SKILL.md` files. They hot-reload — loadable via `skill`, no restart for any action below.',
+  'Skills follow the open **Agent Skills** format (agentskills.io): a directory `skills/<name>/` holding a `SKILL.md` — YAML frontmatter + Markdown body. They hot-reload — loadable via `skill`, no restart.',
   '',
-  '**Create** — use `write` to add `skills/<name>/SKILL.md`. Frontmatter:',
-  '- `name` (required): kebab-case; must match the directory name.',
-  '- `description` (required): one line on when to use it.',
+  '**Frontmatter fields**',
+  '- `name` (required): 1-64 chars, lowercase `a-z` `0-9` and single hyphens only; no leading/trailing/consecutive hyphen; MUST match the directory name.',
+  '- `description` (required): 1-1024 chars, non-empty. Say WHAT it does AND WHEN to use it, with keywords an agent can match on.',
+  '- `license` (optional): license name or a bundled file reference.',
+  '- `compatibility` (optional): ≤500 chars, environment needs (product, system packages, network).',
+  '- `metadata` (optional): map of string→string (author, version, …).',
+  '- `allowed-tools` (optional, experimental): space-separated pre-approved tools.',
   '',
-  'The body is the instructions to follow. Example:',
+  'The body is free Markdown: step-by-step instructions, examples, edge cases. Keep `SKILL.md` under ~500 lines; move detail to `references/`, code to `scripts/`, templates to `assets/` (referenced by relative path).',
+  '',
+  'Example:',
   '~~~markdown',
   '---',
   'name: release-notes',
-  'description: Draft release notes from the commit log since the last tag.',
+  'description: Draft release notes from the commit log since the last tag. Use when asked for a changelog or release summary.',
+  'license: MIT',
+  'metadata:',
+  '  author: arya',
+  '  version: "1.0"',
   '---',
   '1. Run git log <last-tag>..HEAD --oneline.',
   '2. Group commits by type (feat / fix / chore).',
   '3. Write a concise changelog.',
   '~~~',
   '',
-  '**Edit** — `read` then `edit` (or `write`) the SKILL.md. Keep `name` matching the directory.',
-  '**Delete** — remove the skill directory.',
+  '**Create** — `write` `skills/<name>/SKILL.md`. **Edit** — `read` then `edit`/`write`, keep `name` matching the directory. **Delete** — remove the skill directory.',
+  '**Validate** — `arya doctor` checks every SKILL.md against the spec and lists violations.',
 );
 
 const UPDATE_CONFIG = lines(

@@ -60,11 +60,9 @@ const WAVE_DECAY = 0.82; // per-bar release: fast attack, slow decay → the liv
 const MIN_VOICED_MS = 280; // ignore turns shorter than this (clicks/noise)
 const MAX_TURN_MS = 30000; // safety cap on a single turn
 const WAVE_BARS = 28; // points across the live wave (envelope of the current chunk)
-// Invisible (zero-width) marker appended to the CALL-MODE reply text so arya disables
-// the chat model's reasoning for that turn only (fast spoken replies). Typed chat has no
-// marker → normal reasoning. Zero-width → never visible in the bubble. Must match
-// NO_THINK_MARKER in arya's voice-routing.ts.
-const NO_THINK_MARKER = "\u200b\u200c\u200b";
+// Call-mode turns ask the chat model to skip reasoning via the `thinking:'off'`
+// frame field (see arya-core protocol). This replaces the legacy zero-width marker;
+// the server still strips a stray marker for old builds, but new turns use the field.
 
 export type CallPhase = "off" | "listening" | "thinking" | "speaking";
 
@@ -502,9 +500,9 @@ export function useVoiceCall(): VoiceCall {
 		spokenLenRef.current = 0;
 		replyTextRef.current = "";
 		setPhase("thinking");
-		// Append the (invisible) call-mode marker → arya disables reasoning for this turn
-		// only, so the spoken reply comes fast. The marker is zero-width (not shown).
-		arya.sendChat(sid, transcript + NO_THINK_MARKER); // normal, visible chat turn → chat model replies
+		// `thinking:'off'` on the chat frame → arya disables reasoning for this
+		// turn only, so the spoken reply comes fast.
+		arya.sendChat(sid, transcript, undefined, { thinking: "off" }); // normal, visible chat turn → chat model replies
 	}, [ensureSession, setPhase]);
 	finalizeTurnRef.current = finalizeTurn;
 

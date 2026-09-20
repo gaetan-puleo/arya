@@ -22,7 +22,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { SharedValue } from "react-native-reanimated";
 
-import type { AgentInfo, Attachment, CommandInfo } from "@/types/domain";
+import type { Attachment, CommandInfo } from "@/types/domain";
 import { useTheme } from "@/theme/ThemeContext";
 import type { CallPhase } from "@/hooks/useVoiceCall";
 import CallBar from "@/components/chat/CallBar";
@@ -34,8 +34,6 @@ interface ChatInputBarProps {
 	loading: boolean;
 	showCommandMenu: boolean;
 	filteredCommands: CommandInfo[];
-	showAgentMenu: boolean;
-	filteredAgents: AgentInfo[];
 	keyboardOpen: boolean;
 	keyboardHeight: number;
 	attachments: Attachment[];
@@ -62,8 +60,6 @@ export default function ChatInputBar({
 	loading,
 	showCommandMenu,
 	filteredCommands,
-	showAgentMenu,
-	filteredAgents,
 	keyboardOpen,
 	keyboardHeight,
 	attachments,
@@ -135,19 +131,6 @@ export default function ChatInputBar({
 						label={(item) => `/${item.command}`}
 						description={(item) => item.description}
 						keyExtractor={(item) => item.command}
-					/>
-				)}
-
-				{showAgentMenu && filteredAgents.length > 0 && (
-					<InlineMenu
-						items={filteredAgents}
-						onSelect={(agent) => {
-							Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-							onInputChange(`@${agent.id} `);
-						}}
-						label={(item) => `@${item.id}`}
-						description={(item) => item.description}
-						keyExtractor={(item) => item.id}
 					/>
 				)}
 

@@ -1,14 +1,30 @@
 import process from 'node:process';
 import { createConnection } from 'node:net';
-import { ChatApp, connectHarness, type RemoteHarness } from 'mu-harness';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { ChatApp } from 'mu-coding';
+import { connectHarness, type RemoteHarness } from 'arya-core';
 import { loadConfig } from './bootstrap';
 
+const ARYA_VERSION = (() => {
+  try {
+    const pkg = JSON.parse(
+      readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf-8'),
+    ) as { version?: string };
+    return pkg.version ?? '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+})();
+
 const ARYA_BANNER = [
-  '    .    .--..   .  .',
-  '   / \\   |   )\\ /  / \\',
-  "  /___\\  |--'  :  /___\\",
-  ' /     \\ |  \\  | /     \\',
-  "'       `'   ` ''       `",
+  '⠀⠀⠀⠀⢰⡆⠀⠀⠀⠀',
+  '⠀⠀⠀⢠⠉⣿⡄⠀⠀⠀',
+  '⠀⠀⢀⡏⠀⢹⣿⡀⠀⠀',
+  '⠀⠀⣾⠁⠀⠈⣿⣷⠀⠀',
+  '⠀⣼⡏⠀⠀⠀⢹⣿⣧⠀',
+  '⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶',
 ].join('\n');
 
 export interface RunTuiOptions {
@@ -30,12 +46,13 @@ export function isPortOpen(host: string, port: number, timeoutMs = 600): Promise
 }
 
 /**
- * The `tui` channel: an interactive terminal CLIENT of an autonomous arya server.
- * It never boots a server — the autonomous host (`arya serve`) owns serving; the
- * TUI only connects. By default it attaches to the configured host:port; with
- * `--connect ws://…` it attaches to a remote server (token via ARYA_TOKEN).
+ * The TUI: an interactive terminal CLIENT of an autonomous arya server. It is a
+ * view over a `ChatHost` (the remote harness), not a channel — it never boots a
+ * server. The autonomous host (`arya serve`) owns serving; the TUI only connects.
+ * By default it attaches to the configured host:port; with `--connect ws://…` it
+ * attaches to a remote server (token via ARYA_TOKEN).
  */
-export async function runChannelTui(cwd: string, configPath: string | undefined, opts: RunTuiOptions): Promise<void> {
+export async function runTui(cwd: string, configPath: string | undefined, opts: RunTuiOptions): Promise<void> {
   let url: string;
   let token: string | undefined;
 
@@ -70,6 +87,7 @@ export async function runChannelTui(cwd: string, configPath: string | undefined,
     cwd,
     banner: ARYA_BANNER,
     minimal: true,
+    version: `arya ${ARYA_VERSION}`,
     onExit: (code) => void teardown(code),
   });
 

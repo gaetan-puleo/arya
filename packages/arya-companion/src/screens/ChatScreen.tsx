@@ -146,11 +146,9 @@ export default function ChatScreen() {
 						onInputChange={composer.setInput}
 						onSend={composer.send}
 						loading={loading}
-						showCommandMenu={composer.showCommandMenu}
-						filteredCommands={composer.filteredCommands}
-						showAgentMenu={composer.showAgentMenu}
-						filteredAgents={composer.filteredAgents}
-						keyboardOpen={keyboardOpen}
+					showCommandMenu={composer.showCommandMenu}
+					filteredCommands={composer.filteredCommands}
+					keyboardOpen={keyboardOpen}
 						keyboardHeight={keyboardHeight}
 						attachments={composer.attachments}
 						canAttachImage={composer.canAttachImage}

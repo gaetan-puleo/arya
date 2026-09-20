@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx packages/arya/src/index.ts",
     "serve": "tsx packages/arya/src/index.ts serve",
-    "tui": "tsx packages/arya/src/index.ts --channel tui",
+    "tui": "tsx packages/arya/src/index.ts tui",
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "tsc --noEmit",
@@ -19,6 +19,7 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "@yao-pkg/pkg": "^6.20.0",
+    "knip": "^6.37.0",
     "tsup": "^8.3.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",

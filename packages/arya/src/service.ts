@@ -1,12 +1,13 @@
 // `arya service <action>` — install/manage arya as a user service on the host.
 //
 // All platform-specific logic (systemd on linux, launchd on darwin) lives in the
-// generic service-lifecycle in mu-harness; this module only describes how to
+// generic service-lifecycle in mu-coding; this module only describes how to
 // relaunch arya in `serve` mode and prints `[arya]`-prefixed feedback.
 
 import { basename } from 'node:path';
 
-import { createServiceController, type ServiceDescriptor } from 'mu-harness';
+import { createServiceController, type ServiceDescriptor } from 'arya-core';
+import { errMsg } from 'mu-core';
 
 /** Describe the arya `serve` host as an installable user service. */
 export function aryaServiceDescriptor(cwd: string): ServiceDescriptor {
@@ -33,7 +34,7 @@ export async function runServiceCommand(action: string, cwd: string): Promise<nu
   try {
     controller = createServiceController(descriptor, { linger: true });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = errMsg(err);
     console.error(`[arya] Service management is not supported on this platform: ${msg}`);
     console.error('[arya] Run `arya serve` under your own process supervisor instead.');
     return 1;
@@ -80,7 +81,7 @@ export async function runServiceCommand(action: string, cwd: string): Promise<nu
         return 1;
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = errMsg(err);
     console.error(`[arya] service ${action} failed: ${msg}`);
     return 1;
   }
