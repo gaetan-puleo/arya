@@ -1,5 +1,5 @@
 {
-  "name": "arya",
+  "name": "@arya-ai/arya",
   "version": "0.6.0",
   "type": "module",
   "description": "Autonomous multi-agent runtime powered by mu",
@@ -24,7 +24,7 @@
     "build": "tsup"
   },
   "dependencies": {
-    "arya-core": "workspace:*",
+    "@arya-ai/arya-core": "workspace:*",
     "mu-core": "^0.36.0",
     "mu-coding": "^0.36.0",
     "mu-local-provider": "^0.36.0",

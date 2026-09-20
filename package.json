@@ -10,7 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "tsc --noEmit",
-    "build": "pnpm --filter arya build",
+    "build": "pnpm --filter @arya-ai/arya build",
     "compile": "node scripts/compile.mjs",
     "app:start": "pnpm --filter arya-companion start",
     "app:android": "pnpm --filter arya-companion android",

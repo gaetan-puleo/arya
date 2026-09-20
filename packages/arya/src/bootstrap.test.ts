@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig, buildPanelProvider, type BootstrapConfig, type PanelSectionConfig } from './bootstrap';
-import { TaskStore } from 'arya-core';
+import { TaskStore } from '@arya-ai/arya-core';
 
 describe('loadConfig', () => {
   let dir: string;

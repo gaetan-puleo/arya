@@ -20,7 +20,7 @@ import {
   runChecks,
   tcpProbe,
   warn,
-} from 'arya-core';
+} from '@arya-ai/arya-core';
 
 import { aryaServiceDescriptor } from './service';
 import { aryaDirs, resolveXdg } from './xdg';

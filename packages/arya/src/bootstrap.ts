@@ -13,7 +13,7 @@ import {
   type Plugin,
   readConfig,
 } from 'mu-coding';
-import { type ChannelAdapter, serveHost, webSocketAdapter, type WireModel } from 'arya-core';
+import { type ChannelAdapter, serveHost, webSocketAdapter, type WireModel } from '@arya-ai/arya-core';
 import {
   BrowserController,
   createBrowserTools,
@@ -36,7 +36,7 @@ import {
   type TaskStatus,
   type WirePanelItem,
   type WirePanelSection,
-} from 'arya-core';
+} from '@arya-ai/arya-core';
 import { createLocalProvider, listLocalModels, type LocalProviderConfig } from 'mu-local-provider';
 import { createMuTools } from 'mu-tools';
 import webfetchPlugin from 'mu-webfetch';

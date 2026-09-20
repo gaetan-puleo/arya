@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ChatApp } from 'mu-coding';
-import { connectHarness, type RemoteHarness } from 'arya-core';
+import { connectHarness, type RemoteHarness } from '@arya-ai/arya-core';
 import { loadConfig } from './bootstrap';
 
 const ARYA_VERSION = (() => {

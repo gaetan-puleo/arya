@@ -25,7 +25,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - name: "Pack publishable packages (arya, arya-core)"
-        run: pnpm --filter arya --filter arya-core pack
+        run: pnpm --filter @arya-ai/arya --filter @arya-ai/arya-core pack
       - name: "Guard: reject local link: deps (must be registry versions before publish)"
         run: |
           shopt -s nullglob

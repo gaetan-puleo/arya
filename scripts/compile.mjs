@@ -29,7 +29,7 @@ rmSync(DIST, { recursive: true, force: true });
 mkdirSync(DIST, { recursive: true });
 
 console.log('Bundling the arya server into one self-contained ESM file…');
-run('pnpm', ['--filter', 'arya', 'build'], ROOT);
+run('pnpm', ['--filter', '@arya-ai/arya', 'build'], ROOT);
 
 for (const { target, out } of selected) {
   console.log(`\n=== ${out}  (${target}) ===`);

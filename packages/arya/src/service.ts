@@ -6,7 +6,7 @@
 
 import { basename } from 'node:path';
 
-import { createServiceController, type ServiceDescriptor } from 'arya-core';
+import { createServiceController, type ServiceDescriptor } from '@arya-ai/arya-core';
 import { errMsg } from 'mu-core';
 
 /** Describe the arya `serve` host as an installable user service. */

@@ -8,7 +8,7 @@ import {
   type SchedulerEvent as EngineSchedulerEvent,
   type Task,
 } from 'mu-coding';
-import { type WireSchedulerEvent as SchedulerEvent, type WireSchedulerTask as SchedulerTask } from 'arya-core';
+import { type WireSchedulerEvent as SchedulerEvent, type WireSchedulerTask as SchedulerTask } from '@arya-ai/arya-core';
 import { hashOutput, MonitorStateStore, parseWakeGate } from './scheduler-guards';
 import { errMsg } from 'mu-core';
 
